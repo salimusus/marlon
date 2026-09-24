@@ -22070,3 +22070,61 @@ test('un vrai encastrement dans une voiture garée reste un accident : le consta
   const ok = r.accidente === true && r.accidents === 1;
   return { ok, detail: `contre-épreuve de la correction du n° 96 : l'impact se mesure maintenant sur le rapprochement RÉEL des deux tôles et non sur le compteur, il fallait donc vérifier qu'un vrai choc déclenche encore le constat · voiture lancée à ${r.vChoc || 14} m/s (50 km/h) dans une voiture garée droit devant : ${r.accidents} accident ouvert, véhicule immobilisé = ${r.accidente}, ${r.dmg} % de dégâts sur la sienne et ${r.dmgCible} % sur l'autre` };
 });
+
+test('le chien est déclaré passager et s\'assied à SA place, jamais sur les genoux du passager avant', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    const alea = Math.random; Math.random = () => 0.5;
+    const prep = nAmis => {
+      __SHOT.go({ world: 4, x: -8, y: 1, z: 13, hour: 12 });
+      let c = null, best = 1e9;
+      for (const v of G.city.cars) { const d = Math.hypot(v.x + 8, v.z - 10); if (d < best) { best = d; c = v; } }
+      const dog = G.city.pets.find(q => q.kind === 'dog');
+      G.chien.nom = 'Rex'; G.adopterChien(dog, true);
+      dog.x = c.x + 3; dog.z = c.z; dog.y = 0; dog.g.position.set(dog.x, 0, dog.z);
+      const amis = G.bots.filter(b => b.av && b.av.group && !b.ko && !b.prison).slice(0, nAmis);
+      amis.forEach((b, i) => { b.pos.set(c.x - 2 + i * 1.2, 0, c.z + 2.5); b.av.group.position.copy(b.pos);
+        b.av.group.visible = true; b.ko = 0; b.hp = 100; b.rdv = null; b.drive = null; b.enVoiture = null;
+        G.gang.membres.push(b); });
+      return { c, dog };
+    };
+    const out = {};
+    // --- trois amis + le chien dans une voiture à quatre places ---
+    const { c, dog } = prep(3);
+    document.getElementById('msg').textContent = '';
+    G.enterCar(c);
+    out.message = document.getElementById('msg').textContent;
+    out.declare = !!c.chien;
+    out.occupants = (c.occupants || []).map(o => o.place).sort().join(',');
+    // 8 s de conduite : il ne doit pas glisser vers l'avant
+    let ecartMin = 1e9;
+    for (let i = 0; i < 480; i++) {
+      G.keys.add('ArrowUp'); G.step(1 / 60, true);
+      const av = (c.occupants || []).find(o => o.place === 'avant');
+      if (av && i % 30 === 0) ecartMin = Math.min(ecartMin, Math.hypot(dog.g.position.x - av.av.group.position.x, dog.g.position.z - av.av.group.position.z));
+    }
+    G.keys.clear();
+    out.ecartAvant = +ecartMin.toFixed(3);
+    // assis EXACTEMENT sur la place `chien` de la table PLACES, pas sur un repère écrit à la main
+    const T = G.placesDe(c), cs = Math.cos(c.h), sn = Math.sin(c.h);
+    const dx = dog.g.position.x - c.x, dz = dog.g.position.z - c.z;
+    out.local = { lx: +(dx * cs - dz * sn).toFixed(2), lz: +(dx * sn + dz * cs).toFixed(2) };
+    out.table = { lx: +T.chien.x.toFixed(2), lz: +T.chien.z.toFixed(2) };
+    out.coordsSuivent = Math.hypot(dog.x - dog.g.position.x, dog.z - dog.g.position.z) < 0.05;
+    // --- le chien SEUL : il doit être annoncé quand même ---
+    { const a = prep(0); document.getElementById('msg').textContent = ''; G.enterCar(a.c);
+      out.messageSeul = document.getElementById('msg').textContent; }
+    // --- le chien LOIN (35 m) : chienTick l'embarquait sans condition de distance, la déclaration doit suivre ---
+    { const a = prep(0); a.dog.x = a.c.x + 25; a.dog.z = a.c.z + 25; a.dog.g.position.set(a.dog.x, 0, a.dog.z);
+      G.enterCar(a.c); out.loinDeclare = !!a.c.chien; }
+    // --- le chien COUCHÉ dans sa niche : il reste dormir ---
+    { const a = prep(0); G.chien.couche = true; G.enterCar(a.c);
+      out.coucheDeclare = !!a.c.chien; G.chien.couche = false; }
+    Math.random = alea;
+    return out;
+  });
+  const ok = r.declare && r.ecartAvant > 1 && Math.abs(r.local.lx - r.table.lx) < 0.05 && Math.abs(r.local.lz - r.table.lz) < 0.05
+    && /Rex/.test(r.message) && /Rex/.test(r.messageSeul) && r.loinDeclare && !r.coucheDeclare && r.coordsSuivent
+    && r.occupants === 'arriereD,arriereG,avant';
+  return { ok, detail: `le chien voyageait dans l'habitacle SANS être déclaré passager, et à 0,10 m du genou du passager avant : \`chienTick\` avait sa PROPRE table de sièges, écrite à la main, qui le posait à lx −0,52 / lz +0,05 — très exactement le siège « avant » — et elle repassait après \`placeOccupants\`, qui l'asseyait pourtant correctement · il n'y a plus qu'UNE table de sièges (PLACES) : le chien est à lx ${r.local.lx} / lz ${r.local.lz}, soit sa place ${r.table.lx} / ${r.table.lz} au centimètre, à ${r.ecartAvant} m du passager avant (0,10 m avant) pendant 8 s de conduite · il est déclaré (${r.declare}) et NOMMÉ : « ${r.message} », et seul : « ${r.messageSeul} » · à 35 m il monte quand même (${r.loinDeclare}, la règle des 6 m contredisait chienTick) et couché dans sa niche il ne monte pas (${!r.coucheDeclare})` };
+});

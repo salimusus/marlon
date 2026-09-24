@@ -15227,6 +15227,22 @@ function agentTire(a, dmg, disp) {
   if (g && g.flash) { g.flash.visible = true; setTimeout(() => { if (g.flash) g.flash.visible = false; }, 45); }
   burst(origin.x, origin.y, origin.z, 0xffd23f, 1);
 }
+// Y A-T-IL UN TROU DE PLANCHER ENTRE DEUX POINTS DU MEME ETAGE ?
+// Les etages de la banque sont des ANNEAUX autour d'une tremie : deux points parfaitement
+// poses sur le marbre peuvent n'avoir aucune ligne droite entre eux. On echantillonne le
+// segment tous les 80 cm ; des qu'un point n'a plus de plancher a la hauteur ou l'on marche,
+// c'est qu'il faut faire le tour. (Cout : au plus 24 appels a groundCar, et seulement pour un
+// agent deja DANS la banque.)
+function trouEntre(x0, z0, x1, z1, y) {
+  const d = Math.hypot(x1 - x0, z1 - z0);
+  if (d < 0.6) return false;
+  const n = Math.min(24, Math.max(3, Math.ceil(d / 0.8)));
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    if (groundCar(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, null, y + 0.6) < y - 0.6) return true;
+  }
+  return false;
+}
 function agentsTick(dt) {
   if (!police.agents.length) return;
   const but = police.sait || police.lastSeen;
@@ -15306,6 +15322,33 @@ function agentsTick(dt) {
           }
           else { tx = dep[0]; tz = dep[1]; }
         }
+      }
+      // MEME ETAGE QUE LE BRAQUEUR : LE TOUR DE L'ANNEAU VAUT AUSSI (round 76).
+      // Le detour par le bandeau continu, juste au-dessus, est enferme dans
+      // « |P.pos.y - a.y| > 2 » : il ne servait QUE pendant la montee. Arrive sur le palier
+      // des coffres, l'agent visait le braqueur EN LIGNE DROITE, traversait le vide de
+      // l'atrium, retombait au rez-de-chaussee et remontait — sans fin.
+      // MESURE (test 78, avant) : 6 agents descendus de voiture, 6 entres dans la banque,
+      // montes jusqu'a 9,90 m — les coffres y sont — et pourtant JAMAIS a moins de 5,60 m du
+      // braqueur AU MEME ETAGE. D'ou « arrestation a null s » : tout marchait sauf la
+      // derniere etape. Le 2e etage est un anneau (coursive ouest x −61,6 a −56, coursive est
+      // x −48 a −42,4, bandeau nord continu z 60,4 a 62,4) et son milieu est la tremie ; le
+      // 1er a le meme anneau, ferme par le bandeau SUD. On longe donc le bandeau, exactement
+      // comme a la montee, et seulement quand la ligne droite passe par le vide.
+      if (!a.esc && Math.abs(P.pos.y - a.y) <= 2 && a.y > 2 && dansBanque(tx, tz) && trouEntre(a.x, a.z, tx, tz, a.y)) {
+        const zTour = bk.z + (a.y > 6 ? -8.6 : 6.8);   // 2e : le passage nord ; 1er : le bandeau sud
+        // ON NE VISE JAMAIS L'AXE DU BANDEAU LUI-MEME. Un agent LACHE son point de passage
+        // des 1,40 m (voir « d > 1.4 » plus bas) : viser (a.x ; zTour) l'arretait A 1,30 m du
+        // bandeau, ni dessus ni en route. MESURE : les six agents plantes en
+        // (−47,0 ; 9,90 ; 62,7) pendant 90 s, a 12,4 m du braqueur. On vise donc 1,60 m
+        // AU-DELA de l'axe : il marche vraiment jusqu'au bandeau, et des qu'il y est
+        // (moins d'un metre de l'axe) il le longe jusqu'a l'aplomb du braqueur.
+        if (Math.abs(a.z - zTour) < 1.0) tz = zTour;                               // dessus : on le longe
+        // ...MAIS SANS SORTIR DE LA BANQUE. Vise 1,60 m au-dela de l'axe du bandeau nord et
+        // l'on tombe en z = 59,8, hors des murs : le bloc « SORTIR » juste dessous voyait un
+        // but hors de la banque et renvoyait l'agent A LA PORTE. MESURE : les agents montaient
+        // bien aux coffres puis repartaient tourner sur la coursive est (−43 ; 9,90 ; 69).
+        else { tx = a.x; tz = clamp(zTour - Math.sign(a.z - zTour) * 1.6, bk.z - bk.d / 2 + 0.9, bk.z + bk.d / 2 - 0.9); }
       }
     }
     // SORTIR : la banque n'a qu'une porte. Un agent redescendu des coffres pour poursuivre le

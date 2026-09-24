@@ -134,7 +134,11 @@ test('full game: Options takes priority over simultaneous jump and held Options 
 test('full game: camera rotation is identical at 30, 60 and 120 input samples per second', () => {
   const angles = [];
   for (const hz of [30, 60, 120]) { reset(); device.axes[2] = .6; for (let i = 0; i < hz; i++) { now += 1000 / hz; G.pollGamepad(1 / hz); } angles.push(G.cam.yaw); }
-  near(angles[0], angles[1]); near(angles[1], angles[2]); assert.ok(Math.abs(angles[0]) > .8 && Math.abs(angles[0]) < 2);
+  // ARBITRAGE r76 : ce qui compte ici est l'EGALITE entre 30, 60 et 120 Hz. La borne haute
+  // etait a 2 rad, ce qui n'etait tenable qu'avec CAM_VYAW = 3.8 ; or les tests 220 et 396 du
+  // banc exigent 5,5 rad/s au bord (280 a 340 °/s), la vitesse demandee par le joueur au
+  // round 71. A 60 % de course et 12 % de zone morte cela fait 2,11 rad : borne portee a 2,5.
+  near(angles[0], angles[1]); near(angles[1], angles[2]); assert.ok(Math.abs(angles[0]) > .8 && Math.abs(angles[0]) < 2.5);
 });
 test('full game: keyboard aim survives idle gamepad polling and stick drift does not move the view', () => {
   reset(); key('ShiftLeft', true); device.axes = [.08, -.08, .08, .08]; G.pollGamepad(.008);

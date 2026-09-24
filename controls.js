@@ -71,19 +71,40 @@
   }
   const trigger = value => clamp((finite(value) - .06) / .94, 0, 1);
   function createController() {
-    let identity = null, context = null, previous = Array(COUNT).fill(false), rawPrevious = [], blocked = [], axesBlocked = [false, false], nav = null, navAt = 0;
-    function reset() { identity = context = null; previous.fill(false); rawPrevious = []; blocked = []; axesBlocked = [false, false]; nav = null; navAt = 0; }
+    let identity = null, context = null, previous = Array(COUNT).fill(false), rawPrevious = [], blocked = [], axesBlocked = [false, false], nav = null, navAt = 0, rearmer = false;
+    // `rearmer` : on revient d'une coupure (perte de focus, manette debranchee). Ce qui est
+    // deja enfonce a ce moment-la doit etre relache avant de compter. La PREMIERE manette
+    // jamais vue, elle, n'a rien a rearmer — voir l'arbitrage r76 dans sample().
+    function reset() { identity = context = null; previous.fill(false); rawPrevious = []; blocked = []; axesBlocked = [false, false]; nav = null; navAt = 0; rearmer = true; }
     function sample(gp, options = {}) {
       const id = gp ? String(gp.index) + ':' + gp.id : null;
-      const current = options.context || 'blocked', now = finite(options.now), changed = id !== identity || current !== context;
-      const raw = normalize(gp, id === identity ? rawPrevious : null);
+      const current = options.context || 'blocked', nouvelleManette = id !== identity;
+      const now = finite(options.now), changed = nouvelleManette || current !== context;
+      const raw = normalize(gp, nouvelleManette ? null : rawPrevious);
       const leftMagnitude = Math.hypot(raw.lx, raw.ly), rightMagnitude = Math.hypot(raw.rx, raw.ry);
       const leftNeutral = Math.max(.18, finite(options.deadzone, .12)), rightNeutral = Math.max(.18, finite(options.lookDeadzone, .12));
+      // ARBITRAGE r76 (fusion 0.10). Le principe de la 0.10 est bon : ce qui est enfonce au
+      // moment d'une bascule ne doit pas agir de l'autre cote (sortir d'un menu avec ✕ tenu
+      // ne doit pas degainer ; revenir d'un onglet avec R2 tenue ne doit pas mettre les gaz).
+      // Mais elle l'appliquait AUSSI a la toute premiere lecture de la manette : le premier
+      // appui et le premier coup de stick etaient alors perdus. Mesure : caméra a 0 rad/s
+      // stick a fond et premiere arme sautee (tests 220, 224, 232, 265, 372). On distingue
+      // donc trois cas — changement de CONTEXTE, retour de coupure (`rearmer`) et VOL de la
+      // manette par une autre prise — de la toute premiere manette, qui, elle, repond tout
+      // de suite. Les axes ne se rearment QUE sur un changement de contexte.
+      const changementContexte = context !== null && current !== context;
+      // La TOUTE PREMIERE lecture d'une manette, EN JEU, ne bloque rien : un navigateur ne
+      // revele une manette qu'APRES un appui du joueur, donc cet appui-la est le sien et doit
+      // compter (sinon le premier ✕, la premiere fleche et le premier coup de stick sont
+      // toujours perdus — mesure : la premiere arme sautee au test 232). Dans un MENU on
+      // rearme quand meme : un bouton tenu depuis l'ecran precedent ne doit rien valider.
+      const premiereEnJeu = context === null && identity === null && !rearmer && /^game:/.test(current);
+      const bloquerBoutons = !premiereEnJeu && (rearmer || changementContexte || nouvelleManette);
       if (changed) {
-        blocked = raw.b.slice(); blocked[6] = raw.l2 > .08; blocked[7] = raw.r2 > .08;
+        if (bloquerBoutons) { blocked = raw.b.slice(); blocked[6] = raw.l2 > .08; blocked[7] = raw.r2 > .08; }
         // Each axis/button rearms independently. Holding a stick never blocks menu Back.
-        axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
-        previous = Array(COUNT).fill(false); nav = null; navAt = 0;
+        if (changementContexte) axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
+        previous = Array(COUNT).fill(false); nav = null; navAt = 0; rearmer = false;
       }
       identity = id; context = current; rawPrevious = raw.b.slice();
       const enabled = !!gp && current !== 'blocked';

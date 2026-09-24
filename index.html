@@ -15323,19 +15323,23 @@ function agentsTick(dt) {
           else { tx = dep[0]; tz = dep[1]; }
         }
       }
-      // MEME ETAGE QUE LE BRAQUEUR : LE TOUR DE L'ANNEAU VAUT AUSSI (round 76).
-      // Le detour par le bandeau continu, juste au-dessus, est enferme dans
-      // « |P.pos.y - a.y| > 2 » : il ne servait QUE pendant la montee. Arrive sur le palier
-      // des coffres, l'agent visait le braqueur EN LIGNE DROITE, traversait le vide de
-      // l'atrium, retombait au rez-de-chaussee et remontait — sans fin.
-      // MESURE (test 78, avant) : 6 agents descendus de voiture, 6 entres dans la banque,
-      // montes jusqu'a 9,90 m — les coffres y sont — et pourtant JAMAIS a moins de 5,60 m du
-      // braqueur AU MEME ETAGE. D'ou « arrestation a null s » : tout marchait sauf la
-      // derniere etape. Le 2e etage est un anneau (coursive ouest x −61,6 a −56, coursive est
-      // x −48 a −42,4, bandeau nord continu z 60,4 a 62,4) et son milieu est la tremie ; le
-      // 1er a le meme anneau, ferme par le bandeau SUD. On longe donc le bandeau, exactement
-      // comme a la montee, et seulement quand la ligne droite passe par le vide.
-      if (!a.esc && Math.abs(P.pos.y - a.y) <= 2 && a.y > 2 && dansBanque(tx, tz) && trouEntre(a.x, a.z, tx, tz, a.y)) {
+      // LE TOUR DE L'ANNEAU, DES QUE LA LIGNE DROITE PASSE PAR LE VIDE (round 76).
+      // Le detour par le bandeau continu, juste au-dessus, tenait a deux conditions
+      // GEOMETRIQUES : etre a plus de deux metres du braqueur en hauteur, et etre pose a
+      // moins de 40 cm d'un plancher d'etage. Il ne servait donc ni une fois arrive au meme
+      // etage que lui, ni depuis la premiere marche d'une volee. Deux pannes mesurees :
+      //   - test 78 : 6 agents montes jusqu'a 9,90 m (les coffres y sont) et JAMAIS a moins
+      //     de 5,60 m du braqueur au meme etage. Arrives sur le palier, ils visaient droit
+      //     sur lui, traversaient la tremie, retombaient au rez-de-chaussee et remontaient ;
+      //   - test 114 : redescendus a 5,60 m — la premiere marche de la volee du 2e, donc
+      //     « ni au sol ni en l'air » — ils visaient le pied de la volee du 1er en ligne
+      //     droite, par le vide, et restaient plantes en (−59,2 ; 5,6 ; 64,8) pendant 80 s.
+      // On remplace donc les deux conditions geometriques par une MESURE : si le plancher
+      // manque quelque part sur la ligne droite (trouEntre), on longe le bandeau continu.
+      // Les etages de la banque sont des anneaux — coursive ouest x −61,6 a −56, coursive
+      // est x −48 a −42,4, bandeau NORD continu au 2e (z 60,4 a 62,4), bandeau SUD au 1er —
+      // et le milieu est la tremie.
+      if (!a.esc && !a.surEsc && a.y > 2 && dansBanque(tx, tz) && trouEntre(a.x, a.z, tx, tz, a.y)) {
         const zTour = bk.z + (a.y > 6 ? -8.6 : 6.8);   // 2e : le passage nord ; 1er : le bandeau sud
         // ON NE VISE JAMAIS L'AXE DU BANDEAU LUI-MEME. Un agent LACHE son point de passage
         // des 1,40 m (voir « d > 1.4 » plus bas) : viser (a.x ; zTour) l'arretait A 1,30 m du

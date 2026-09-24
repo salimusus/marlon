@@ -2658,7 +2658,13 @@ function lamp(x, z) {   // lampadaire cassable
   const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
   const post = new THREE.Mesh(unitBox, lam(0x3b4252)); post.scale.set(0.18, 4.4, 0.18); post.position.y = 2.2; post.castShadow = true; g.add(post);
   const bulb = new THREE.Mesh(unitBox, neonMat(0xfff2b0)); bulb.scale.set(0.7, 0.4, 0.7); bulb.position.y = 4.5; g.add(bulb);
-  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36 }; solids.push(solid); sgridSale();
+  // `lampe: true` : le grand nettoyage des chaussees (degageLesRoutes) epargne les feux et les
+  // lampadaires parce qu'une passe SPECIALE les repousse ensuite sur le trottoir — mais le
+  // solide du lampadaire ne portait pas la marque, donc il partait AVANT avec le mobilier
+  // ordinaire. Mesure apres l'elargissement du round 75 (Rue des Primeurs et Rue de la Halle
+  // passees de 7 a 11 m) : il ne restait que 2 lampadaires sur 10 au Marche et 5 sur 10 au
+  // Techno-Parc. Marques, ils sont DEPLACES au bord de la voie au lieu d'etre supprimes.
+  const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36, lampe: true }; solids.push(solid); sgridSale();
   const br = { kind: 'lamp', g, bulb, solid, x, z, r: 0.5, broken: false };
   solid.brk = br; breakables.push(br);
 }
@@ -4650,7 +4656,7 @@ function buildPark() {   // grand parc au sud : balançoires, terrain de boules,
     const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -SWCORDE, 0); piv.add(seat);
     // `siege` : le maillage lui-meme. swingTick s'en sert pour COLLER le joueur a la planche
     // au lieu de recalculer sa place avec une formule (voir swingTick).
-    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null });
+    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null, lieu: 'parc' });
   }
   sign(-12, 0.3, 58, '🎠 Balançoires : E pour s\'asseoir', false, Math.PI);
   // terrain de boules
@@ -4960,7 +4966,16 @@ function building(x, z, w, h, d, color, dir) {
   mx.emissiveMap = ex; mz.emissiveMap = ez; mx.emissive.set(0x000000); mz.emissive.set(0x000000); city.buildings.push(mx, mz);
   box(x, GF + hh / 2, z, w, hh, d, color, { material: [mx, mx, lam(color), lam(color), mz, mz] });   // les étages
   box(x, GF + hh + 0.2, z, w * 0.7, 0.4, d * 0.7, 0x3b4252, { deco: true, studs: false });
-  const dir2 = coque(x, z, w, d, GF, color, dir, 2, 2.6, 0.35, mx, mz);   // même façade vitrée que les étages
+  // LA BAIE DU HALL. L'entree ne faisait que 2 m de large au milieu d'une facade de 9 : la
+  // rangee du nord a ete decalee de x = ±6 a ±8 (round precedent, pour laisser 7 m de chaussee
+  // entre les deux immeubles du centre) et la porte a suivi, alors que le TROTTOIR qui la
+  // dessert, lui, est reste ou il etait — releve devant l'immeuble de (-8 ; -35,5) : le trottoir
+  // court de x = -8,0 a -3,9 (centre -5,95) et la porte de -9,3 a -6,7. On arrivait donc du
+  // trottoir NEZ CONTRE LE MUR (mesure : parti de z = -30, arrete a z = -31,6). Une baie de
+  // hall de 5 m — la largeur d'une vraie entree d'immeuble vitree — couvre le trottoir et
+  // l'axe : on entre en marchant droit devant soi.
+  const baie = Math.min(5, Math.max(2.6, w - 4));
+  const dir2 = coque(x, z, w, d, GF, color, dir, baie, 2.6, 0.35, mx, mz);   // même façade vitrée que les étages
   // hall : comptoir d'accueil au fond, plante dans un coin (elle bouchait l'entrée), plafonnier
   const [fx, fz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][dir2];   // vers la façade
   box(x - fx * (w / 2 - 1.6), 0.75, z - fz * (d / 2 - 1.6), fx ? 0.8 : 2.6, 0.9, fx ? 2.6 : 0.8, 0x8b5a2b, { studs: false, noRoute: true });
@@ -5197,7 +5212,14 @@ const PLAN_ROUTIER = {
     // deux extremites : ce sont les seules impasses ACCIDENTELLES que le releve ait trouvees
     // hors du bitume existant (les autres sont de vraies fins de rue).
     { n: 'Raccord ouest des rues de l\'ouest', x: -101, z: 16, w: 8, d: 23 },
-    { n: 'Raccord est des rues de l\'ouest', x: -65, z: 18, w: 8, d: 12 },
+    // Il etait en x = -65 : son bord est tombait a x = -61, soit UN METRE DANS le commissariat
+    // (coque de 16 x 10 en (-54 ; 28), mur ouest a x = -62). Mesure : degageLesRoutes emportait
+    // le mur ouest ET le mur nord (leur centre tombe a 7 cm hors de l'emprise `city.batiments`,
+    // qui est rognee de 0,5 m, donc la protection « dedans » ne jouait pas) : il ne restait que
+    // 3 murs sur 5 au commissariat, et on voyait le bureau depuis la rue. Decale de 1,5 m a
+    // l'ouest : il garde ses 8 m, recouvre toujours les deux rues (z = 10 jusqu'a x = -61,
+    // z = 22 jusqu'a x = -63) et laisse 0,5 m entre son bitume et le mur.
+    { n: 'Raccord est des rues de l\'ouest', x: -66.5, z: 18, w: 8, d: 12 },
     { n: 'Liaison nord du parc', x: -20, z: 110, w: 60, d: 8 },
     { n: 'Route de la fête foraine', x: 0, z: 126, w: 8, d: 34 },
     // Le reseau etait coupe en 25 morceaux pour les voitures : la statue bouchait le carrefour
@@ -8830,7 +8852,8 @@ function buildSports() {
   plat(-173, 0.15, -128, 32, 42, 0x5cc453, { studs: false, noRoute: true }, 0.12);
   plat(-172, 0.2, -136, 16, 14, 0xe0c890, { studs: false, noRoute: true }, 0.1);   // le sable, sous les balancoires
   // LES BALANCOIRES : meme portique que celui du parc, meme mecanique (city.swings), donc
-  // meme touche E et meme saut a la manette. Trois sieges, cordes de 2,85 m sous une poutre
+  // meme touche E et meme saut a la manette. Chaque siege porte son `lieu` ('parc', 'plaine',
+  // 'ferme', 'bois') : le tableau en compte 10 en tout, dont les QUATRE du parc. Trois sieges, cordes de 2,85 m sous une poutre
   // a 3,75 m : la planche retombe a 0,95 m du sol, la hauteur mesuree au parc.
   const SWX = -172, SWZ = -138, SWL = 7.8, SWH = 3.55, SWC = 0x4f8dff, SWCORDE = 2.85;
   for (const px of [SWX - SWL / 2, SWX + SWL / 2]) {
@@ -8844,7 +8867,7 @@ function buildSports() {
     const piv = new THREE.Group(); piv.position.set(sx, SWH + 0.2, SWZ); worldGroup.add(piv);
     for (const dx of [-0.35, 0.35]) { const rope = new THREE.Mesh(unitBox, lam(0x8f98ab)); rope.scale.set(0.06, SWCORDE, 0.06); rope.position.set(dx, -SWCORDE / 2, 0); piv.add(rope); }
     const seat = new THREE.Mesh(unitBox, lam(0x2b3550)); seat.scale.set(0.9, 0.1, 0.5); seat.position.set(0, -SWCORDE, 0); piv.add(seat);
-    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null });
+    city.swings.push({ x: sx, z: SWZ, piv, siege: seat, L: SWCORDE, ang: 0, vel: 0, amp: 0, rider: null, lieu: 'plaine' });
   }
   sign(SWX, 0.2, SWZ + 6, '🎠 Balançoires : E pour s\'asseoir', false, 0);
   // LE TOURNIQUET : un manege que l'on pousse. Il reutilise `city.rides` (kind 'carousel'),
@@ -9140,7 +9163,7 @@ function buildHameau() {
     const piv = new THREE.Group(); piv.position.set(BX, BH + 0.12, BZ); worldGroup.add(piv);
     const corde = new THREE.Mesh(unitBox, lam(0x8f98ab)); corde.scale.set(0.06, BL - 0.3, 0.06); corde.position.y = -(BL - 0.3) / 2; piv.add(corde);
     const pneu = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.17, 8, 16), lam(0x1b1b1b)); pneu.rotation.x = Math.PI / 2; pneu.position.y = -BL; piv.add(pneu);
-    city.swings.push({ x: BX, z: BZ, piv, siege: pneu, L: BL, ang: 0, vel: 0, amp: 0, rider: null });
+    city.swings.push({ x: BX, z: BZ, piv, siege: pneu, L: BL, ang: 0, vel: 0, amp: 0, rider: null, lieu: 'ferme' });
   }
   sign(BX, 0.12, BZ + 4, '🛞 Balançoire-pneu : E pour s\'asseoir', false, 0);
   // LE LABYRINTHE DE BOTTES DE PAILLE. Chaque botte est un cylindre SOLIDE de 1,3 m : trop
@@ -9429,7 +9452,7 @@ function buildBois() {
     for (const dx of [-0.5, 0.5]) { const c = new THREE.Mesh(unitBox, lam(0x8f98ab)); c.scale.set(0.05, NL - 0.2, 0.05); c.position.set(dx, -(NL - 0.2) / 2, 0); piv.add(c); }
     const nid = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.14, 8, 16), lam(0x6b4423)); nid.rotation.x = Math.PI / 2; nid.position.y = -NL; piv.add(nid);
     const fond = new THREE.Mesh(unitBox, lam(0x3b2a16)); fond.scale.set(1.1, 0.06, 1.1); fond.position.y = -NL - 0.06; piv.add(fond);
-    city.swings.push({ x: sx, z: NZ, piv, siege: nid, L: NL, ang: 0, vel: 0, amp: 0, rider: null });
+    city.swings.push({ x: sx, z: NZ, piv, siege: nid, L: NL, ang: 0, vel: 0, amp: 0, rider: null, lieu: 'bois' });
   }
   sign(NX, 0.14, NZ + 4, '🪺 Balançoires nid d\'oiseau : E pour s\'asseoir', false, 0);
   // ---- LE MOBILIER URBAIN (a 8 m au moins de l'axe de chaque chemin) ----
@@ -9543,7 +9566,14 @@ function signalisation() {
         for (const cote of [1, -1]) {
           const x = k.cx - ux * (recul + dep) + rx * lat * cote, z = k.cz - uz * (recul + dep) + rz * lat * cote;
           if (!posLibre(x, z)) continue;
-          if ((city.panneaux || []).some(p => Math.hypot(p.x - x, p.z - z) < 3)) { mis = true; break; }
+          // UN PANNEAU VOISIN N'EST PAS LE PANNEAU DEMANDE. On considerait la pose comme faite
+          // des qu'un panneau — n'importe lequel — se tenait a moins de 3 m : au carrefour
+          // (114 ; 333,3) du Bois des Aventuriers, le losange « route prioritaire » du boulevard
+          // etait a 1,15 m de la place du cedez-le-passage de la rue, et la rue secondaire est
+          // restee SANS aucun panneau (1 carrefour fautif au releve). On ne saute que si le
+          // panneau deja la dit LA MEME chose pour LA MEME rue ; sinon on cherche l'autre bord.
+          const voisin = (city.panneaux || []).find(p => Math.hypot(p.x - x, p.z - z) < 3);
+          if (voisin) { if (voisin.type === type && voisin.route === (ir == null ? -1 : ir)) { mis = true; break; } continue; }
           panneau(x, z, type, s, ir); mis = true; break;
         }
         if (mis) break;
@@ -21115,6 +21145,15 @@ const JOUETS = [
     aide: 'En main : E devant quelqu\'un pour la lui offrir.' },
   { id: 'plante', e: '🪴', n: 'Petite plante verte', article: 'Petite plante verte', main: true, offre: 2,
     aide: 'En main : E devant quelqu\'un pour la lui offrir.' },
+  // LES DEUX ARTICLES DU CAMP DU BOIS DES AVENTURIERS. Releve du recensement : « Lampe
+  // frontale » (8 🪙) et « Boussole » (6 🪙) etaient les deux SEULS articles de comptoir a ne
+  // rien faire une fois achetes. Ils servent maintenant pour de bon — et c'est le bois, de
+  // nuit, qui les rend utiles.
+  { id: 'frontale', e: '🔦', n: 'Lampe frontale', article: 'Lampe frontale',
+    aide: 'Sur le front : elle eclaire devant toi, meme en pleine nuit.',
+    dehors: () => !!sac.frontale, sortir: () => frontaleMet(true), ranger: () => frontaleMet(false) },
+  { id: 'boussole', e: '🧭', n: 'Boussole', article: 'Boussole', main: true,
+    aide: 'En main : E vise le quartier le plus proche et plante le repere.' },
 ];
 const JOUET = id => JOUETS.find(j => j.id === id) || null;
 const JOUET_PAR_ARTICLE = n => JOUETS.find(j => j.article === n) || null;
@@ -22407,6 +22446,16 @@ function jouetsTick(dt) {
     k.fil.scale.set(1, len, 1);
     k.fil.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
   }
+  // la lampe frontale : posee a hauteur d'yeux, elle vise 12 m devant le regard du joueur
+  const f = sac.frontale;
+  if (f) {
+    const hx = P.pos.x, hy = P.pos.y + 1.55, hz = P.pos.z;
+    const cap = (P.gun && P.drawn) ? cam.yaw + Math.PI : P.facing;
+    f.lum.position.set(hx + Math.sin(cap) * 0.22, hy, hz + Math.cos(cap) * 0.22);
+    f.bloc.position.copy(f.lum.position); f.bloc.rotation.y = cap;
+    f.lum.target.position.set(hx + Math.sin(cap) * 12, hy - 2.4, hz + Math.cos(cap) * 12);
+    f.lum.target.updateMatrixWorld();
+  }
   // le boomerang : une boucle de 2,4 s dont la seconde moitié vise le joueur là où il est
   const b = sac.boom;
   if (b) {
@@ -22437,6 +22486,7 @@ function jouetActionPrete() {
   if (j.offre) { const b = botAOffrir(); return b ? { quoi: 'offre', bot: b } : null; }
   if (sac.main === 'peluche') return { quoi: 'calin' };
   if (sac.main === 'boomerang') return sac.boom ? null : { quoi: 'boomerang' };
+  if (sac.main === 'boussole') return { quoi: 'boussole' };
   return null;
 }
 function jouetAction(a) {
@@ -22444,9 +22494,48 @@ function jouetAction(a) {
   if (a.quoi === 'offre') return offreFleur(a.bot);
   if (a.quoi === 'calin') return pelucheCalin();
   if (a.quoi === 'boomerang') return boomerangLance();
+  if (a.quoi === 'boussole') return boussoleVise();
   return false;
 }
-function jouetsReset() { ballonRanger(true); cerfRanger(true); boomerangRanger(); }
+// ---- la lampe frontale : une vraie lumiere posee sur le front, qui suit le regard ----
+// Elle est faite d'un projecteur (SpotLight) et d'un petit bloc lumineux visible par les
+// autres. On ne la parente pas au crane de l'avatar : le rig change de place a chaque
+// animation (accroupi, assis, au volant), et jouetsTick la repose a hauteur d'yeux chaque
+// image, ce qui marche dans tous ces cas.
+function frontaleMet(on) {
+  if (on && !sac.frontale) {
+    const lum = new THREE.SpotLight(0xfff0c0, 1.15, 30, 0.6, 0.45, 1);
+    lum.castShadow = false; scene.add(lum); scene.add(lum.target);
+    const bloc = new THREE.Mesh(unitBox, neonMat(0xfff0c0)); bloc.scale.set(0.16, 0.1, 0.1); scene.add(bloc);
+    sac.frontale = { lum, bloc };
+    msg('🔦 Lampe frontale allumee — elle eclaire devant toi', 2400);
+  } else if (!on && sac.frontale) {
+    const f = sac.frontale; scene.remove(f.lum); scene.remove(f.lum.target); scene.remove(f.bloc);
+    f.bloc.material.dispose();   // la geometrie est le cube partage (unitBox) : on ne la jette pas
+    sac.frontale = null;
+    msg('🔦 Lampe frontale eteinte', 1500);
+  }
+  return true;
+}
+// ---- la boussole : elle vise le quartier le plus proche et plante le repere ----
+function boussoleVise() {
+  const ici = { x: P.pos.x, z: P.pos.z };
+  const zones = (city.zones || []).filter(z => z.hint && !(ici.x > z.x1 && ici.x < z.x2 && ici.z > z.z1 && ici.z < z.z2));
+  if (!zones.length) { msg('🧭 La boussole ne trouve aucun quartier d\'ici', 2000); return false; }
+  let best = null;
+  for (const z of zones) {
+    const cx = (z.x1 + z.x2) / 2, cz = (z.z1 + z.z2) / 2, d = Math.hypot(cx - ici.x, cz - ici.z);
+    if (!best || d < best.d) best = { z, cx, cz, d };
+  }
+  const cap = Math.atan2(best.cx - ici.x, best.cz - ici.z);
+  const ROSE = ['sud', 'sud-ouest', 'ouest', 'nord-ouest', 'nord', 'nord-est', 'est', 'sud-est'];
+  const dir = ROSE[(Math.round(cap / (Math.PI / 4)) + 8) % 8];
+  setBeacon(best.cx, best.cz, 0, 'boussole');
+  msg(`🧭 ${best.z.emoji || ''} ${best.z.name} : plein ${dir}, a ${Math.round(best.d)} m`, 3200);
+  try { sfx.tone(700, 0, .1, 'sine', .04); } catch (e) {}
+  return true;
+}
+function jouetsReset() { ballonRanger(true); cerfRanger(true); boomerangRanger(); frontaleMet(false); }
 // ================= LA SALLE D'ARCADE DU SAC (round 71) =================
 // LE JOUEUR : « les jeu acheter en boutique, crée les avec un mode de jeu ». Trois articles
 // de la boutique Jeux Vidéo (borne d'arcade 25 🪙, jeu du mois 9 🪙, ordinateur portable
@@ -33303,7 +33392,15 @@ function routesOuest() {
   road(-184, -1.5, 27, 7, 0, true);                   // raccord nord vers le contournement
   road(-193, 38, 9, 86, 0, true);                     // contournement ouest de La Zone
   road(-184, 77.5, 27, 7, 0, true);                   // raccord sud
-  road(-175, 169, 9, 182, 0, true);                   // avenue des Chefs, tronçon sud
+  // LE SEUL CUL-DE-SAC ACCIDENTEL QUI RESTAIT (releve des impasses). L'avenue s'arretait a
+  // z = 260 et le chemin du Hameau de la Ferme (z 260 a 268) commencait exactement la :
+  // BORD A BORD, sans un metre de recouvrement, donc sans carrefour pour le graphe des voies.
+  // Ses deux bouts, (-175 ; 257,5) et (-181,5 ; 264), etaient a 9,2 m a vol d'oiseau pour
+  // 108 m par les voies, et le raccord automatique ne pouvait pas passer : le coin de la
+  // cloture de la ferme (-179,8 ; z 220 a 260 et -185,5 ; 260,2) tombe dans les 1,90 m de
+  // gabarit du raccord. On prolonge donc l'avenue de 6 m DANS le chemin, qui est deja du
+  // bitume : aucun terrain de plus, et un vrai carrefour.
+  road(-175, 172, 9, 188, 0, true);                   // avenue des Chefs, tronçon sud
   road(-150, -50, 46, 7, 0, true);                    // vers le rallye et le nord de la ville
   road(-138, 130, 70, 7, 0, true);                    // vers le centre
   road(-140, 240, 66, 7, 0, true);                    // vers l'école

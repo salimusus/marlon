@@ -20158,7 +20158,7 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     // posee sur un parking ou dans une allee n'est sur aucune voie, et le conducteur tournait
     // en rond autour du pate de maisons sans jamais s'en approcher. `st.panne` est le filet :
     // 45 s sans se rapprocher du but, et on repasse a la grille pendant un moment.
-    const via = (dist > 30 && T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
+    const via = (T > (st.panne || 0)) ? itineraireVoies(c.x, c.z, tx, tz, capDeRoute(c), c.departVoie, departInterdit(c)) : null;
     const grille = navPath(c.x, c.z, tx, tz);
     // LE DETOUR ABSURDE. Dans un quartier ou un immeuble coupe la rue en deux, le graphe des
     // voies impose parfois trois fois le chemin direct : mesure relevee, 755 m par les voies
@@ -20166,7 +20166,22 @@ function conduireVersPoint(c, tx, tz, dt, st) {
     // Un vrai conducteur, lui, coupe par le parking. Au-dela de deux fois le chemin de la
     // grille, on reprend donc le trace de la grille.
     const lgTrace = (q, sx, sz) => { let l = 0, a = [sx, sz]; for (const b of (q || [])) { l += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b; } return q && q.length ? l : Infinity; };
-    const pth = (via && via.length > 2 && lgTrace(via, c.x, c.z) < lgTrace(grille, c.x, c.z) * 2.1) ? via : grille;
+    // LES TRENTE DERNIERS METRES. On y passait a la grille A* SANS CONDITION, parce qu'une
+    // cible posee sur un parking, dans une allee ou au fond d'une cour n'est sur aucune voie.
+    // Depuis l'elargissement du reseau, la grille doit parfois RESSORTIR du quartier pour y
+    // revenir : son trace commence alors DERRIERE le pare-chocs, le conducteur fait demi-tour,
+    // s'eloigne — et passe 30 m le graphe des voies le renvoie en avant. C'est un va-et-vient
+    // sans fin, exactement a la frontiere des 30 m.
+    // MESURE (test 147, trajet (-92 ; -40) -> (60 ; 60)) : va-et-vient de periode 14,7 s entre
+    // (49 ; 33) et (60 ; -7), 232 images de demi-tour, 34 recalculs d'itineraire, 650 m
+    // parcourus pour 255 m de plan en 74,6 s. Releve au point de bascule (49 ; 32) : la grille
+    // rend 108 m et le graphe des voies 29 m — la grille repart en arriere.
+    // On calcule donc les deux dans TOUS les cas, et de pres on ne prend la grille que si elle
+    // ne coute pas plus de 1,3 fois le trace par les voies : c'est encore vrai pour le parking
+    // (la grille y va tout droit) et c'est faux pour le detour absurde.
+    const lgVia = lgTrace(via, c.x, c.z), lgGrille = lgTrace(grille, c.x, c.z);
+    const grillePres = dist <= 30 && lgGrille <= lgVia * 1.3;
+    const pth = (!grillePres && via && via.length > 2 && lgVia < lgGrille * 2.1) ? via : grille;
     c.departVoie = (pth === via) ? itineraireDepart : -1;   // on ne gele que la voie qu'on suit vraiment
     st.route = pth && pth.length ? pth.concat([[tx, tz]]) : [[tx, tz]];
   }

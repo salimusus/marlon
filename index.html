@@ -10126,15 +10126,37 @@ function enIntervention(v) { return !!v && (v.prio || 0) > simTime; }
 //   `sens` : +1 on se range a DROITE (on cede le passage), -1 on deborde a GAUCHE (on est
 //   le prioritaire et on double celui qui s'est range).
 // Rend le deport total deja consenti, en metres.
-const ECART_SIRENE = 1.7;         // de quoi degager une file sur une chaussee de 7 m
-// CELUI QUI DOUBLE VA CHERCHER LA VOIE D'EN FACE. 1,70 m ne suffisaient pas : rangee a 1,18 m
-// du milieu de sa voie (la bordure l'arrete la), la voiture doublee laissait 2,88 m d'axe a
-// axe — et le garde-fou de collision, qui sonde la caisse par trois disques de 1,64 m de
-// rayon, en exige 2,90. La depanneuse prioritaire restait collee derriere a 1,1 m/s, bloquee.
-// Le vehicule qui double se deporte donc jusqu'a 3,20 m, c'est-a-dire sur la voie d'en face —
-// et le test des deux flancs l'empeche toujours de mordre le trottoir dans une rue etroite.
-const ECART_DOUBLE = 3.2;
-function ecarteChaussee(c, dt, sens, but) {
+// L'ECART DE RANGEMENT SE CALCULE, IL NE SE FIGE PAS SUR UNE LARGEUR.
+// Il a longtemps valu 1,70 m en dur — un reglage taille a la main pour une chaussee de 9 m.
+// Quand l'urbanisme a elargi les avenues de 9 a 13 m, ce 1,70 m est reste le meme nombre
+// ABSOLU alors que l'axe de la voie, lui, s'etait eloigne du milieu de la chaussee : la
+// voiture rangee se retrouvait a 4,95 m de l'axe de la rue, c'est-a-dire contre la bordure du
+// carrefour suivant, ou elle se bloquait pour de bon (mesure : la voiture de tete restee
+// 700 images immobile a 8 m du bout de l'avenue, toute la file derriere elle, et la
+// depanneuse prioritaire coincee dedans — 76,8 m parcourus en 30 s au lieu de 120,6).
+// On le CALCULE donc a partir de deux choses, et de rien d'autre :
+//   — le BESOIN : deux vehicules se croisent s'il y a (larg_A + larg_B)/2 + un jeu entre
+//     leurs axes. Ce jeu est celui qu'exige le garde-fou de collision, pas un chiffre rond.
+//   — LA PLACE : depuis l'axe de sa voie, celui qui se range n'a que larg/4 jusqu'a la
+//     bordure ; celui qui double a 3·larg/4 jusqu'a la bordure d'en face.
+// Le besoin est partage : celui qui se range en prend la moitie, dans la limite de la place
+// qu'il a ; celui qui double prend TOUT LE RESTE. Sur un boulevard de 13 m chacun fait 1,45 m,
+// sur une ruelle de 8 m le cedant n'a que 0,65 m et le prioritaire va chercher les 2,25 m
+// qui manquent sur la voie d'en face.
+const MARGE_CROISEMENT = 0.5;     // le jeu entre deux toles qui se croisent (garde-fou de collision)
+const MARGE_BORDURE = 0.15;       // on ne met jamais une roue sur le trottoir
+function gabaritVeh(v) { return (v && v.baseW) || 2.4; }
+function ecartsPriorite(cedant, prio, e) {
+  const larg = (e && e.larg) || 9;
+  const besoin = (gabaritVeh(cedant) + gabaritVeh(prio)) / 2 + MARGE_CROISEMENT;
+  const place = larg / 4 - gabaritVeh(cedant) / 2 - MARGE_BORDURE;
+  const range = Math.max(0, Math.min(place, besoin / 2));
+  const placeD = 3 * larg / 4 - gabaritVeh(prio) / 2 - MARGE_BORDURE;
+  return { range, double: Math.max(0, Math.min(placeD, besoin - range)) };
+}
+// `autre` : l'AUTRE vehicule de la manoeuvre (celui dont la sirene arrive quand on se range,
+// celui qu'on double quand on deborde). Il donne son gabarit ; inconnu, on prend une voiture.
+function ecarteChaussee(c, dt, sens, autre) {
   // LE DEPORT SE MESURE PAR RAPPORT A LA VOIE, PAS EN CUMUL. Premiere version : on comptait
   // les centimetres deja consentis (`c.ecart` += pas) et on s'arretait a 1,70 m. Resultat :
   // le vehicule se deportait en une seconde, le suivi d'itineraire le ramenait tranquillement
@@ -10151,7 +10173,9 @@ function ecarteChaussee(c, dt, sens, but) {
   const e = c.voieSir, p = projVoie(c.x, c.z, e);
   const rx = -Math.cos(e.sens), rz = Math.sin(e.sens);          // « la droite » de la voie
   const dec = (c.x - p.px) * rx + (c.z - p.pz) * rz;            // deport ACTUEL, compte a droite
-  const visee = (but || ECART_SIRENE) * sens;
+  // sens vaut +1 quand je cede le passage (l'autre est le prioritaire), et -1 quand c'est moi qui double.
+  const ec = sens > 0 ? ecartsPriorite(c, autre, e) : ecartsPriorite(autre, c, e);
+  const visee = (sens > 0 ? ec.range : ec.double) * sens;
   const reste = (visee - dec) * sens;
   c.ecart = dec * sens;
   if (reste <= 0.02) return c.ecart;
@@ -10990,8 +11014,8 @@ function traficRoule(c, dt, opt) {
   if (opt.pilote && avanceReel(c) < 0.5 * dt && (c.raison === 'file' || (c.figeT || 0) > 2)) c.fileT = (c.fileT || 0) + dt;
   else c.fileT = 0;
   c.double = c.fileT > 3;
-  if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
-  if (c.sireneVeh) ecarteChaussee(c, dt, 1, ECART_SIRENE);
+  if (c.double) ecarteChaussee(c, dt, -1, null);
+  if (c.sireneVeh) ecarteChaussee(c, dt, 1, c.sireneVeh);
   else if (opt.urgence) {
     // LE PRIORITAIRE DÉBORDE POUR DOUBLER. Attention au piège : `gapDevant` ne regarde qu'un
     // couloir de 1,2 m quand on est en intervention, justement pour ne pas faire la queue
@@ -11000,7 +11024,7 @@ function traficRoule(c, dt, opt) {
     // encore de un mètre et que le garde-fou de collision le clouait sur place (mesure :
     // 1 035 images immobile, 0 voiture doublée). On rouvre donc ici le couloir à 2,6 m
     // POUR DÉCIDER DU PAS DE CÔTÉ, et seulement pour ça.
-    if (gapDevant(c, 2.6)[0] < 14) ecarteChaussee(c, dt, -1, ECART_DOUBLE); else c.ecart = 0;
+    if (gapDevant(c, 2.6)[0] < 14) ecarteChaussee(c, dt, -1, null); else c.ecart = 0;
   } else c.ecart = 0;
   if (bloque) { c.bloqueT = (c.bloqueT || 0) + dt; if (c.bloqueT > 2.5) { c.bloqueT = 0; c.ia = null; } }
   else c.bloqueT = 0;
@@ -15592,7 +15616,7 @@ function policeTick(dt) {
     // levait le pied (codeRoute) mais restait au milieu de la voie : le camion de pompiers
     // finissait par lui coller au pare-chocs. `ecarteChaussee` ne pose le pas de côté que
     // s'il est libre — donc sans un seul dégât.
-    if (pc.sireneVeh) ecarteChaussee(pc, dt, 1, ECART_SIRENE); else pc.ecart = 0;
+    if (pc.sireneVeh) ecarteChaussee(pc, dt, 1, pc.sireneVeh); else pc.ecart = 0;
     // La police ouvre le feu dès le niveau 2 de recherche (et toujours pendant un braquage).
     // Plus le délit est grave, plus elle tire loin, souvent et juste.
     const braquage = police.alarmT > simTime, tenace = police.crimeLevel || 0;
@@ -20065,10 +20089,10 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // l'ambulance sans jamais lui laisser la place. Mesure : sur 78 vehicules croises devant une
   // depanneuse en intervention, 24 ne s'ecartaient pas d'un centimetre. Se ranger passe avant
   // doubler : on ne double pas pendant qu'une sirene arrive derriere.
-  if (c.sireneVeh) { c.double = false; ecarteChaussee(c, dt, 1, ECART_SIRENE); }
+  if (c.sireneVeh) { c.double = false; ecarteChaussee(c, dt, 1, c.sireneVeh); }
   else {
     c.double = T < (st.oubliFile || 0) && !((st.reculT || 0) > T);
-    if (c.double) ecarteChaussee(c, dt, -1, ECART_DOUBLE);
+    if (c.double) ecarteChaussee(c, dt, -1, null);
   }
   // Bloqué : on cherche une direction libre autour de l'obstacle et on recalcule l'itinéraire.
   // Sans cela, un ami qui vient te chercher renonçait au premier poteau venu.

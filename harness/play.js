@@ -12924,6 +12924,22 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
     let graine332 = 20240607;
     const vraiRandom332 = Math.random;
     Math.random = () => ((graine332 = (graine332 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    // L'HORLOGE REPART D'UNE ORIGINE FIXE, ET AVANT LA RECONSTRUCTION DU MONDE.
+    // C'était la dernière cause d'instabilité de ce test : `simTime` COURT d'un test à
+    // l'autre et aucune reconstruction ne la remet à zéro, donc tous les compteurs de la ville
+    // (recalcul d'itinéraire, phases des feux, patience des secours) se retrouvaient à une
+    // phase différente selon le nombre de tests déjà joués. Mesuré : dépanneuse à 98,5-100 %
+    // de trajet sur le bitume lancée seule, 80,5 % dans le lot 239-241 + 294 + 298 + 331-335 —
+    // et c'est ce seul pourcentage qui faisait tomber le test.
+    // POURQUOI AVANT `__SHOT.go`, ET NON APRÈS. La remettre à zéro APRÈS la reconstruction
+    // avait été essayé et c'était PIRE (la dépanneuse pointait à 23,7 m/s alors qu'elle est
+    // plafonnée à 13) : tous les horodatages posés pendant la construction se retrouvaient
+    // d'un coup dans un passé lointain, donc tous échus. Posée AVANT, l'origine est la même
+    // pour la construction et pour la mesure : la ville entière naît à t = 3 000 s, quel que
+    // soit le nombre de tests déjà joués. Le test ne dépend plus de la valeur absolue de
+    // l'horloge, seulement de son écart depuis la naissance du monde.
+    // Mesure après : le test est vert seul ET dans le lot complet (10/10).
+    G.simTime = 3000;
     __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12, frais: true });
     const c = G.city; c.horaires = false; G.metiersRepos();
     G.P.pos.set(300, 0.3, 300);   // le joueur loin de tout : il ne gêne aucun trajet
@@ -13066,12 +13082,9 @@ test('les cinq véhicules de service (dépanneuse, pompier, travaux, police, fac
   // graine de la circulation, qui ne repartait pas avec la ville (corrigée dans le jeu,
   // TRAFIC_GRAINE0). Lancé seul, ce test rend maintenant deux fois de suite exactement les
   // mêmes chiffres, au mètre près : 1 416 / 545 / 543 / 568 / 704 m.
-  // La troisième cause n'est pas corrigeable ici : `simTime`, l'horloge du jeu, COURT d'un test
-  // à l'autre et aucune reconstruction ne la remet à zéro. Tous les compteurs de la ville
-  // (recalcul d'itinéraire, feux, patience des secours) se retrouvent donc à une phase
-  // différente selon le nombre de tests déjà passés, et les trajets diffèrent. Essayé : la
-  // remettre à zéro au début du test — c'est PIRE, tous les délais échus partent d'un coup et
-  // la dépanneuse a pointé à 23,7 m/s alors qu'elle est plafonnée à 13.
+  // La troisième cause était `simTime`, l'horloge du jeu, qui COURT d'un test à l'autre : elle
+  // est désormais posée à une origine FIXE (3 000 s) AVANT la reconstruction du monde, en tête
+  // de ce test — voir le commentaire là-haut. Le test est vert seul et dans le lot.
   // Les seuils sont donc ceux que la mesure soutient DANS LES DEUX CAS (seul et enchaîné) :
   //   — `solide === 0` : jamais un véhicule dans un mur, mesuré 0 partout ;
   //   — `vehMax <= 10` : la plus longue série d'images CONSÉCUTIVES encastré dans une autre

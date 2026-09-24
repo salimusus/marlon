@@ -5958,6 +5958,7 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
   await page.evaluate(f => { window.__SHOT.fraisDefaut = f;
     try { if (f) localStorage.setItem('superobby.banc.frais', '1'); else localStorage.removeItem('superobby.banc.frais'); } catch (e) {} }, fraisDefaut);
   let pass=0, fail=0;
+  let fuitePrec = null; const fuiteLog = [];
   const filtre = process.env.FILTRE ? new RegExp(process.env.FILTRE, 'i') : null;
   // PLAGE="180-250" : ne joue que les tests n° 180 a 250 (numerotation = ordre du fichier).
   // Les pannes de FIABILITE ne se voient qu'en LOT : un test sali par ses voisins est vert
@@ -5988,6 +5989,23 @@ test('une partie déjà sauvegardée se recharge sans écran noir', async p => {
     } catch (e) {} }
     console.log(`${ok?'  OK  ':'ÉCHEC '} [${idx+1}] ${c.n}\n        ${r.detail}${newErr.length?'\n        erreurs: '+newErr.slice(0,3).join(' | ').slice(0,300):''}${sale}`);
     ok?pass++:fail++;
+    // ---- TEMPORAIRE (poste FIABILITE r76) : qui fait grossir la scene, test par test ----
+    if (process.env.FUITE) { try {
+      const c2 = await page.evaluate(() => window.__SHOT.fuites());
+      if (fuitePrec) { const d = c2.total - fuitePrec.total;
+        if (d !== 0) { const par = {};
+          const m = x => { const o = {}; x.classement.forEach(e => o[e.ou] = e.objets); return o; };
+          const a = m(fuitePrec), b = m(c2);
+          Object.keys(b).forEach(k => { if ((b[k] || 0) !== (a[k] || 0)) par[k] = (b[k] || 0) - (a[k] || 0); });
+          Object.keys(a).forEach(k => { if (!(k in b)) par[k] = -a[k]; });
+          fuiteLog.push({ idx: idx + 1, n: c.n.slice(0, 70), d, total: c2.total, par });
+        } }
+      fuitePrec = c2;
+    } catch (e) {} }
+  }
+  if (process.env.FUITE && fuiteLog.length) {
+    console.log('\n===== CROISSANCE DE LA SCENE, TEST PAR TEST =====');
+    for (const e of fuiteLog) console.log(`  [${e.idx}] ${e.d > 0 ? '+' : ''}${e.d} → ${e.total}  ${e.n}\n       ${Object.entries(e.par).map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k}`).join('\n       ')}`);
   }
   console.log(`\n${pass} réussis, ${fail} échoués — ${errors.length} erreur(s) console au total`);
   if(errors.length) errors.slice(0,8).forEach(e=>console.log('  '+e.slice(0,200)));
@@ -21497,4 +21515,16 @@ test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rech
     && r.mort.mort && r.mort.wanted === 0 && !dit(r.mort.texte, 'la police recherche')
     && r.moi.partis === 6 && r.moi.touches === 6;
   return { ok, detail: `avant : tout le test de collision de shotsTick était enfermé dans « if (s.mine) », 3 balles de police tirées à bout portant sur un habitant lui faisaient 0 point de dégât et la traversaient · maintenant (a) 3 balles de police = ${r.flic.degats} points de dégâts, ★ de l'enfant ${r.flic.wanted}, « ${r.flic.texte} » · (b) la balle suivante l'abat (mort=${r.mort.mort}) : ★ ${r.mort.wanted}, « ${r.mort.texte} » — l'enfant n'est pas l'auteur · (c) non-régression, l'enfant tire 6 balles visées à 12 m : ${r.moi.partis} parties du canon, ${r.moi.touches} touches, ${r.moi.degats} points de dégâts` };
+});
+
+// ---- TEMPORAIRE (poste FIABILITE r76) : recensement, pas encore un garde-fou ----
+test('RECENSEMENT des objets restes directement dans scene', async p => {
+  const r = await p.evaluate(() => {
+    const avant = __SHOT.fuites();
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const apres = __SHOT.fuites();
+    return { avant, apres };
+  });
+  const f = (c) => c.classement.slice(0, 14).map(e => `${e.objets} obj / ${e.maillages} maillages ← ${e.ou} [${Object.keys(e.types).slice(0, 4).join(', ')}]`).join('\n           ');
+  return { ok: true, detail: `AVANT go() : ${r.avant.total} objets\n           ${f(r.avant)}\n        APRES go(frais) : ${r.apres.total} objets\n           ${f(r.apres)}` };
 });

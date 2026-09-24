@@ -26767,7 +26767,13 @@ function degageService(c, dt) {
   const wp = R && R.length ? R[Math.min(c.ia.i, R.length - 1)] : null;
   if (!wp) return false;
   const dh = CAP(Math.atan2(wp[0] - c.x, wp[1] - c.z) - c.h);
+  // ON NE TOURNE PAS DANS LE VOISIN NON PLUS. Le pas de sortie etait bien refuse s'il touchait
+  // une autre tole, mais LE BRAQUAGE, lui, n'etait jamais annule : un camion de service qui
+  // sort de son hangar pivotait son arriere dans la caisse d'a cote et l'y laissait. C'est le
+  // meme defaut que la marche arriere de `rouleVers` (cap de depart releve apres le braquage).
+  const h0d = c.h;
   c.h += clamp(dh, -1, 1) * 1.8 * dt;
+  if (vehiculeMord(c, c.x, c.z, c.h) && !vehiculeMord(c, c.x, c.z, h0d)) c.h = h0d;
   const v = 3;
   const nx = c.x + Math.sin(c.h) * v * dt, nz = c.z + Math.cos(c.h) * v * dt;
   // On sort d'un MUR, jamais d'un VEHICULE : le camion de pompiers qui se degageait d'un

@@ -18117,6 +18117,17 @@ const CAM_RETOUR = 5;          // mètres par seconde : vitesse maximale à laqu
 // et une part CARRÉE qui garde la grande vitesse pour le bord du stick.
 const CAM_MORTE = 0.075;       // zone morte RONDE du stick droit : juste au-dessus de la dérive d'une DualSense usée (5 % sur les DEUX axes font 7,07 % en diagonale — mesuré : 0,9 °/s de rotation parasite avec 6 %)
 const CAM_LIN = 0.35;          // part linéaire de la courbe de visée ; le reste est en carré
+// SYNTHÈSE DES DEUX VERSIONS (round 76). La 0.10 posait la zone morte du regard à 12 % pour
+// qu'une manette usée qui rend 8 % SUR LES DEUX AXES (11,3 % en diagonale) ne fasse pas tourner
+// l'image toute seule — mesuré : 3,4 °/s de dérive avec 7,5 % de zone morte ronde, et c'est un
+// vrai défaut, l'enfant verrait le décor partir. Mais 12 % de zone morte RONDE avale aussi la
+// poussée LÉGÈRE à 12 % de course : mesuré 0 °/s là où il en faut entre 2 et 25 (test 396), et
+// l'on ne peut pas avoir les deux avec une seule zone morte ronde. On garde donc les deux :
+// un squelch par AXE à 8,5 % qui n'agit que si AUCUN des deux axes ne dépasse ce seuil — la
+// dérive meurt, et le grief classique de la zone morte carrée (« en diagonale un axe est coupé
+// et l'on part tout droit ») ne s'applique pas, puisqu'on annule le vecteur ENTIER ou rien —
+// puis la zone morte RONDE de 7,5 % et la courbe de visée du round 71.
+const CAM_DERIVE = 0.085;      // dérive d'un stick usé : 8 % sur chaque axe doivent rester du silence
 // ARBITRAGE DE FUSION (round 76). La version 0.10 avait ramené ces deux vitesses à 3,8 et
 // 2,4 rad/s. Mesuré au banc (test 396) avec ces valeurs : 217,7 °/s au bord du stick pour
 // 280 à 340 exigés, 59,3 °/s à mi-course pour 60 au minimum — on n'arrive plus à se retourner
@@ -29801,6 +29812,7 @@ function padStick(x, y, morte = settings.padDeadzone || .12) {
   return MarlonControls.radial(x, y, morte);
 }
 function padVisee(x, y) {
+  if (Math.max(Math.abs(x), Math.abs(y)) < CAM_DERIVE) return [0, 0];   // voir CAM_DERIVE : le silence d'un stick usé
   return MarlonControls.radial(x, y, CAM_MORTE, true);
 }
 const padController = MarlonControls.createController();

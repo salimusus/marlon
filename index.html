@@ -9089,7 +9089,15 @@ function buildSports() {
   box(BX, 1.2, BZ, 3, 2.4, 3, 0xb57cff, { studs: false, noRoute: true });                  // la tour
   plat(BX, 2.5, BZ, 3.4, 3.4, 0xffd23f, { studs: false, noRoute: true }, 0.2);              // sa plateforme
   for (const dx of [-1.6, 1.6]) box(BX + dx, 3.2, BZ, 0.14, 1.2, 3.2, 0xb57cff, { studs: false, noRoute: true });   // les garde-corps, solides
-  for (let i = 0; i < 5; i++) plat(BX, 0.5 + i * 0.4, BZ - 2 - i * 0.9, 2.6, 0.9, 0x8f98ab, { studs: false, noRoute: true }, 0.5 + i * 0.4);   // l'escalier, au nord
+  // L'ESCALIER, AU NORD. Il MONTAIT EN S'ELOIGNANT DE LA TOUR (n° 91 du contrôleur) : la
+  // marche collee a la tour etait a 0,50 m, la plus lointaine a 2,10 m, et la plateforme,
+  // elle, est a 2,50 m. En arrivant du nord on rencontrait donc d'abord une face de 2,10 m
+  // (mesure : bloque a z = -120,45, 226 images sans avancer), et depuis la derniere marche
+  // il n'y avait plus aucun chemin : il fallait sauter par-dessus son propre escalier.
+  // Les hauteurs sont inversees : 0,50 m au nord (la premiere marche qu'on rencontre, a
+  // 0,34 m du sol) puis 0,90 / 1,30 / 1,70 / 2,10 m contre la tour, d'ou l'on monte sur la
+  // plateforme d'un dernier pas de 0,40 m. Marches de 0,40 m, sous le pas du joueur (0,60).
+  for (let i = 0; i < 5; i++) { const my = 2.1 - i * 0.4; plat(BX, my, BZ - 2 - i * 0.9, 2.6, 0.9, 0x8f98ab, { studs: false, noRoute: true }, my); }   // l'escalier, au nord : il monte VERS la tour
   for (let i = 0; i < 6; i++) plat(BX, 2.3 - i * 0.35, BZ + 2 + i * 0.95, 1.6, 0.95, 0x35d0e6, { studs: false, noRoute: true }, 2.3 - i * 0.35);   // la glissade, au sud
   sign(BX + 3.5, 0.2, BZ + 3, '🛝 Toboggan', false, -Math.PI / 2);
   // ---- LA PLACE DU SPORT (est de l'Allee) : la buvette, le ping-pong, la fontaine ----

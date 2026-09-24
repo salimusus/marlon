@@ -257,3 +257,26 @@ conducteurs continuent de ne lire que `city.passages`.
   sont antérieurs (mesurés identiques avant/après) : ils appartiennent aux postes qui ont
   bâti ces quartiers.
 - **Les six chaussées sous 7,60 m** du §7 restent comme décrites.
+
+## 5. Les bancs Node de la version 0.10 (lancés, et verts)
+
+La 0.10 est arrivée avec ses propres bancs en Node (rapides, sans navigateur, chargés par
+`harness/run.js` — ils acceptent `JEU=` pour comparer deux versions). Le seul échec de
+géométrie qu'ils relevaient :
+
+> `All building and shop footprints stay outside the 89 streets : building −54,28 overlaps
+> street −65,18 by 0.75`
+
+C'est **exactement** le raccord du §2 : son bord est tombait à x = -61 et l'emprise du
+commissariat commence à x = -61,75. Le décalage à x = -66,5 (qui rendait aussi ses deux murs)
+ferme ce défaut : la chaussée y est passée à 9 m à l'élargissement, bord est à x = -62,
+**25 cm de dégagement**. Tolérance du banc : 40 cm de chevauchement ; la pire valeur de la
+ville est maintenant **+0,30 m**, les trois boutiques de z = 19,5 contre la rue z = 26 (défaut
+connu du §7).
+
+État après travaux : `traffic.js` **14/14**, `verify.cjs` 14 + cosmétiques, `vehicle-contact.js`
+6/6, `strategy.js` 7/0, `city-detail.js` 10/10, `cinematic.js` 14, `empire.js` 15/0,
+`save-strategy.js` 4/0, `gamepad.js`, `controls-tv.js`, `cosmetic-performance.js` : **0 échec
+sur les 12 bancs**. `harness/audit.js` : la liste des poteaux plantés dans un bâtiment est
+redevenue celle d'avant mes corrections (10, tous antérieurs, tous à La Zone) et le nombre de
+régions piétonnes séparées passe de 11 à 10.

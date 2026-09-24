@@ -1258,8 +1258,21 @@ test('un ami organise un braquage, attend au volant et file à la villa', async 
 
 
 test('la caméra se rapproche dans une pièce et devant un objet', async p => {
-  // la distance de caméra glisse doucement : on attend qu'elle se stabilise
-  const lis = async cond => { await attendre(p, cond, 40000); return p.evaluate(() => ({ dedans: __G.cam.dedans, dist: +__G.cam.dist.toFixed(2), inter: !!__G.city.interact })); };
+  // ON LIT UNE PERCHE POSÉE, PAS UNE PERCHE EN ROUTE (poste CAMÉRA, round 77). `attendre` rend
+  // la main à la PREMIÈRE image où le seuil est franchi : on mesurait donc la perche en plein
+  // glissement, et la valeur dépendait de l'endroit d'où elle partait. Mesuré : 9,05 m en pleine
+  // rue lancé seul (perche déjà posée à 9 m) contre 7,67 m derrière un autre test (perche qui
+  // remontait de 3,15 m, héritée de la scène du frigo) — et comme le test exige « dedans, on est
+  // 2 m plus près que dehors », il tombait pour TROIS CENTIMÈTRES en suite complète. La cause
+  // première est corrigée dans `__SHOT.go` (la caméra y est reposée comme au chargement) ; ici on
+  // ajoute la ceinture : on attend le seuil, PUIS on attend que la perche ne bouge plus.
+  const posee = () => { const d = __G.cam.dist, p0 = window.__camPrec; window.__camPrec = d; return p0 != null && Math.abs(d - p0) < 0.02; };
+  const lis = async cond => {
+    await attendre(p, cond, 40000);
+    await p.evaluate(() => { window.__camPrec = null; });
+    await attendre(p, posee, 30000);
+    return p.evaluate(() => ({ dedans: __G.cam.dedans, dist: +__G.cam.dist.toFixed(2), inter: !!__G.city.interact }));
+  };
   await p.evaluate(() => __SHOT.go({ world: 4, x: 0, y: 1, z: 40, hour: 12 }));   // en pleine rue
   const dehors = await lis(() => __G.cam.dist > 7.5);
   await p.evaluate(() => __SHOT.go({ world: 4, x: -35.5, y: 1, z: -27, hour: 12 }));   // hall d'immeuble
@@ -1268,6 +1281,10 @@ test('la caméra se rapproche dans une pièce et devant un objet', async p => {
   //  parce qu'a 4,8 m dans une halle de vingt-quatre metres on ne voyait rien. Le seuil de ce
   //  test passe donc de 4,2 a 6,2 m : ce qu'il garantit reste « dedans, on est plus pres que
   //  dehors, et devant un objet plus pres encore ».)
+  // (round 77 : la perche POSEE de ce hall vaut 4,84 m. Elle valait 6,54 m tant que la taille
+  //  de la piece etait prise au lancer de rayons, qui sortait par la porte et faisait passer un
+  //  hall de 6,5 x 8,5 m pour une halle de quinze metres — capture a l'appui, la camera sortait
+  //  du batiment et l'enfant se voyait tout petit au fond d'une porte.)
   const dedans = await lis(() => __G.cam.dist < 6.2);
   await p.evaluate(() => { __SHOT.go({ world: 4, x: 70, y: 1, z: 158, hour: 12 }); });   // devant le frigo de la villa
   const frigo = await lis(() => !!__G.city.interact && __G.cam.dist < 3.6);
@@ -16399,7 +16416,11 @@ test('la camera regarde le ciel et le sol sans se retourner, et l axe vertical s
         ds.axes = [0, 0, 0, ry];
         for (let i = 0; i < n; i++) { G.P.pos.set(-60, 0.5, 196); G.pollGamepad(1 / 120); G.pollGamepad(1 / 120); G.camPerche(1 / 60, false); }
         return { pitch: +G.cam.pitch.toFixed(3), deg: +(G.cam.pitch * DEG).toFixed(1), camY: +G.camera.position.y.toFixed(2),
-          d: +Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.z - G.P.pos.z).toFixed(2), vue: vueY() };
+          d: +Math.hypot(G.camera.position.x - G.P.pos.x, G.camera.position.z - G.P.pos.z).toFixed(2), vue: vueY(),
+          // de quoi lire un echec EN LOT sans relancer : ce qui pilote la longueur de la perche
+          dist: +G.cam.dist.toFixed(2), base: +G.cam.base.toFixed(2), hausse: +(G.cam.hausse || 0).toFixed(3),
+          cible: +Math.hypot(G.cam.target.x - G.P.pos.x, G.cam.target.z - G.P.pos.z).toFixed(2),
+          dedans: !!G.cam.interieur, fixe: !!G.cam.fixe, zoom: !!G.P.zoom, veh: !!G.drive.car };
       };
       const res = {};
       G.cam.pitch = 0.32; G.cam.libre = null; G.cam.dLisse = null;
@@ -16424,7 +16445,7 @@ test('la camera regarde le ciel et le sol sans se retourner, et l axe vertical s
   const ok = r.ciel.pitch <= -0.4 && r.ciel.vue > 0.25 && r.ciel.camY > 0.5 && r.ciel.d > 1.5
     && r.sol.pitch >= 1.2 && r.sol.vue < -0.6 && r.retour.pitch <= -0.4
     && r.inverse.pitch > 0.32 && r.normal.pitch < 0.32 && r.bouton && r.retenu === '1';
-  return { ok, detail: `avant : la butee haute etait a -0,15 rad (-8,6°), le joueur ne pouvait NI voir le ciel NI viser le haut d une tour, et l image se bloquait net · maintenant, stick droit pousse vers le haut deux secondes : inclinaison ${r.ciel.deg}° (${r.ciel.pitch} rad), le regard monte a ${r.ciel.vue} de vertical, la perche se raccourcit a ${r.ciel.d} m pour que l objectif reste a ${r.ciel.camY} m AU-DESSUS du sol (sans ce raccourcissement il partait 2,7 m sous le bitume) · vers le bas : ${r.sol.deg}°, regard a ${r.sol.vue}, l image ne se retourne jamais · et le reglage « Caméra verticale » de la pause inverse bien l axe (${r.inverse.pitch} au lieu de ${r.normal.pitch}) et se retient (localStorage=${r.retenu})` };
+  return { ok, detail: `avant : la butee haute etait a -0,15 rad (-8,6°), le joueur ne pouvait NI voir le ciel NI viser le haut d une tour, et l image se bloquait net · maintenant, stick droit pousse vers le haut deux secondes : inclinaison ${r.ciel.deg}° (${r.ciel.pitch} rad), le regard monte a ${r.ciel.vue} de vertical, la perche se raccourcit a ${r.ciel.d} m (voulue ${r.ciel.dist}, base ${r.ciel.base}, hausse ${r.ciel.hausse}, cible a ${r.ciel.cible} m du joueur, dedans=${r.ciel.dedans}, fixe=${r.ciel.fixe}, zoom=${r.ciel.zoom}, vehicule=${r.ciel.veh}) pour que l objectif reste a ${r.ciel.camY} m AU-DESSUS du sol (sans ce raccourcissement il partait 2,7 m sous le bitume) · vers le bas : ${r.sol.deg}°, regard a ${r.sol.vue}, l image ne se retourne jamais · et le reglage « Caméra verticale » de la pause inverse bien l axe (${r.inverse.pitch} au lieu de ${r.normal.pitch}) et se retient (localStorage=${r.retenu})` };
 });
 
 test('apres un virage, la camera se replace derriere le joueur en douceur, sans coup sec', async p => {
@@ -20427,7 +20448,9 @@ test('au volant d\'une voiture garée entre deux autres, l\'écran n\'est plus b
     out.place = { x: +vp.x.toFixed(1), z: +vp.z.toFixed(1) };
     out.voisines = G.city.cars.filter(c => c !== vp && Math.abs(c.z - vp.z) < 3 && Math.abs(c.x - vp.x) < 4.2).length;
     G.P.pos.set(vp.x, 0.3, vp.z + 3.2); G.P.facing = Math.PI;
+    out.prise = { busy: !!vp.busy, epave: !!vp.dead };   // ce qui EMPECHE de monter (enterCar sort sans un mot)
     G.enterCar(vp); G.cam.recale = true;
+    out.auVolant = G.drive.car === vp;
     // LE CAP DE LA CAMÉRA SE POSE À LA MAIN. `__SHOT.go` ne le remet pas quand la vue ne le
     // demande pas : lancé APRÈS un autre test, celui-ci héritait du cap laissé par le
     // précédent, la caméra regardait à côté du parking et la mesure ne voulait plus rien dire
@@ -20489,10 +20512,10 @@ test('au volant d\'une voiture garée entre deux autres, l\'écran n\'est plus b
     return out;
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
-  const ok = r.voisines >= 2 && r.bouche <= 0.08 && r.saVoiture.libre && r.saVoiture.cadre
+  const ok = r.auVolant && r.voisines >= 2 && r.bouche <= 0.08 && r.saVoiture.libre && r.saVoiture.cadre
     && r.rueDevant.libre && r.rueDevant.cadre && !r.dansUnVoisin
     && !!r.versVoisine && r.versVoisine.camLibres < r.versVoisine.ecart && r.versVoisine.murEntreVue >= 0;
-  return { ok, detail: `scène du QA refaite à l'identique — voiture garée en (${r.place.x} ; ${r.place.z}) avec ${r.voisines} voisines, joueur au volant, à l'arrêt, ne touchant à rien · AVANT : la caméra se posait à 5,39 m derrière et 3,73 m de haut, soit 15 cm sous l'auvent rayé du snack (8,2 × 0,6 × 1,4 m) que la perche traversait — 88,9 % des 144 rayons du champ butaient sur un objet à moins de 1,80 m de l'objectif, l'écran était un aplat rouge et blanc · APRÈS : ${Math.round(r.bouche * 100)} % de rayons collés (le plus proche à ${r.plusProche ? r.plusProche.d + ' m' : 'rien sous 1,80 m'}), la perche monte de ${r.cam.hausse} rad au lieu de reculer et se pose à ${r.cam.perche} m (${r.cam.recul} m derrière, ${r.cam.y} m de haut) · on voit sa voiture (vue libre=${r.saVoiture.libre}, dans le cadre=${r.saVoiture.cadre}) ET la rue 12 m devant en (${r.rueDevant.x} ; ${r.rueDevant.z}) (libre=${r.rueDevant.libre}, cadre=${r.rueDevant.cadre}), et la caméra n'est logée dans aucune voisine (${r.dansUnVoisin}) · les carrosseries entrent enfin dans le test d'occlusion : vers la voisine à ${r.versVoisine ? r.versVoisine.ecart : '?'} m, camLibres rend ${r.versVoisine ? r.versVoisine.camLibres : '?'} m et murEntreVue ${r.versVoisine ? r.versVoisine.murEntreVue : '?'} m (avant : 6 m et −1, « rien sur le chemin »)` };
+  return { ok, detail: `scène du QA refaite à l'identique — voiture garée en (${r.place.x} ; ${r.place.z}) avec ${r.voisines} voisines, joueur au volant=${r.auVolant} (réservée par un autre=${r.prise.busy}, épave=${r.prise.epave}), à l'arrêt, ne touchant à rien · AVANT : la caméra se posait à 5,39 m derrière et 3,73 m de haut, soit 15 cm sous l'auvent rayé du snack (8,2 × 0,6 × 1,4 m) que la perche traversait — 88,9 % des 144 rayons du champ butaient sur un objet à moins de 1,80 m de l'objectif, l'écran était un aplat rouge et blanc · APRÈS : ${Math.round(r.bouche * 100)} % de rayons collés (le plus proche à ${r.plusProche ? r.plusProche.d + ' m' : 'rien sous 1,80 m'}), la perche monte de ${r.cam.hausse} rad au lieu de reculer et se pose à ${r.cam.perche} m (${r.cam.recul} m derrière, ${r.cam.y} m de haut) · on voit sa voiture (vue libre=${r.saVoiture.libre}, dans le cadre=${r.saVoiture.cadre}) ET la rue 12 m devant en (${r.rueDevant.x} ; ${r.rueDevant.z}) (libre=${r.rueDevant.libre}, cadre=${r.rueDevant.cadre}), et la caméra n'est logée dans aucune voisine (${r.dansUnVoisin}) · les carrosseries entrent enfin dans le test d'occlusion : vers la voisine à ${r.versVoisine ? r.versVoisine.ecart : '?'} m, camLibres rend ${r.versVoisine ? r.versVoisine.camLibres : '?'} m et murEntreVue ${r.versVoisine ? r.versVoisine.murEntreVue : '?'} m (avant : 6 m et −1, « rien sur le chemin »)` };
 });
 
 // ================= POSTE BÂTIMENTS — escaliers, paliers et garde-corps =================
@@ -21626,4 +21649,56 @@ test('la scene ne grossit pas d un test a l autre : les objets directement dans 
   // de plus, 400 a l'heritage normal d'un test voisin (balles en vol, grenades posees).
   const ok = r.apres <= 200 && r.avant <= 400 && r.ephemeres === 0;
   return { ok, detail: `avant : la mort d'un personnage posait 249 maillages directement dans \`scene\`, qui ne vieillissaient que dans la boucle d'affichage — 2 612 objets releves a l'entree d'un test pour 135 attendus, ~5 000 appels de dessin herites, et le budget d'image a 15 166 au lieu de 9 621 · maintenant tout ce qui est ephemere (morceaux d'explosion, ondes de choc, impacts) vit dans le groupe \`ephemeres\` que la reconstruction du monde vide d'office · heritage des tests precedents : ${r.avant} objets (plafond 400) → ${r.pireAvant.join(' · ')} · ville neuve : ${r.apres} objets (plafond 200), groupe des ephemeres vide=${r.ephemeres === 0} → ${r.pireApres.join(' · ')}` };
+});
+
+// ---- POSTE DIVERS (round 77) : CE QUE COUTE UNE MORT ----
+// Le poste FIABILITE avait mesure +455 appels de dessin par mort, dont la moitie pour les
+// seules ombres portees des morceaux. Ce test fige une explosion (vitesses a zero, duree de
+// vie repoussee), rend DEUX FOIS la meme image depuis la MEME camera posee a la main — une
+// fois avec l'ancien comportement (tous les morceaux portent leur ombre), une fois avec la
+// regle en vigueur — et compare a la fois la facture et LES PIXELS. Aucune image de jeu ne
+// tourne pendant la mesure : elle est donc reproductible au pixel pres (le bruit de fond est
+// verifie a zero).
+test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l\'explosion reste la meme', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 16, frais: true });
+    const b = G.bots.find(x => x.av && x.av.group.visible && !x.ko);
+    if (!b) return { pourquoi: 'aucun habitant visible' };
+    b.pos.set(0, 0, 49); b.av.group.position.set(0, 0, 49); b.av.group.updateMatrixWorld(true);
+    // camera posee a la main : la perche du jeu n'arrive jamais deux fois au meme endroit
+    G.camera.position.set(0, 9, 41); G.camera.lookAt(0, 0.4, 50); G.camera.updateMatrixWorld(true);
+    const gl = G.renderer.getContext(), w = G.renderer.domElement.width, h = G.renderer.domElement.height;
+    const pixels = () => { G.renderer.render(G.scene, G.camera); const t = new Uint8Array(w * h * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, t); return t; };
+    const ecart = (a, c) => { let n = 0; for (let i = 0; i < a.length; i += 4) {
+      const d = Math.max(Math.abs(a[i] - c[i]), Math.abs(a[i + 1] - c[i + 1]), Math.abs(a[i + 2] - c[i + 2]));
+      if (d > 4) n++; } return +(100 * n / (a.length / 4)).toFixed(3); };
+    G.renderer.info.autoReset = false;
+    const cout = () => { G.renderer.info.reset(); G.renderer.render(G.scene, G.camera); return G.renderer.info.render.calls; };
+    const calme = cout();
+    const n0 = G.morceaux.length;
+    G.explode(b.av);
+    const nx = G.morceaux.slice(n0);
+    for (const d of nx) { d.vel.set(0, 0, 0); d.ang.set(0, 0, 0); d.life = 9999; }   // l'explosion se fige
+    const garde = nx.map(d => d.m.castShadow);
+    const douze = cout(), imgDouze = pixels();
+    for (const d of nx) d.m.castShadow = true;
+    const toutes = cout(), imgToutes = pixels(), imgToutes2 = pixels();
+    for (const d of nx) d.m.castShadow = false;
+    const aucune = cout(), imgAucune = pixels();
+    G.renderer.info.autoReset = true;
+    // ON NE LAISSE RIEN DERRIERE : les morceaux figes pollueraient le budget d'image du test
+    // suivant (voir « la scene ne grossit pas d un test a l autre »).
+    for (const d of nx) G.EPHEMERES.remove(d.m);
+    G.morceaux.length = n0;
+    return { morceaux: nx.length, ombres: garde.filter(Boolean).length,
+      calme, douze, toutes, aucune,
+      bruit: ecart(imgToutes, imgToutes2), pxDouze: ecart(imgToutes, imgDouze), pxAucune: ecart(imgToutes, imgAucune) };
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const coutDouze = r.douze - r.calme, coutToutes = r.toutes - r.calme;
+  const ok = r.morceaux >= 80 && r.ombres <= 12 && r.bruit === 0
+    && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
+  return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
 });

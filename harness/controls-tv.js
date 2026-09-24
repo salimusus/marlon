@@ -42,7 +42,9 @@ function sandbox(names, extra = {}) {
   vm.runInContext(names.map(declaration).join('\n'), s);
   return s;
 }
-const padRead = ['padProfil', 'padChapeau', 'padAxeChapeau', 'padLu', 'padStick', 'padVisee'];
+// camMorte / camDerive : depuis l'arbitrage r77, la zone morte de la CAMERA derive du curseur
+// du menu (settings.padDeadzone) au lieu d'etre une constante — padVisee et pollGamepad les appellent.
+const padRead = ['padProfil', 'padChapeau', 'padAxeChapeau', 'padLu', 'padStick', 'camMorte', 'camDerive', 'padVisee'];
 const gamepad = (axes = [0, 0, 0, 0]) => ({ id: 'Xbox', index: 0, connected: true, mapping: 'standard', axes,
   buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) });
 const near = (value, target, epsilon = 1e-9) => assert.ok(Math.abs(value - target) < epsilon, `${value} != ${target}`);

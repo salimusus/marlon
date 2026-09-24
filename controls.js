@@ -101,6 +101,7 @@
       // celles ou un bouton tenu appartenait a l'ecran precedent (tests node de la 0.10).
       const enJeu = c => /^game:/.test(c || '');
       const changementContexte = context !== null && current !== context && !(enJeu(current) && enJeu(context));
+      const entreeMenu = changementContexte && enJeu(context) && !enJeu(current);
       // La TOUTE PREMIERE lecture d'une manette, EN JEU, ne bloque rien : un navigateur ne
       // revele une manette qu'APRES un appui du joueur, donc cet appui-la est le sien et doit
       // compter (sinon le premier ✕, la premiere fleche et le premier coup de stick sont
@@ -111,7 +112,12 @@
       if (changed) {
         if (bloquerBoutons) { blocked = raw.b.slice(); blocked[6] = raw.l2 > .08; blocked[7] = raw.r2 > .08; }
         // Each axis/button rearms independently. Holding a stick never blocks menu Back.
-        if (changementContexte) axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
+        // ARBITRAGE r76 (avec le poste CAMERA) : la quarantaine des AXES ne s'arme qu'en
+        // ENTRANT dans un menu ou une pause. En SORTANT, l'enfant qui tient deja le stick doit
+        // marcher tout de suite — il ne va pas relacher le pouce pour que le jeu veuille bien
+        // repartir ; et au tout premier releve il n'y a rien a rearmer. Derriere un stick il
+        // n'y a aucune action destructrice a retenir, contrairement aux boutons.
+        if (entreeMenu) axesBlocked = [leftMagnitude > leftNeutral, rightMagnitude > rightNeutral];
         previous = Array(COUNT).fill(false); nav = null; navAt = 0; rearmer = false;
       }
       identity = id; context = current; rawPrevious = raw.b.slice();

@@ -30,7 +30,7 @@ function sandbox(names, extra = {}) {
     PAD_MAP: { 0: 'KeyG', 1: 'Space', 2: 'KeyV', 3: 'KeyE', 5: 'KeyX', 8: 'KeyT', 9: 'Escape' },
     PAD_BOUTONS: 18, PAD_HID_PS: [2, 0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17],
     PAD_SEUIL_GACHETTE: .35, PAD_GACHETTE_MORTE: .06,
-    CAM_MORTE: .075, CAM_LIN: .35, CAM_VYAW: 5.5, CAM_VPITCH: 3.3, CAM_PITCH_ARME: -.8, CAM_PITCH_HAUT: -.4,
+    CAM_MORTE: .075, CAM_LIN: .35, CAM_DERIVE: .085, CAM_VYAW: 5.5, CAM_VPITCH: 3.3, CAM_PITCH_ARME: -.8, CAM_PITCH_HAUT: -.4,
     cam: { yaw: 0, pitch: .1 }, settings: { sensib: 1 },
     performance: { now: () => 100 },
     setGarde(v) { s.P.garde = v; }, setAccroupi(v) { s.P.accroupi = v; },

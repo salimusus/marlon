@@ -273,19 +273,71 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
     for (const G2 of __G.gangs) for (const o of G2.membres) { o.x += 400; o.z += 400; o.av.group.position.set(o.x, o.y, o.z); }
     __G.police.agents.slice().forEach(a => { a.x += 400; a.z += 400; });
     b.pos.set(110, 0.4, 72); b.ko = 0; b.dead = 0; b.hp = 100000; b.wait = 9999; b.target = null; b.av.group.visible = true;
+    // LA CIBLE NE DOIT PAS PARTIR EN COURSE PENDANT LA RAFALE. `wait` ne suffit pas : un
+    // rendez-vous, une activite de quartier ou une bagarre reprennent la main sur l'habitant
+    // et il s'en va. Une seule mesure pleine suite l'a montre — « 0 balle sur 6 » alors que le
+    // meme test, seul, en touche 6 sur 6 : la balle partait droit vers z = +72 pendant que
+    // l'habitant marchait vers son rendez-vous. On coupe donc TOUT ce qui peut le faire bouger,
+    // et on releve son deplacement dans le bilan pour qu'un echec dise POURQUOI.
+    b.rdv = null; b.rdvRoute = null; b.ordre = null; b.activite = null; b.bagarre = null; b.fight = null;
+    b.drive = null; b.enVoiture = null; b.sport = null; b.gangMission = null; b.gardeCorps = 0; b.prison = 0;
+    b.av.group.position.copy(b.pos);
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
     __G.P.aimToggle = true; __G.P.aim = true;   // visée épaulée : dispersion réduite
   });
   const hp0 = await p.evaluate(() => __G.bots[0].hp);
+  const pos0 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
   // Une balle avance de ~4,7 m par image : l'ancien test ponctuel ne la voyait dans la
   // boîte du bot (0,84 m) qu'environ une fois sur six. La rafale rend l'écart visible.
+  let partis = 0, mutisme = '', fuite = 0, trajets = '', vol = null, pasDeVol = 0;
   for (let i = 0; i < 6; i++) {
-    await p.evaluate(() => { __G.P.fireCd = 0; __G.P.ammo = 8; __G.P.aim = true; __G.aimTick(); __G.fire(); });
-    await attendre(p, () => __G.shots.length === 0, 20000);
+    const t = await p.evaluate(() => { const G = __G, P = G.P, n = G.shots.length, b = G.bots[0];
+      // LA CIBLE EST REMISE A 12 M AVANT CHAQUE COUP. Une balle qui touche pose `fight = 'flee'`
+      // pour huit secondes : l'habitant DETALE. Mesure : 12,50 m parcourus pendant la rafale —
+      // plus que la distance de tir. Le verrouillage automatique ne le reprend que dans le cone
+      // de la camera (0,65 rad) ; une fois sorti du cone, la balle part tout droit et les cinq
+      // coups suivants manquent. C'est exactement « 0 balle sur 6 » releve sur la suite
+      // complete, alors que le meme test, lance seul sur une machine au repos, en touche 6 sur
+      // 6 : plus la page est lourde, plus chaque attente dure, plus l'habitant a le temps de
+      // fuir. Le test mesure la BALISTIQUE a 12 m, pas la course a pied : on le repose.
+      const derive = Math.hypot(b.pos.x - 110, b.pos.z - 72);
+      b.pos.set(110, 0.4, 72); b.av.group.position.copy(b.pos);
+      b.fight = null; b.fightT = 0; b.wait = 9999; b.rdv = null; b.activite = null; b.bagarre = null; b.ko = 0; b.dead = 0;
+      P.fireCd = 0; P.ammo = 8; P.aim = true; G.aimTick(); G.fire();
+      if (G.shots.length > n) {
+        // OU PART LA BALLE ? Une balle partie sans toucher un homme immobile a 12 m ne dit rien
+        // par elle-meme : on releve la cible verrouillee, le cap de la balle et le cap qu'il
+        // aurait fallu. Sans ce releve, « 0 balle sur 6 » reste une enigme.
+        const sh = G.shots[G.shots.length - 1];
+        const vise = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+        let ec = Math.atan2(sh.v.x, sh.v.z) - vise; ec = Math.abs(Math.atan2(Math.sin(ec), Math.cos(ec)));
+        // LA BALLE AVANCE EN PAS DE SIMULATION, PAS EN TEMPS REEL. Le test attendait jusqu'a
+        // 20 s de temps MUR que `shots` se vide ; sous rendu logiciel et machine chargee, la
+        // page peut ne rendre AUCUNE image pendant ce temps-la : les six balles restaient
+        // suspendues en l'air, 0 degat, alors que rien n'etait casse dans le tir. Signature
+        // relevee : 6 balles parties, 0 touche, fuite de la cible 0,00 m — elle n'avait jamais
+        // ete touchee. On fait donc voler la balle nous-memes, image par image (c'est la
+        // fonction du jeu, `shotsTick`), jusqu'a l'impact : la mesure ne depend plus de la
+        // charge de la machine. Cent pas = 1,67 s de vol, la balle en vit 1,6.
+        let pas = 0; while (G.shots.length && pas++ < 100) G.shotsTick(1 / 60);
+        return { parti: 1, derive, pas, tir: `verrou=${P.lock ? P.lock.nom : 'AUCUN'} ecart de cap=${ec.toFixed(3)} rad joueur=${P.pos.x.toFixed(1)}/${P.pos.z.toFixed(1)} cible=${b.pos.x.toFixed(1)}/${b.pos.z.toFixed(1)} camYaw=${G.cam.yaw.toFixed(2)} visible=${b.av.group.visible} degainee=${!!P.drawn}` };
+      }
+      // POURQUOI RIEN N'EST PARTI ? fire() a sept portes de sortie ; on les releve toutes,
+      // sinon « 0 balle sur 6 » ne dit rien de ce qu'il faut reparer. C'est ce releve qui a
+      // trouve, en une mesure, que le canon se taisait sur « arme = null ».
+      return { parti: 0, derive, pourquoi: `arme=${P.weapon} degainee=${!!P.drawn} munitions=${P.ammo} fireCd=${(P.fireCd || 0).toFixed(2)} horloge=${G.simTime.toFixed(2)} rechargeT=${(P.reloadT || 0).toFixed(2)} volant=${!!G.drive.car} assis=${!!P.sit} balancoire=${!!P.swing} manege=${!!P.ride} gym=${!!G.gym.on} zoom=${!!P.zoom} enJeu=${G.running}/${!G.paused} prison=${!!G.jail.on} monde=${G.worldIdx} ville=${G.city.on} achetee=${G.owned.has('arme:pistol')} fenetre=${G.uiOpen}` };
+    });
+    partis += t.parti; fuite = Math.max(fuite, t.derive);
+    if (!t.parti && !mutisme) mutisme = t.pourquoi;
+    if (t.tir && !trajets) trajets = t.tir;
+    if (t.pas != null) pasDeVol = Math.max(pasDeVol, t.pas);
+    vol = await p.evaluate(() => ({ sim: __G.simTime, reste: __G.shots.length }));
   }
   const hp1 = await p.evaluate(() => __G.bots[0].hp);
+  const pos1 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
+  const bouge = Math.hypot(pos1[0] - pos0[0], pos1[1] - pos0[1]);
   const touches = Math.round((hp0 - hp1) / 24);
-  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts)` };
+  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon ; touchée, la cible détale (fuite maximale relevée entre deux coups : ${fuite.toFixed(2)} m), elle est reposée à 12 m avant chaque tir — écart final ${bouge.toFixed(2)} m${mutisme ? ' · le canon est resté muet : ' + mutisme : ''}${touches < 5 && trajets ? ' · premier tir : ' + trajets : ''}${touches < 5 && vol ? ` · vol le plus long ${pasDeVol} pas de simulation (une balle met 8 pas pour faire 12 m), ${vol.reste} balle(s) volaient encore à la fin` : ''}` };
 });
 
 test('une balle ne traverse plus une cloison fine', async p => {
@@ -384,18 +436,32 @@ test('la piscine de la villa fait 1,80 m de fond', async p => {
 });
 
 test('le stand de tir a des cibles et on peut les toucher', async p => {
-  const n = await p.evaluate(() => { __SHOT.go({ world: 4, x: 52, y: 1, z: 11, hour: 12 }); return __G.city.targets.length; });
+  const n = await p.evaluate(() => { __SHOT.go({ world: 4, x: 67, y: 1, z: 20, hour: 12 }); return __G.city.targets.length; });
   if (!n) return { ok: false, detail: 'aucune cible dans le jeu' };
   const r = await p.evaluate(() => {
-    __G.P.pos.set(47, 0.4, 11); __G.P.vel.set(0, 0, 0);
-    __G.cam.yaw = 0; __G.cam.pitch = 0; __G.P.facing = Math.PI;   // caméra vers -z : on regarde les cibles
-    __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
-    __G.P.aimToggle = true; __G.P.aim = true; __G.P.fireCd = 0; __G.aimTick(); __G.fire();
-    return __G.city.shots;
+    const G = __G;
+    // LA LIGNE DE TIR SE DEDUIT DES CIBLES, elle n'est plus ecrite en dur. L'armurerie et son
+    // stand ont demenage en (67, 27) au round 75 ; le test, lui, tirait toujours depuis (47, 11)
+    // vers -z alors que les trois cibles sont en x = 62 / 67 / 72, z = 11,4 — quatre-vingt-dix
+    // degres a cote. Mesure de la sonde avant correction : P.lock = null (la cible est hors du
+    // cone du verrouillage automatique, 1,6 rad d'ecart pour 0,65 rad de cone) et la balle
+    // partait tout droit vers z = -109. On se place maintenant 8 m derriere la premiere cible,
+    // sur la ligne de tir : le verrouillage la prend, et si le stand redemenage le test suit.
+    const t0 = G.city.targets[0];
+    G.P.pos.set(t0.x, 0.4, t0.z + 8); G.P.vel.set(0, 0, 0);
+    G.cam.yaw = 0; G.cam.pitch = 0; G.P.facing = Math.PI;   // camera vers -z : on regarde les cibles
+    G.P.lock = null; G.P.lockRef = null;
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true);
+    G.P.aimToggle = true; G.P.aim = true; G.P.fireCd = 0; G.P.ammo = 8;
+    G.armeTick(1 / 60); G.aimTick();
+    const vise = G.P.lock ? G.P.lock.nom : null, n0 = G.shots.length;
+    const avant = G.city.shots; G.fire();
+    return { avant, vise, parti: G.shots.length > n0, tx: +t0.x.toFixed(1), tz: +t0.z.toFixed(1) };
   });
   await attendre(p, () => __G.city.shots > 0 || __G.shots.length === 0, 25000);
   const apres = await p.evaluate(() => __G.city.shots);
-  return { ok: n === 3 && apres > r, detail: `${n} cibles, compteur de touches ${r} → ${apres}` };
+  return { ok: n === 3 && r.parti && apres > r.avant,
+    detail: `${n} cibles (la premiere en ${r.tx} / ${r.tz}), tir depuis la ligne de tir 8 m derriere · verrouillage sur « ${r.vise} », balle partie=${r.parti}, compteur de touches ${r.avant} → ${apres}` };
 });
 
 test('les cages de but existent, avec filet', async p => {
@@ -19126,6 +19192,15 @@ test('le fusil à lunette montre vraiment sa lunette, même gâchette maintenue'
       axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
     const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
     const D = 1 / 60;
+    // LA MANETTE EST D'ABORD AU REPOS. Depuis la version 0.10, la lecture de la manette exige
+    // une image NEUTRE avant d'accepter un bouton : a la premiere lecture d'une manette (ou
+    // apres un changement de contexte), tout bouton deja enfonce est neutralise jusqu'a son
+    // relachement — c'est ce qui empeche l'appui d'un menu de fuir dans la partie. Le test
+    // branchait la manette avec R2 DEJA enfoncee : la gachette restait donc bloquee pour
+    // toujours et fire() n'etait jamais appele (mesure pleine suite : 0 image dans la lunette,
+    // chargeur 5/5, coup jamais parti). Un enfant a sa manette branchee et au repos AVANT de
+    // presser la gachette : on lit donc deux images a vide pour l'armer, puis on maintient R2.
+    G.pollGamepad(D); G.pollGamepad(D);
     P.ammo = 5; P.fireCd = 0; P.zoom = false;
     const n0 = G.shots.length;
     ds.buttons[7] = { pressed: true, value: 1 };   // R2 MAINTENUE, comme un enfant la tient
@@ -21316,4 +21391,66 @@ test('les impasses sont triées : plus aucun cul-de-sac accidentel, et les fins 
   if (r.erreur) return { ok: false, detail: r.erreur };
   const ok = r.accidentelles.length === 0 && r.culs >= 20 && r.culs <= 40;
   return { ok, detail: `avant : 43 nœuds cul-de-sac, dont plusieurs où deux bouts de la MÊME rue s'ignoraient — (-54,5 ; 110) et (-47,5 ; 110), 7 m sur le même bitume pour 62 m de détour · maintenant ${r.culs} culs-de-sac sur ${r.noeuds} nœuds et ${r.routes} chaussées : ${r.accidentelles.length} accidentelle${r.accidentelles.length ? ' → ' + r.accidentelles.slice(0, 5).join(' · ') : ''}, ${r.legitimes} vraies fins de rue (bord de carte, accès circuit, hélistation, fond de quartier)` };
+});
+
+// (r76, poste ARMES) LA BALLE QUI N'EST PAS CELLE DE L'ENFANT TOUCHE QUAND MÊME, ET NE LUI EST
+// PAS IMPUTÉE. Le test de collision de `shotsTick` était enfermé dans `if (s.mine)` : une balle
+// de la police, de l'hélicoptère ou de l'ami armé traversait les gens sans rien leur faire. On
+// l'a sorti de la parenthèse en laissant les gardes `s.mine` sur les déclarations d'infraction
+// (défaut 85). Ce test tient les DEUX bouts dans la même mesure.
+test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rechercher', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, THREE = G.THREE;
+    __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const log = document.getElementById('chatLog');
+    const raz = () => { G.police.wanted = 0; G.police.avert = 0; G.police.avertT = -999; G.police.crimeLevel = 0;
+      G.police.reactT = 0; G.police.decayT = 0; P.crime = 0; P.crimeTir = 0; P.crimeVeh = 0; log.innerHTML = ''; };
+    const lis = () => Array.prototype.map.call(log.children, d => d.textContent).join(' ⏎ ');
+    // le terrain est dégagé : un seul habitant, l'enfant au loin et hors de la trajectoire
+    G.bots.forEach((o, i) => { o.rdv = null; o.ordre = null; o.activite = null; o.bagarre = null; o.fight = null;
+      o.drive = null; o.sport = null; o.gangMission = null; o.ko = 0; o.dead = 0; o.hp = 100; o.wait = 9999;
+      if (i) { o.pos.set(500 + i * 2, 0.4, 500); o.av.group.position.copy(o.pos); } });
+    (G.gangs || []).forEach(Gg => (Gg.membres || []).forEach(m => { m.x += 600; m.z += 600; if (m.av) m.av.group.position.set(m.x, m.y || 0, m.z); }));
+    G.police.agents.slice().forEach(a => { a.x += 600; a.z += 600; });
+    const v = G.bots[0]; v.pos.set(110, 0.4, 66); v.av.group.position.copy(v.pos); v.av.group.visible = true;
+    P.pos.set(90, 0.4, 40); P.vel.set(0, 0, 0);   // l'enfant est AILLEURS : la balle ne le vise pas
+    raz();
+    // ---- A) TROIS BALLES DE POLICE sur l'habitant, tirées de 6 m
+    const hp0 = v.hp;
+    const balleFlic = () => {
+      const o = new THREE.Vector3(110, 1.4, 60);
+      const d = new THREE.Vector3(v.pos.x - o.x, (v.pos.y + 1.2) - o.y, v.pos.z - o.z).normalize().multiplyScalar(95);
+      const sh = { m: null, p: o, v: d, t: 0, mine: false, police: true, byName: 'la police', dmg: 22 };
+      G.shots.push(sh); G.spawnShot(sh);
+      for (let k = 0; k < 30 && G.shots.length; k++) G.shotsTick(1 / 60);
+    };
+    for (let i = 0; i < 3; i++) balleFlic();
+    const flic = { degats: hp0 - v.hp, wanted: G.police.wanted, texte: lis() };
+    // ---- B) LA MÊME BALLE L'ACHÈVE : l'auteur annoncé n'est pas l'enfant, et ★ reste à 0
+    raz(); v.hp = 10;
+    balleFlic();
+    const mort = { mort: !!v.dead, wanted: G.police.wanted, texte: lis() };
+    // ---- C) NON-RÉGRESSION : l'enfant, lui, touche ce qu'il vise et EST tenu pour l'auteur
+    raz();
+    const c = G.bots[1]; c.ko = 0; c.dead = 0; c.hp = 100000; c.wait = 9999; c.rdv = null; c.activite = null; c.fight = null;
+    c.pos.set(110, 0.4, 72); c.av.group.position.copy(c.pos); c.av.group.visible = true;
+    P.pos.set(110, 0.4, 60); P.vel.set(0, 0, 0); G.cam.yaw = Math.PI; G.cam.pitch = 0; P.facing = 0;
+    P.lock = null; P.lockRef = null;
+    G.owned.add('arme:pistol'); G.equipWeapon('pistol'); G.drawWeapon(true); P.aimToggle = true; P.aim = true;
+    const h0 = c.hp; let partis = 0;
+    for (let i = 0; i < 6; i++) {
+      P.fireCd = 0; P.ammo = 8; P.aim = true; G.aimTick();
+      const n = G.shots.length; G.fire(); if (G.shots.length > n) partis++;
+      for (let k = 0; k < 40 && G.shots.length; k++) G.shotsTick(1 / 60);
+    }
+    const moi = { partis, degats: h0 - c.hp, touches: Math.round((h0 - c.hp) / 24) };
+    G.drawWeapon(false); G.equipWeapon(null); G.clearWanted(); raz();
+    return { flic, mort, moi };
+  });
+  const dit = (t, mot) => (t || '').toLowerCase().includes(mot);
+  const ok = r.flic.degats === 66 && r.flic.wanted === 0 && !dit(r.flic.texte, 'la police recherche')
+    && r.mort.mort && r.mort.wanted === 0 && !dit(r.mort.texte, 'la police recherche')
+    && r.moi.partis === 6 && r.moi.touches === 6;
+  return { ok, detail: `avant : tout le test de collision de shotsTick était enfermé dans « if (s.mine) », 3 balles de police tirées à bout portant sur un habitant lui faisaient 0 point de dégât et la traversaient · maintenant (a) 3 balles de police = ${r.flic.degats} points de dégâts, ★ de l'enfant ${r.flic.wanted}, « ${r.flic.texte} » · (b) la balle suivante l'abat (mort=${r.mort.mort}) : ★ ${r.mort.wanted}, « ${r.mort.texte} » — l'enfant n'est pas l'auteur · (c) non-régression, l'enfant tire 6 balles visées à 12 m : ${r.moi.partis} parties du canon, ${r.moi.touches} touches, ${r.moi.degats} points de dégâts` };
 });

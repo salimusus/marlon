@@ -15421,11 +15421,16 @@ function agentsTick(dt) {
     }
   }
 }
-function agentTue(a) {   // un policier abattu : c'est l'armée qui prend le relais
+function agentTue(a, auteur) {   // un policier abattu : c'est l'armée qui prend le relais
+  // (n° 85) L'AUTEUR N'EST PLUS FORCEMENT L'ENFANT. Depuis qu'une balle qui n'est pas la
+  // sienne peut atteindre un agent (celle d'un homme de gang, celle de l'ami arme), cette
+  // fonction annoncait « <l'enfant> a abattu un policier » et lui collait L'ARMEE AUX TROUSSES
+  // pour un coup qu'il n'avait pas tire. Sans argument, rien ne change : c'est lui.
   a.ko = simTime + 60; a.hp = 0;
   burst(a.x, a.y + 1, a.z, 0xff2020, 14); sfx.die();
-  chat(null, `🚨 ${myCfg.name} a abattu un policier !`);
-  armeeAlerte();
+  if (!auteur) { chat(null, `🚨 ${myCfg.name} a abattu un policier !`); armeeAlerte(); return; }
+  const nom = typeof auteur === 'string' ? auteur : (auteur.name || auteur.nom || 'quelqu\'un');
+  chat(null, `🚨 ${nom} a abattu un policier !`);
 }
 function armeeAlerte() {
   if (armee.on) return;
@@ -28965,6 +28970,24 @@ function shotsTick(dt) {
     const hs = castSolids(s.p.x, s.p.y, s.p.z, dx, dy, dz, best, true);
     if (hs.o) { best = hs.d; quoi = 'solide'; cible = hs.o; }
 
+    // ---- QUI UNE BALLE PEUT-ELLE TOUCHER ? (arbitrage r76, défaut 85) ----
+    // Tout ce test de collision était enfermé dans `if (s.mine)` : SEULE la balle de l'enfant
+    // touchait quelqu'un. Mesuré à la sonde, 3 balles de police tirées sur un habitant planté
+    // à 6 m (l'enfant ailleurs) : avant 100 → 100 PV, 0 dégât — elles le TRAVERSAIENT ; après
+    // 100 → 34 PV, 66 dégâts, et ★ de l'enfant toujours à 0. La balle de l'ami armé, elle, ne
+    // devait ses victimes qu'à
+    // un retrait de points de vie fait À LA MAIN dans `gardeArmeTick`, faute de quoi elle ne
+    // faisait rien du tout. La règle du défaut 85 — « une infraction n'est imputée à l'enfant
+    // que s'il en est l'auteur » — ne se joue PAS ici : elle se joue sur les gardes `s.mine`
+    // posées plus bas, sur chaque déclaration d'infraction, et elles restent toutes en place.
+    // Une balle touche donc maintenant tout être vivant sur son trajet, SAUF :
+    //   · son propre tireur (`s.ami`) et la victime déjà décomptée à bout portant (`s.deja`) ;
+    //   · les agents, quand c'est la police elle-même qui tire (elle ne fauche pas les siens).
+    // Le STAND DE TIR, les joueurs DISTANTS et les VÉHICULES restent réservés à la balle de
+    // l'enfant : ce sont son entraînement, sa partie en réseau et ses dégâts matériels (une
+    // balle perdue de la police qui fait exploser une voiture garée déclencherait une scène
+    // d'accident à l'autre bout de la ville, sans personne pour l'avoir voulue).
+    const tireur = s.ami || null, balleFlic = !!s.police;
     if (!s.mine && !drive.car) {   // une balle (police ou joueur) me touche
       const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, P.pos.x, P.pos.y, P.pos.z, best);
       if (t >= 0 && t < best) { best = t; quoi = 'moi'; cible = null; }
@@ -28978,23 +29001,25 @@ function shotsTick(dt) {
         const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, r.cur.x, r.cur.y, r.cur.z, best);
         if (t >= 0 && t < best) { best = t; quoi = 'distant'; cible = r; }
       }
-      if (!net.on) for (const b of bots) if (b.av.group.visible && !b.ko) {
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, b.pos.x, b.pos.y, b.pos.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'bot'; cible = b; }
-      }
-      for (const gd of city.guards) if (!gd.ko) {
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, gd.x, gd.y, gd.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'garde'; cible = gd; }
-      }
-      for (const G of gangs) for (const m of G.membres) {   // les membres de gang encaissent aussi
-        if (m.ko || m.captif) continue;
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, m.x, m.y, m.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'gangeur'; cible = m; }
-      }
-      for (const a of police.agents) if (!a.ko) {
-        const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, a.x, a.y, a.z, best);
-        if (t >= 0 && t < best) { best = t; quoi = 'agent'; cible = a; }
-      }
+    }
+    if (!net.on) for (const b of bots) if (b.av.group.visible && !b.ko && b !== tireur && b !== s.deja) {
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, b.pos.x, b.pos.y, b.pos.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'bot'; cible = b; }
+    }
+    for (const gd of city.guards) if (!gd.ko && gd !== s.deja) {
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, gd.x, gd.y, gd.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'garde'; cible = gd; }
+    }
+    for (const G of gangs) for (const m of G.membres) {   // les membres de gang encaissent aussi
+      if (m.ko || m.captif || m === s.deja) continue;
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, m.x, m.y, m.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'gangeur'; cible = m; }
+    }
+    if (!balleFlic) for (const a of police.agents) if (!a.ko && a !== s.deja) {
+      const t = rayPerso(s.p.x, s.p.y, s.p.z, dx, dy, dz, a.x, a.y, a.z, best);
+      if (t >= 0 && t < best) { best = t; quoi = 'agent'; cible = a; }
+    }
+    if (s.mine) {
       // les véhicules encaissent les balles (et finissent par exploser)
       for (const v of [...city.cars, ...city.aiCars, ...police.cars]) {
         const o = v.solid; if (!o || v === drive.car) continue;
@@ -29073,7 +29098,7 @@ function shotsTick(dt) {
     } else if (quoi === 'agent') {
       const a = cible; a.hp -= (s.dmg || 20); impact(a.x, a.y + 1.2, a.z, { x: dx, y: dy, z: dz }, 'balle', 1);
       if (s.mine) police.riposte = simTime + 30;
-      if (a.hp <= 0) agentTue(a);
+      if (a.hp <= 0) agentTue(a, s.mine ? null : (s.ami || s.byName || 'un tireur'));   // (n° 85) pas NOTRE balle, pas NOTRE meurtre : ni l'annonce, ni l'armée
       else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'gangeur') {
       const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sfx.hit();
@@ -32619,10 +32644,16 @@ function gardeArmeTick(b, dt) {
   const dir = new THREE.Vector3(c.x - origin.x, c.y - origin.y, c.z - origin.z).normalize();
   dir.x += rnd(-0.02, 0.02); dir.z += rnd(-0.02, 0.02);
   dir.normalize().multiplyScalar(95);
-  const sh = { m: null, p: origin, v: dir, t: 0, mine: false, ami: b, byName: b.name, dmg: 22 };
+  // `deja` : la victime visee est decomptee TOUT DE SUITE, a bout portant (voir plus bas).
+  // Depuis que la balle d'un autre que l'enfant touche vraiment les gens, il faut dire a
+  // `shotsTick` de ne pas la compter une SECONDE fois sur la meme personne — la balle garde
+  // en revanche tout son effet sur qui se trouverait sur son trajet.
+  const sh = { m: null, p: origin, v: dir, t: 0, mine: false, ami: b, byName: b.name, dmg: 22, deja: c.bot || c.agent || null };
   shots.push(sh); spawnShot(sh);
   sonDetonation('pistol', origin.x, origin.y, origin.z, 0.9);   // poste SON : le coequipier tire la meme detonation, placee a SON canon
-  // touche directe : la balle de l'ami compte tout de suite (le rayon générique ne vise que le joueur)
+  // touche directe : la balle de l'ami compte tout de suite, a bout portant, sans attendre
+  // l'image suivante (c'est ce qui permet de rejouer la scene sans faire tourner la boucle) ;
+  // `deja` empeche `shotsTick` de la recompter sur la meme victime.
   if (c.agent) { c.agent.hp -= 22; impact(c.agent.x, c.agent.y + 1.3, c.agent.z, null, 'sang', 1);
     if (c.agent.hp <= 0 && !c.agent.ko) { c.agent.ko = simTime + 12; botSay(b, ['un de moins ! 😤', 'reste à terre !']); } }
   else if (c.bot) { c.bot.hp = (c.bot.hp ?? 100) - 22; c.bot.fight = 'flee'; c.bot.fightT = simTime + 6;

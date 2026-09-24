@@ -6864,7 +6864,7 @@ const WORLDS = [
       for (const [x, z] of [[0, -12], [0, 12], [12, 0], [-12, 0], [22, -22], [-22, 22]]) coin(x, 0, z);
       city.zones.push({ name: 'Parking', emoji: '🚗', x1: -23, x2: -3, z1: 3, z2: 14, hint: '🚗 Parking : E (ou 🚗) devant une voiture, une moto ou le camion pour monter' });
       city.zones.push({ name: 'Trampolines', emoji: '🤸', x1: 3, x2: 23, z1: 3, z2: 23, hint: '🤸 Trampolines : saute dessus pour t\'envoler vers les pièces de la tour' });
-      city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 34, x2: 60, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, F pour la course d\'anneaux' });
+      city.zones.push({ name: 'Héliport', emoji: '🚁', x1: 34, x2: 60, z1: -24, z2: -2, hint: '🚁 Héliport : E pour monter, Espace / ⬆ pour décoller, %anneaux% pour la course d\'anneaux' });
       city.zones.push({ name: 'Départ', emoji: '🏁', x1: RACE_C.x - 20, x2: RACE_C.x + 34, z1: RACE_C.z + RACE_C.r - 20, z2: RACE_C.z + RACE_C.r + 4, hint: '🏁 Circuit : E pour un kart, F pour lancer la course sur l\'anneau' });
       buildClouds(0xffffff, 10); noSigns = false;
       // Les deux quartiers neufs : ils arrivent APRES `city.wander` (ils y ajoutent leurs
@@ -19988,17 +19988,27 @@ const msgEl = $('msg'); let msgTimer = 0;
 // Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
 // deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
 // au lieu d'une quarantaine de libellés qui parlaient de « E » et « Espace ».
-const ctrlText = t => {
+function ctrlText(t) {
   t = String(t);
   const b = document.body.classList;
+  // LE JETON « %anneaux% » (n° 89). La course d'anneaux ne peut PAS être sur ▢ : aux commandes
+  // de l'hélico, ▢ pose l'appareil. Elle est sur R1. Un jeton plutôt qu'une lettre parce que
+  // les libellés concernés (pastille de zone, conseils du chat) sont écrits UNE fois à la
+  // construction de la ville, bien avant qu'on sache si une manette est branchée.
+  t = t.replace(/%anneaux%/g, b.contains('manette') && !b.contains('touch') ? 'R1' : b.contains('touch') ? '🏁' : 'F');
   // À LA MANETTE, ON PARLE MANETTE (n° 15, 30, 44 du Joueur). Les consignes ne traduisaient les
   // touches que pour l'écran tactile : un enfant sur sa PS5 cherchait la touche « E ». Dès
   // qu'une manette pilote, E devient △, Espace ◯, le clic R2, G ✕, O et V ▢, Ctrl L2, F ▢.
+  // CHAQUE TRADUCTION CI-DESSOUS DOIT ÊTRE VRAIE : la lettre remplacée doit être réellement
+  // envoyée par le bouton nommé (E → △ = PAD_MAP[3], Espace → ◯ = PAD_MAP[1], G → ✕ =
+  // PAD_MAP[0], O et V → ▢ = PAD_MAP[2], clic → R2, Ctrl → L2, F → ▢ depuis le n° 89,
+  // T → Create = PAD_MAP[8]). Le banc `les libellés de manette ne mentent plus` le vérifie
+  // bouton par bouton : « F → ▢ » a menti pendant tout un round.
   if (b.contains('manette') && !b.contains('touch')) {
     return t.replace(/Espace \/ SAUT/g, '◯').replace(/\bEspace\b/g, '◯').replace(/\bE\b(?!\.)/g, '△')
       .replace(/\bclic ou X\b/g, 'R2').replace(/\bclic\b/g, 'R2').replace(/\bG\b(?= pour| :|\))/g, '✕')
       .replace(/\b[OV]\b(?= pour| =| :|\))/g, '▢').replace(/\bCtrl\b/g, 'L2').replace(/\bF\b(?= pour| =| :|\))/g, '▢')
-      .replace(/\(ou 🚗\)/g, '');
+      .replace(/\bT\b(?= pour| =| :|\))/g, 'Create').replace(/\(ou 🚗\)/g, '');
   }
   if (!b.contains('touch')) return t;
   return t.replace(/Espace \/ SAUT/g, 'SAUT').replace(/\bEspace(?=\s*(?:\/|pour|ou|,))/g, 'SAUT').replace(/\bE\b/g, '✋');
@@ -20086,7 +20096,7 @@ const norm = t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '
 const BOT_QUESTIONS = [
   { q: 'tu veux faire une course de karts ?', topic: 'course', yes: 'go ! rendez-vous au portique du circuit, appuie sur F 🏁', no: 'ok, une autre fois alors' },
   { q: 'tu preferes le foot ou le tennis ?', topic: 'sport', foot: 'moi aussi le foot ⚽ viens, je te fais des passes', tennis: 'le tennis ! prends une raquette au râtelier 🎾' },
-  { q: 'tu as déjà piloté l\'hélico ?', topic: 'heli', yes: 'trop bien non ? essaie la course d\'anneaux avec F', no: 'va à l\'héliport à l\'est, E pour monter et Espace pour décoller !' },
+  { q: 'tu as déjà piloté l\'hélico ?', topic: 'heli', yes: 'trop bien non ? essaie la course d\'anneaux avec %anneaux%', no: 'va à l\'héliport à l\'est, E pour monter et Espace pour décoller !' },
   { q: 'tu as combien de pièces ?', topic: 'pieces', any: 'pas mal ! achète-toi un chapeau à la boutique 👑' },
   { q: 'on va a la piscine ?', topic: 'piscine', yes: 'yes ! le dernier au plongeoir a perdu 🏊', no: 'tant pis, moi j\'y vais' },
   { q: 'tu es musclé toi ?', topic: 'muscle', yes: 'montre à la salle de sport alors 💪', no: 'va soulever la barre à la salle de sport, tape vite sur Espace !' },
@@ -20096,7 +20106,7 @@ const HELP = [
   [/foot|ballon|but\b/, 'le terrain de foot est au nord-ouest, fonce dans le ballon pour tirer ⚽ (il y a une cage maintenant)'],
   [/tennis|raquette/, 'le tennis est au nord-est : prends une raquette au râtelier, et si on est deux on fait un match 🎾'],
   [/course|circuit|kart|voiture/, 'le circuit est au sud : monte dans un kart (E) et appuie sur F près du portique pour lancer la course 🏁'],
-  [/helic|hélic|voler|anneau/, 'l\'héliport est à l\'est : E pour monter, Espace pour décoller, F pour la course d\'anneaux 🚁'],
+  [/helic|hélic|voler|anneau/, 'l\'héliport est à l\'est : E pour monter, Espace pour décoller, %anneaux% pour la course d\'anneaux 🚁'],
   [/piscine|nager|plong/, 'la piscine est à l\'ouest, saute du plongeoir ! 🏊'],
   [/tir|pistolet|laser|fusil|grenade|armurerie|arme/, 'l\'armurerie est à l\'est : pistolet laser, fusil automatique et grenades de choc, touches 1 2 3 pour changer d\'arme 🔫'],
   [/muscl|sport|gym|costaud|fort\b/, 'la salle de sport est vers le parking : E devant le banc, puis tape vite sur Espace 💪'],
@@ -20139,7 +20149,10 @@ const HELP = [
 ];
 function botReply(text) {
   const t = norm(text), b = dialog.lastBot || pickOne(bots), name = myCfg.name;
-  const say = r => { setTimeout(() => { chat(b.name, r, b.color); bubble(b.av, r); voice.say(r, !!b.girl, true); }, rnd(900, 2200)); };
+  // n° 93 : les conseils du chat parlaient clavier (« appuie sur F », « E pour monter ») a un
+  // enfant qui tient une DualSense. Ils passent par ctrlText comme le reste de l'interface ;
+  // la VOIX, elle, garde la phrase d'origine (la synthese ne sait pas lire « △ »).
+  const say = r => { const ecrit = ctrlText(r); setTimeout(() => { chat(b.name, ecrit, b.color); bubble(b.av, ecrit); voice.say(r, !!b.girl, true); }, rnd(900, 2200)); };
   const pend = dialog.pending && simTime - dialog.pending.t < 40 ? dialog.pending : null;
   if (pend) {
     const q = pend.q, yes = /\b(oui|ouais|yes|ok|d.?accord|go|carrement|bien sur|volontiers)\b/.test(t), no = /\b(non|nan|nope|pas envie|jamais)\b/.test(t);
@@ -28550,7 +28563,7 @@ function cityVie(dt) {
     }
   }
   const rackNear = Math.hypot(P.pos.x - 8.5, P.pos.z + 5.2) < 3.2; if (rackNear !== city.rackNear) { city.rackNear = rackNear; document.body.classList.toggle('racknear', rackNear || !!city.gunNear); if (rackNear && !isMobile) msg(P.racket ? '🎾 E : ranger la raquette' : '🎾 E : prendre une raquette', 1200); }
-  const raceNear = (Math.abs(P.pos.x - RACE_C.x) < 19 && Math.abs(P.pos.z - (RACE_C.z + RACE_C.r - 12)) < 8 && race.state === 'idle') || (!!drive.car && !!drive.car.heli && !hrace.on); if (raceNear !== city.raceNear) { city.raceNear = raceNear; document.body.classList.toggle('racenear', raceNear); if (raceNear && !isMobile) msg(drive.car && drive.car.heli ? '🚁 F : course d\'anneaux' : '🏁 F : lancer la course', 1400); }
+  const raceNear = (Math.abs(P.pos.x - RACE_C.x) < 19 && Math.abs(P.pos.z - (RACE_C.z + RACE_C.r - 12)) < 8 && race.state === 'idle') || (!!drive.car && !!drive.car.heli && !hrace.on); if (raceNear !== city.raceNear) { city.raceNear = raceNear; document.body.classList.toggle('racenear', raceNear); if (raceNear && !isMobile) msg(drive.car && drive.car.heli ? '🚁 %anneaux% : course d\'anneaux' : '🏁 F : lancer la course', 1400); }
   raceTick(dt);
   const guest = net.on && !net.host;
   // La raquette se range TOUTE SEULE quand on quitte le court : on ne se promène plus en
@@ -30504,10 +30517,26 @@ function pollGamepad(dt) {
   if (frame.pressed[9] || frame.pressed[16]) { padTouche('Escape', true); releaseGamepad(false); return; }
   const enHelico = !!drive.car && !!drive.car.heli;
   const enEngin = !!drive.car && !!drive.car.travail && !drive.car.heli;
+  // ===== LES DEUX COURSES ONT ENFIN UN BOUTON DE MANETTE (n° 89 du contrôleur) =====
+  // Le jeu écrivait « 🏁 Circuit : △ pour un kart, ▢ pour lancer la course » et « 🚁 ▢ :
+  // course d'anneaux », mais AUCUN bouton n'envoyait KeyF, la touche qui lance vraiment la
+  // course : ▢ vaut KeyV (frapper, et poser l'hélico). Mesuré à la manette : ▢, △, ✕, ◯ →
+  // `race.state` reste `idle` ; F au clavier → `countdown`. Deux modes de jeu entiers — le
+  // circuit et ses karts, les anneaux de l'hélico — n'existaient pas pour un enfant à la
+  // manette. Maintenant :
+  //   • à pied ou en kart devant le portique, ▢ LANCE LA COURSE (frapper n'y sert à rien) ;
+  //   • aux commandes de l'hélico, ▢ reste la POSE (on doit toujours pouvoir se poser) et la
+  //     course d'anneaux passe sur R1, qui ne fait rien en vol (fire() sort dès `drive.car`).
+  // Les libellés disent désormais CE bouton-là : « F » se traduit en « ▢ » (c'est vrai
+  // depuis ce commit) et le jeton « %anneaux% » de ctrlText() donne « R1 ».
+  const lanceCourse = frame.pressed[2] && !enHelico && !enEngin && !!city.raceNear && race.state === 'idle';
+  const lanceAnneaux = frame.pressed[5] && enHelico && !hrace.on;
+  if (lanceCourse) { launchRace(); padVibre(.3, 60); }
+  if (lanceAnneaux) { startHeliRace(); padVibre(.3, 60); }
   if (frame.pressed[2] && enHelico) { heliPoser(); padVibre(.25, 60); }
   if (frame.pressed[2] && enEngin && actionneOutil(drive.car)) padVibre(.35, 70);
   for (const [i, code] of Object.entries(PAD_MAP)) {
-    if (+i === 9 || (+i === 2 && (enHelico || enEngin))) continue;
+    if (+i === 9 || (+i === 2 && (enHelico || enEngin || lanceCourse)) || (+i === 5 && lanceAnneaux)) continue;
     if (neuf[i] === bas[i]) continue;
     padTouche(code, neuf[i]);
     if (!stillPlaying()) { releaseGamepad(false); return; }
@@ -30592,7 +30621,7 @@ function padMenu(L, neuf, bas, direction) {
 const PT_AXES = [['Stick G ←→ (marcher)', 'lx'], ['Stick G ↑↓ (marcher)', 'ly'], ['Stick D ←→ (caméra)', 'rx'], ['Stick D ↑↓ (caméra)', 'ry'], ['L2 (freiner / se baisser / braquer)', 'l2'], ['R2 (accélérer / tirer)', 'r2']];
 // A quoi sert chaque bouton : affiche sous son nom, pour qu'on verifie du meme coup que le
 // bon bouton fait la bonne chose (c'est la question que posait le joueur).
-const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer',
+const PT_ROLES = { 0: 'braquer / rengainer', 1: 'sauter / monter', 2: 'frapper · 🏁 lancer la course · 🚁 atterrir · 🚜 creuser', 3: 'agir', 4: 'garde / viser', 5: 'tirer · 🚁 course d\'anneaux',
   6: 'freiner · se baisser · braquer', 7: 'accélérer · tirer', 8: 'parler', 9: 'menu', 10: 'courir', 11: 'recentrer',
   12: 'ordres', 13: 'danser', 14: 'arme préc. · cible préc.', 15: 'arme suiv. · cible suiv.', 16: 'menu', 17: 'aide' };
 const padEssai = { fait: false };

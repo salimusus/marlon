@@ -21723,3 +21723,73 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
   return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
 });
+
+// ============ POSTE MANETTE & MESSAGES (round 78) ============
+test('les deux courses se lancent avec un BOUTON de manette, jamais avec une touche', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const R = G.RACE_C;
+    // ---- 1) LE CIRCUIT : a pied devant le portique, ▢ doit lancer la course ----
+    __SHOT.go({ world: 4, x: R.x, y: 1, z: R.z + R.r - 12, hour: 12 });
+    if (G.uiOpen) G.closeUI();
+    await dodo(250);
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    document.body.classList.add('manette');
+    const gp = { index: 0, id: 'DualSense Wireless Controller', mapping: 'standard',
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+    navigator.getGamepads = () => [gp];
+    G.pollGamepad(1 / 60); G.pollGamepad(1 / 60);
+    const presse = i => { gp.buttons[i] = { pressed: true, value: 1 }; G.pollGamepad(1 / 60);
+      gp.buttons[i] = { pressed: false, value: 0 }; G.pollGamepad(1 / 60); };
+    const out = { pres: !!G.city.raceNear, depart: G.race.state };
+    for (const i of [0, 1, 3]) presse(i);       // ✕ ◯ △ : aucun ne doit lancer quoi que ce soit
+    out.autres = G.race.state;
+    presse(2);                                   // ▢
+    out.carre = G.race.state;
+    for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+    out.bandeau = document.getElementById('msg').textContent;
+    // ---- 2) L'HELICO : ▢ pose toujours, R1 lance la course d'anneaux ----
+    __SHOT.go({ world: 4, x: 47, y: 1, z: -13, hour: 12 });
+    if (G.uiOpen) G.closeUI();
+    await dodo(250);
+    for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+    const heli = G.city.cars.find(c => c.heli);
+    out.heli = !!heli;
+    if (heli) {
+      G.enterCar(heli);
+      for (let i = 0; i < 10; i++) G.step(1 / 60, true);
+      out.auxCommandes = !!(G.drive.car && G.drive.car.heli);
+      document.body.classList.add('manette');
+      navigator.getGamepads = () => [gp];
+      G.pollGamepad(1 / 60); G.pollGamepad(1 / 60);
+      presse(2); out.carreHeli = G.hrace.on;     // ▢ pose l'appareil, il ne lance PAS la course
+      presse(5); out.r1Heli = G.hrace.on;        // R1 lance la course d'anneaux
+      G.hrace.on = false;
+    }
+    // ---- 3) AUCUN LIBELLE NE MENT : chaque touche traduite en bouton est vraiment envoyee ----
+    // Le n° 89 vient de la : ctrlText() ecrivait « ▢ » pour « F » alors qu'aucun bouton
+    // n'envoyait KeyF. On refait la verification pour TOUTE la famille.
+    const envoyes = {};
+    for (const [i, code] of Object.entries(G.PAD_MAP)) envoyes[G.PS_NOMS[i]] = code;
+    const attendu = { 'E pour monter': '△', 'Espace pour sauter': '◯', 'G pour dégainer': '✕',
+      'V pour frapper': '▢', 'O pour creuser': '▢', 'T pour parler': 'Create' };
+    out.libelles = {};
+    for (const [phrase, bouton] of Object.entries(attendu)) {
+      const traduit = G.ctrlText(phrase);
+      const codeAttendu = { '△': 'KeyE', '◯': 'Space', '✕': 'KeyG', '▢': 'KeyV', 'Create': 'KeyT' }[bouton];
+      out.libelles[phrase] = { traduit, vrai: traduit.startsWith(bouton) && envoyes[bouton] === codeAttendu };
+    }
+    // « F » vaut ▢ : ce bouton lance desormais vraiment la course (mesure 1)
+    out.libelleF = G.ctrlText('🏁 F : lancer la course');
+    out.libelleAnneaux = G.ctrlText("🚁 %anneaux% : course d'anneaux");
+    delete navigator.getGamepads;
+    document.body.classList.remove('manette');
+    return out;
+  });
+  const mensonges = Object.entries(r.libelles || {}).filter(([, v]) => !v.vrai).map(([k]) => k);
+  const ok = r.pres && r.depart === 'idle' && r.autres === 'idle' && r.carre === 'countdown'
+    && /🏁/.test(r.bandeau) && r.heli && r.auxCommandes && r.carreHeli === false && r.r1Heli === true
+    && mensonges.length === 0 && r.libelleF === '🏁 ▢ : lancer la course'
+    && r.libelleAnneaux === "🚁 R1 : course d'anneaux";
+  return { ok, detail: `n° 89 : le jeu ecrivait « ▢ pour lancer la course » et « 🚁 ▢ : course d'anneaux » mais AUCUN bouton n'envoyait KeyF — avant, ▢ △ ✕ ◯ laissaient race.state a « idle » · maintenant, devant le portique : ✕ ◯ △ → ${r.autres}, ▢ → ${r.carre} (« ${r.bandeau} ») · aux commandes de l'helico ▢ pose toujours (course d'anneaux = ${r.carreHeli}) et R1 la lance (${r.r1Heli}) · et les libelles disent la verite : « ${r.libelleF} », « ${r.libelleAnneaux} », ${Object.keys(r.libelles).length} traductions verifiees bouton par bouton, ${mensonges.length} mensonge(s)` };
+});

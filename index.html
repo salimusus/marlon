@@ -16292,7 +16292,15 @@ function policeTick(dt) {
       else msg(`🕵️ Ils perdent ta trace… niveau ${'★'.repeat(police.wanted)}`, 1600);
     }
     majWanted();
-    if (simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) { armeeFin(); clearWanted('🚔 La police ne te cherche plus'); } }   // plus le délit est grave, plus elle s'accroche
+    // LA TRAQUE NE PEUT PAS S'ARRÊTER DEUX FOIS DANS LA MÊME IMAGE (round 79). `clearWanted()`
+    // remet maintenant `decayT` à 0 pour ne plus traîner un futur inatteignable d'un test à
+    // l'autre — mais cette ligne-ci s'exécute JUSTE APRÈS, dans la même image : `simTime > 0`
+    // était vrai, la traque « expirait » une seconde fois et le « 🚔 La police ne te cherche
+    // plus » recouvrait le « 🙈 Ils t'ont perdu » que l'enfant devait lire. Mesuré : caché dans
+    // une planque, l'abandon tombait bien à t+26 s, mais sous le mauvais texte — l'enfant ne
+    // savait plus que c'est de s'être caché qui avait payé. On ne fait donc expirer que ce qui
+    // est encore en cours.
+    if (police.wanted > 0 && simTime > police.decayT) { police.wanted--; police.decayT = simTime + 45 + (police.crimeLevel || 0) * 40; if (police.wanted <= 0) { armeeFin(); clearWanted('🚔 La police ne te cherche plus'); } }   // plus le délit est grave, plus elle s'accroche
   }
   for (const pc of police.cars) {
     const flash = (simTime * 4) % 2 < 1; pc.lampR.visible = flash && (pc.active || police.wanted > 0); pc.lampB.visible = !flash && (pc.active || police.wanted > 0);

@@ -5927,7 +5927,16 @@ function decorPublic() {
     if (portes.some(o => Math.abs(x - o.x) < o.w / 2 + 4 && Math.abs(z - o.z) < o.d / 2 + 4)) return false;
     if (typeof terrainH === 'function') { const th = terrainH(x, z); if (th != null && th > 0.05) return false; }
     for (const o of solidsAutour(x, z, 3, true)) {
-      if (o.h >= 30 || o.veh) continue;
+      if (o.h >= 30) continue;
+      // UN VÉHICULE GARÉ N'EST PAS UN EMPLACEMENT LIBRE (test « aucun véhicule ne flotte »,
+      // round 79). Les caisses étaient purement et simplement sautées : après l'élargissement
+      // des rues du round 78, un nouveau trottoir est passé devant l'hôpital et le mobilier de
+      // rue a planté un BANC de 66 cm de haut EN PLEIN MILIEU de l'emplacement de l'ambulance
+      // (29,3 ; 206) — le banc dans la caisse, et surtout `solSousRoues` prenant le sol sous le
+      // CENTRE du véhicule, l'ambulance se retrouvait posée sur le dossier du banc : 0,524 m de
+      // vide sous ses quatre roues. On garde donc les caisses hors du test de portance (une
+      // voiture ne porte rien) mais on interdit d'y planter quoi que ce soit.
+      if (o.veh) { if (Math.abs(x - o.x) < o.w / 2 + 1 && Math.abs(z - o.z) < o.d / 2 + 1) return false; continue; }
       if (o.trottoir || o.sol) continue;   // le sol de la ville et les trottoirs ne comptent pas
       const top = o.y + o.h / 2;
       // un sol amenage (terrain, terrasse, dalle de quartier) : on n'y plante rien

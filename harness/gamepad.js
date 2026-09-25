@@ -57,6 +57,30 @@ test('changing between two menus suppresses held confirm without losing the next
   assert.equal(tick('menu:shop').pressed[0], false); button(gp, 0, 0); tick('menu:shop'); button(gp, 0, 1);
   assert.equal(tick('menu:shop').pressed[0], true);
 });
+// ===== LE TROU DU BANC (defaut 104) =====
+// La regle « un bouton tenu n'est pas un nouvel appui » etait bien verifiee (essai du haut,
+// `assert.equal(tick().pressed[3], false)`) mais JAMAIS a travers un changement de contexte.
+// Or c'est exactement ce que vit l'enfant : △ le fait monter en voiture, le contexte passe de
+// game:foot a game:vehicle, et `sample()` effacait alors le passe — le meme bouton, toujours
+// enfonce, etait reannonce comme un nouvel appui, qui le faisait redescendre, et ainsi de
+// suite a chaque lecture (8 ms). Mesure d'alors : bouton tenu a contexte fixe → true puis
+// 8 × false (correct) ; bouton tenu a contexte qui alterne → true 8 fois sur 8.
+test('a held button crossing a game context change is never a new press', () => {
+  const { gp, tick } = reader(); button(gp, 3, 1);
+  assert.equal(tick('game:foot').pressed[3], true);
+  // le contexte fait l'aller-retour dedans/dehors, comme quand on monte puis descend
+  let reappuis = 0;
+  for (let i = 0; i < 8; i++) if (tick(i % 2 === 0 ? 'game:vehicle' : 'game:foot').pressed[3]) reappuis++;
+  assert.equal(reappuis, 0);
+  // le bouton reste TENU pendant tout l'aller-retour, et son relachement est bien vu une fois
+  assert.equal(tick('game:vehicle').b[3], true);
+  button(gp, 3, 0); assert.equal(tick('game:foot').released[3], true);
+  // contre-epreuve : un NOUVEL appui apres le changement de contexte compte, lui
+  button(gp, 3, 1); assert.equal(tick('game:vehicle').pressed[3], true);
+  // et la quarantaine des menus n'est pas touchee : jeu → menu avale toujours le bouton tenu
+  assert.equal(tick('menu:pause').pressed[3], false);
+  assert.equal(tick('menu:pause').b[3], false);
+});
 test('small held throttle cannot accelerate when a menu closes', () => {
   const { gp, tick } = reader(); tick('menu:pause'); button(gp, 7, .25); tick('menu:pause');
   assert.equal(tick('game:vehicle').gaz, 0); button(gp, 7, 0); tick('game:vehicle'); button(gp, 7, .25);
@@ -171,4 +195,31 @@ test('full game: camera-relative stick moves sideways, while rotation mode remai
 test('full game: changing world closes menu ownership so subsequent controller actions remain available', () => {
   reset(); G.openUI('menu'); G.openUI('worlds'); G.chooseWorld(0);
   assert.equal(G.uiOpen, null); assert.equal(G.paused, false); assert.equal(G.running, true);
+});
+
+// ===== DEFAUT 104, AU NIVEAU DU JEU : △ TENU NE FAIT PAS MONTER-DESCENDRE EN BOUCLE =====
+// On rejoue la boucle exacte : △ enfonce, chaque KeyE reçu fait basculer `drive.car` (c'est ce
+// que fait `enterCar` / `exitCar`), donc le contexte alterne game:foot / game:vehicle. Avant :
+// une bascule PAR LECTURE de la manette — 24 pour un appui de 200 ms a 120 Hz, avec autant de
+// claquements de portiere, et l'etat final decide par la seule parite du nombre de lectures.
+test('full game: holding the action button through a vehicle context change toggles the car once', () => {
+  reset();
+  let recus = 0;
+  const compteur = event => { if (event.code === 'KeyE' && event.type === 'keydown') recus++; };
+  stubs.window.addEventListener('keydown', compteur);
+  const durees = [];
+  for (let lectures = 18; lectures <= 29; lectures++) {   // les deux parites autour de 200 ms
+    reset(); recus = 0; G.drive.car = null;
+    button(device, 3, 1);
+    let bascules = 0;
+    for (let i = 0; i < lectures; i++) {
+      now += 1000 / 120; const avant = recus; G.pollGamepad(.008);
+      if (recus > avant) { G.drive.car = G.drive.car ? null : { kind: 'voiture' }; bascules++; }
+    }
+    button(device, 3, 0); now += 1000 / 120; G.pollGamepad(.008);
+    durees.push({ lectures, bascules, auVolant: !!G.drive.car });
+    G.drive.car = null;
+  }
+  assert.deepEqual(durees.filter(d => d.bascules !== 1), [], JSON.stringify(durees));
+  assert.deepEqual(durees.filter(d => !d.auVolant), [], JSON.stringify(durees));
 });

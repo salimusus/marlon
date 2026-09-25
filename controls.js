@@ -139,7 +139,23 @@
         // quarantaine du droit ne protegeait donc plus rien, elle ne faisait que rendre
         // `frame.look` faux. axesBlocked[1] n'existe plus.
         if (entreeMenu) axesBlocked = [leftMagnitude > leftNeutral, false];
-        previous = Array(COUNT).fill(false); nav = null; navAt = 0; rearmer = false;
+        // ======= DEFAUT 104 : UN BOUTON TENU N'EST JAMAIS UN NOUVEL APPUI =======
+        // `previous` etait remis a zero des que `changed` etait vrai — donc AUSSI pour la
+        // bascule game:foot -> game:vehicle, que `changementContexte` ecarte pourtant exprès
+        // (arbitrage r76, point 2). Consequence mesuree : l'enfant appuie sur △ devant une
+        // voiture, il monte, le contexte devient game:vehicle, la lecture suivante voit
+        // `changed` et efface le passe, donc le MEME bouton toujours enfonce est reannonce
+        // comme un nouvel appui — qui le fait redescendre, ce qui rechange le contexte, etc.
+        // Un appui de 200 ms (24 lectures a 120 Hz) donnait 24 allers-retours dedans/dehors,
+        // autant de claquements de portiere et de demarrages moteur, et l'etat final ne
+        // dependait que de la PARITE du nombre de lectures : 6 appuis sur 12 finissaient au
+        // volant. `previous` ne s'efface donc plus qu'a une VRAIE frontiere — nouvelle
+        // manette, rearmement complet, ou changement de contexte hors jeu (jeu <-> menu) —
+        // c'est-a-dire exactement quand une quarantaine s'arme. Entre deux situations de JEU
+        // on garde l'etat precedent : le bouton reste « tenu », et le banc `gamepad.js` le
+        // verifie desormais A TRAVERS un changement de contexte (c'etait le trou du banc).
+        if (nouvelleManette || rearmeTout || rearmeTenus) previous = Array(COUNT).fill(false);
+        nav = null; navAt = 0; rearmer = false;
       }
       identity = id; context = current; rawPrevious = raw.b.slice(); l2Precedent = raw.l2; r2Precedent = raw.r2;
       const enabled = !!gp && current !== 'blocked';

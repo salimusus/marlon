@@ -22893,3 +22893,55 @@ test('le camion de pompiers n\'est plus garé au travers de sa caserne, et les b
     && r.rue52.pireChevauchement < 0.01 && r.rue52.jeuVoieDroite > 0.5 && r.rue52.bancs === 6;
   return { ok, detail: `deux relevés de géométrie du poste CONDUITE · CASERNE : le camion (2,60 × 8 m en ${r.camion.x} ; ${r.camion.z}, donc z de ${r.camion.z1} à ${r.camion.z2}) était garé AU TRAVERS de la « perche de descente » — en réalité un panneau de 3 × 6,80 × 0,30 m planté en (−40 ; 126), au milieu de la travée, et qui sortait de 1,70 m AU-DESSUS du toit (pavillon à 5,10 m) ; c'est une vraie perche de 0,30 m rangée contre le flanc ouest : ${r.dansLaCaisse.length} solide dans la caisse du camion, ${r.percentLeToit.length} qui perce le toit · RUE x = 52 : les six bancs (x = 48,5, boîte de 0,85 m, donc jusqu'à x = 48,925) mordaient de 42,5 cm sur une chaussée qui commence à 48,5, et l'axe de la voie de droite ne leur laissait que 12,5 cm pour un demi-gabarit de 1,20 m ; reculés à 47,9 : chevauchement ${r.rue52.pireChevauchement} m, jeu de la voie ${r.rue52.jeuVoieDroite} m, et les ${r.rue52.bancs} bancs sont toujours là` };
 });
+
+test('a la manette, un appui de 200 ms sur △ devant une voiture met l\'enfant au volant a tous les coups, et une seule fois', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G; __SHOT.go({ world: 4, x: -8, y: 1, z: 12, hour: 12, pad: 1 });
+    const ds = { index: 0, connected: true, id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)',
+      mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })),
+      vibrationActuator: { playEffect: () => Promise.resolve('complete') } };
+    const vrai = navigator.getGamepads; navigator.getGamepads = () => [ds];
+    try {
+      const vs = (G.city.cars || []).filter(c => !c.heli && !c.rider && c.kind !== 'jetski');
+      vs.sort((a, b) => Math.hypot(a.x + 8, a.z - 10) - Math.hypot(b.x + 8, b.z - 10));
+      const c = vs[0];
+      // LA MANETTE EST LUE A 120 Hz (setInterval du jeu), UNE IMAGE SUR DEUX. On compte donc en
+      // LECTURES, pas en temps reel : le banc tourne a 1 image/s sous swiftshader, une mesure au
+      // temps du mur ne voudrait rien dire. Un appui d'enfant de 200 ms = 24 lectures ; la gigue
+      // de la manette fait qu'on n'en a jamais exactement 24, alors on balaie 18 a 29 lectures
+      // (150 a 242 ms), donc les DEUX PARITES six fois chacune — c'est la parite qui decidait de
+      // l'etat final (defaut 104 : 6 appuis sur 12 finissaient au volant).
+      const DT = 1 / 60, lots = [];
+      const essai = (lectures) => {
+        try { if (G.drive.car) G.exitCar(); } catch (e) {}
+        G.releaseGamepad();
+        for (let i = 0; i < 18; i++) ds.buttons[i] = { pressed: false, value: 0 };
+        G.P.pos.set(c.x + 2.4, 0.6, c.z); G.P.vel.set(0, 0, 0); G.P.hp = 100;
+        for (let i = 0; i < 20; i++) { G.pollGamepad(DT); if (i % 2) G.step(DT, true); }
+        const pastille = (document.getElementById('act') || {}).textContent || '';
+        let bascules = 0, dedans = !!G.drive.car;
+        ds.buttons[3] = { pressed: true, value: 1 };
+        for (let i = 0; i < lectures; i++) {
+          G.pollGamepad(DT); if (i % 2) G.step(DT, true);
+          if (!!G.drive.car !== dedans) { dedans = !!G.drive.car; bascules++; }
+        }
+        ds.buttons[3] = { pressed: false, value: 0 };
+        for (let i = 0; i < 18; i++) {
+          G.pollGamepad(DT); if (i % 2) G.step(DT, true);
+          if (!!G.drive.car !== dedans) { dedans = !!G.drive.car; bascules++; }
+        }
+        return { lectures, bascules, auVolant: !!G.drive.car, pastille: pastille.trim().slice(0, 40) };
+      };
+      for (let n = 18; n <= 29; n++) lots.push(essai(n));
+      try { if (G.drive.car) G.exitCar(); } catch (e) {}
+      return { kind: c.kind || 'voiture', x: +c.x.toFixed(1), z: +c.z.toFixed(1),
+        auVolant: lots.filter(l => l.auVolant).length, sur: lots.length,
+        basculesMax: Math.max(...lots.map(l => l.bascules)),
+        basculesTotal: lots.reduce((s, l) => s + l.bascules, 0),
+        pastille: [...new Set(lots.map(l => l.pastille))].join(' | '),
+        detail: lots.map(l => [l.lectures, l.bascules, l.auVolant ? 1 : 0]) };
+    } finally { navigator.getGamepads = vrai; ds.buttons[3] = { pressed: false, value: 0 }; try { G.releaseGamepad(); } catch (e) {} }
+  });
+  const ok = r.auVolant === r.sur && r.basculesMax === 1 && r.basculesTotal === r.sur;
+  return { ok, detail: `△ est LE bouton du jeu, et « monter en voiture » le geste le plus frequent : il repondait une fois sur deux. \`sample()\` effacait le passe des boutons a CHAQUE changement de contexte, y compris game:foot → game:vehicle, donc △ TENU etait reannonce comme un nouvel appui a chaque lecture de la manette (8 ms) : monte, descend, monte… jusqu'a 47 allers-retours dedans/dehors pour un appui de 350 ms, autant de claquements de portiere et de demarrages moteur, et l'etat final decide par la seule PARITE du nombre de lectures — 6 appuis de 200 ms sur 12 finissaient au volant · maintenant, douze appuis autour de 200 ms (${r.detail[0][0]} a ${r.detail[r.detail.length - 1][0]} lectures a 120 Hz, les deux parites) devant la ${r.kind} de (${r.x} ; ${r.z}) : ${r.auVolant}/${r.sur} finissent au volant, ${r.basculesMax} bascule au maximum (${r.basculesTotal} en tout, soit une par appui — la montee), pastille « ${r.pastille} »` };
+});

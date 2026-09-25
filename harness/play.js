@@ -12239,8 +12239,13 @@ test('les chevrons du GPS se lisent sur le bitume comme sur la dalle du Techno-P
     };
     const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     G.setBeacon(40, 60, 0, 'mission'); G.gpsRoute.update();
-    const chev = G.scene.children.filter(o => o.isMesh && o.material && o.material.map
-      && o.material.map.image && o.material.map.image.width === 128 && o.geometry.type === 'PlaneGeometry');
+    // ON PARCOURT LA SCENE, ON NE LIT PLUS SES ENFANTS DIRECTS (poste FIABILITE, round 80) :
+    // la reserve de chevrons a desormais son noeud a elle (GPS_G) au lieu d'etre accrochee
+    // chevron par chevron a la scene, et ce filtre-la n'en trouvait plus aucun. On se repere
+    // a la marque `userData.chevron`, posee exprès pour le banc, comme les deux autres tests
+    // du GPS le font deja.
+    const chev = [];
+    G.scene.traverse(o => { if (o.isMesh && o.userData && o.userData.chevron) chev.push(o); });
     const m = chev.length ? chev[0] : null;
     let clair = 0, sombre = 1, opaques = 0, doux = 0;
     if (m) {

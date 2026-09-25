@@ -260,7 +260,7 @@ window.__SHOT = {
         var bul = 0;
         if (typeof bots !== 'undefined') for (var bi = 0; bi < bots.length; bi++)
           if (bots[bi].av && bots[bi].av.bubble) bul++;
-        dit(bul, bul + ' bulle(s) de dialogue encore accrochees a un habitant (elles n\u2019expirent que dans la boucle d\u2019affichage)');
+        dit(bul, bul + ' bulle(s) de dialogue encore accrochees a un habitant (posees il y a moins de 4,5 s de jeu, ou laissees par un test qui n a plus fait tourner la simulation)');
       } catch (eBul) {}
       // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
       // l'ecran et il fausse toutes les mesures de niveau des tests audio.
@@ -516,6 +516,19 @@ window.__SHOT = {
       if (typeof defi !== 'undefined') defi.on = null;
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
+    // LES BULLES DE DIALOGUE. Depuis le round 80 elles expirent dans la SIMULATION et non plus
+    // dans la boucle d'affichage (voir bullesExpirent dans index.html), mais un test qui
+    // s'arrete moins de 4,5 s de jeu apres la derniere phrase d'un habitant en laisse encore
+    // une accrochee — et un panneau de plus sur un avatar, c'est un enfant de plus a mesurer
+    // pour le test suivant. On les decroche : l'etat est parfaitement rattrapable en jouant.
+    try {
+      if (typeof allAvatars === 'function') for (const avB of allAvatars()) {
+        if (!avB || !avB.bubble) continue;
+        avB.group.remove(avB.bubble);
+        try { avB.bubble.material.map.dispose(); avB.bubble.material.dispose(); } catch (eB1) {}
+        avB.bubble = null; avB.bubbleT = 0;
+      }
+    } catch (eB2) {}
     // ================= LES SERVICES DE LA VILLE : ON REND LA VILLE AU REPOS ==========    // Tout ce qui suit repare un DRAPEAU PERSISTANT. Les services municipaux (accidents,
     // police en constat, depanneuse, ambulance, pompiers, equipes de metier) posent des
     // drapeaux sur des objets qui, eux, survivent a loadWorld et meme a frais: true :

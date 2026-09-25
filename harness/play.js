@@ -20661,33 +20661,73 @@ test('aucun véhicule ne flotte ni ne s\'enfonce : les roues touchent le sol sur
 // le convoi à escorter. Ils suivaient bien un tracé A*, mais leur conduite avançait
 // `c.x += sin(h) × v × dt` SANS AUCUN contrôle de collision : ni mur, ni mobilier, ni autre
 // voiture, ni feu rouge. Ils passent maintenant par `botConduit`, comme tout le reste.
-// CONFIRME EN LONG LOT, DEUX FOIS (r80). Ce test avait ete rendu avec un avertissement :
-// « fragile a la position dans la suite, independamment de moi » — tombe une fois en lot
-// 455-466, vert seul et vert en lot 460-466 avec le meme code. Depuis que le chauffard recoit
-// `exactVeh` (voir policeDemarre), PLAGE="440-470" a ete joue DEUX FOIS de suite et rend les
-// memes chiffres a l'unite pres : 461 m, 0 image dans un solide, 0 image dans une autre voiture
-// (0 d'affilee), 64.5 % du temps sur la chaussee. En suite r79 : 29 images dans une autre
-// voiture, dont 20 d'affilee, pour un seuil de 10. La graine figee ci-dessous est ce qui rend
-// ces deux lots identiques : sans elle, le tirage du circuit changeait la mesure.
+// POURQUOI CE TEST RETOMBAIT EN SUITE COMPLETE APRES TROIS REPARATIONS (r81).
+// Il a ete rendu trois fois « vert, confirme en lot » et il est retombe trois fois en suite
+// entiere, avec le meme code : vert seul (478 m), vert en lot 440-470 joue DEUX FOIS aux memes
+// chiffres, et rouge apres quatre cents tests. Ce n'etait pas la conduite : c'etait le
+// PROTOCOLE. Un lot rejoue la suite a partir de son premier numero, jamais depuis le test 1, et
+// le test dependait de trois choses que seule une longue suite fait varier :
+//   a) L'HORLOGE. `simTime` court d'un test a l'autre et rien ne la remet a zero. `__SHOT.go`
+//      la fait sauter au prochain « midi », soit un nombre ENTIER de journees de 360 s ; or
+//      le cycle des feux vaut 28 s et 360 n'est pas un multiple de 28 (360 = 12 x 28 + 24). La
+//      phase des feux avance donc de 24 s a chaque test, et revient tous les sept tests : le
+//      chauffard trouvait le carrefour vert ou rouge SELON LE RANG DU TEST DANS LA SUITE.
+//   b) LE POINT DE DEPART DU TIRAGE. La graine etait bien figee, mais AVANT `__SHOT.go` : la
+//      construction de la ville consomme un nombre de tirages qui depend de ce qu'elle trouve
+//      (le palier de reputation decide du nombre de gangs et d'habitants), donc le tirage de la
+//      mission ne repartait pas du meme endroit.
+//   c) LES VOITURES QUE LE TEST PLANTAIT LUI-MEME. Il relancait `demarre` jusqu'a vingt-cinq
+//      fois pour tomber sur « chauffard », et chaque essai rate FABRIQUE ses vehicules : le
+//      fourgon du convoi et les trois voitures du barrage, a l'arret, en pleine rue, sur des
+//      adresses de panne — celles-la memes ou le circuit du chauffard l'envoie. Le nombre
+//      d'essais dependait de (b), donc du rang du test.
+// Les trois sont supprimees ci-dessous (horloge fixe avant la reconstruction, graine re-semee
+// apres, variante FORCEE en un seul appel), plus la remise a pied des habitants restes au
+// volant (recette du test 332). Ce que le test mesure — le chauffard ne traverse ni mur ni
+// voiture — n'a pas change ; ce qui change, c'est qu'il mesure la meme chose partout.
+// Rappel des mesures : avant `exactVeh`, 29 images dans une autre voiture dont 20 d'affilee
+// pour un seuil de 10 ; apres, 0.
 test('le chauffard de la mission de police roule par les rues : il ne traverse plus ni mur ni voiture', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
-    let graine = 987654321;
     const vrai = Math.random;
-    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const semer = g => { let x = g; Math.random = () => ((x = (x * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); };
+    semer(987654321);
+    // 1. L'HORLOGE REPART D'UNE ORIGINE FIXE, ET AVANT LA RECONSTRUCTION (recette du test 332).
+    G.simTime = 3000;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // 2. ON RESEME APRES LA RECONSTRUCTION. La graine etait posee avant `__SHOT.go`, et la
+    //    construction de la ville consomme un nombre de tirages qui DEPEND de l'etat trouve
+    //    (le palier de reputation decide du nombre de gangs, donc du nombre d'habitants, donc
+    //    des tirages) : le tirage de la mission repartait d'un point different selon le rang
+    //    du test dans la suite, meme avec la graine figee. Re-semee ici, la mission est posee
+    //    exactement au meme endroit quel que soit ce qui precede.
+    semer(987654321);
     G.city.horaires = false; G.metiersRepos();
+    // 3. PERSONNE NE LAISSE UNE VOITURE EN TRAVERS DE LA RUE (recette du test 332). Un test
+    //    precedent peut laisser un habitant AU VOLANT ou un rendez-vous en cours : la caisse
+    //    reste garee sur la chaussee et le chauffard vient s'y encastrer.
+    G.bots.forEach(b => { if (b.drive) G.botDescendre(b, false);
+      b.rdv = null; b.rdvRoute = null; b.target = null; b.tgt = null; b.fight = null;
+      b.ordre = null; b.activite = null; b.wait = 0; });
+    G.city.rideBot = null; G.city.botCarNear = null;
+    for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
     G.carriere.total = 9;                                   // la mission de police demande 3 réussites
-    // on relance le tirage de la variante jusqu'à tomber sur « chauffard »
-    let d = null;
-    for (let essai = 0; essai < 25 && !(d && d.variante === 'chauffard'); essai++) {
-      G.mission.cur = G.MISSIONS.find(m => m.id === 'police');
-      G.mission.step = 0; G.mission.data = {};
-      const e = G.mission.data;
-      let ok = false; try { ok = G.ACT_MISSIONS.police.demarre(e); } catch (x) { ok = false; }
-      d = ok ? e : null;
-    }
-    if (!d || d.variante !== 'chauffard') { Math.random = vrai; return { erreur: 'variante chauffard jamais tirée' }; }
+    // 4. LA VARIANTE SE FORCE, ELLE NE SE TIRE PLUS AU SORT. Le test relancait `demarre`
+    //    jusqu'a vingt-cinq fois pour tomber sur « chauffard » — et CHAQUE tirage rate
+    //    FABRIQUE ses vehicules : le fourgon du convoi et les TROIS voitures du barrage, gares
+    //    a l'arret, `busy`, sur une adresse de panne, c'est-a-dire en pleine rue. Le circuit du
+    //    chauffard est tire dans ces memes adresses : il roulait donc droit sur des caisses que
+    //    le test venait lui-meme de planter la, et le nombre d'essais — donc le nombre et
+    //    l'endroit de ces caisses — dependait du tirage, donc du rang du test dans la suite.
+    //    `mission.forcer` existe justement pour ca (voir `varianteMission`) : un seul appel,
+    //    aucune voiture parasite.
+    G.mission.cur = G.MISSIONS.find(m => m.id === 'police');
+    G.mission.step = 0; G.mission.data = {};
+    G.mission.forcer = 'chauffard';
+    const d = G.mission.data;
+    let demarre = false; try { demarre = G.ACT_MISSIONS.police.demarre(d); } catch (x) { demarre = false; }
+    if (!demarre || d.variante !== 'chauffard') { Math.random = vrai; return { erreur: 'variante chauffard jamais tirée' }; }
     const ch = d.cible;
     G.mission.step = 2;                                      // le chauffard file : c'est ce qu'on mesure
     const dansUnSolide = v => {
@@ -20729,9 +20769,16 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
       if (touche) { vehSuite++; if (vehSuite > vehMax) { vehMax = vehSuite;
           // QUI EXACTEMENT ? Dix images encastré, c'est le seuil ; sans le nom du véhicule et
           // sans savoir lequel des deux avançait, on ne peut pas dire si le chauffard rentre
-          // dedans ou s'il se fait rentrer dedans.
+          // dedans ou s'il se fait rentrer dedans. Et sans savoir D'OÙ SORT la caisse d'en
+          // face — quelle liste, occupée ou non, véhicule de mission ou pas, conduite par un
+          // habitant ou non — on relit dix fois la conduite alors que le coupable est un
+          // véhicule que le test ou le test précédent avait garé là.
           pire = { kind: quoi.kind || '?', ia: !!quoi.ia, spd: +(quoi.speed || quoi.spd || 0).toFixed(1),
-            moi: +(ch.speed || 0).toFixed(1), ou: `${ch.x.toFixed(0)} ; ${ch.z.toFixed(0)}` }; } } else vehSuite = 0;
+            moi: +(ch.speed || 0).toFixed(1), ou: `${ch.x.toFixed(0)} ; ${ch.z.toFixed(0)}`,
+            lui: `${quoi.x.toFixed(0)} ; ${quoi.z.toFixed(0)}`, busy: !!quoi.busy, rail: quoi.s != null,
+            liste: G.city.cars.includes(quoi) ? 'city.cars' : G.city.aiCars.includes(quoi) ? 'aiCars' : 'police.cars',
+            mission: Object.keys(G.city.vehMission || {}).find(k => G.city.vehMission[k] === quoi) || null,
+            pilote: (G.bots.find(b => b.drive && b.drive.car === quoi) || {}).name || null }; } } else vehSuite = 0;
     }
     const dbg = { tour: d.tour, circuit: (d.circuit || []).length, fini: !G.mission.cur };
     Math.random = vrai;
@@ -20748,7 +20795,7 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
   // passe dépend de ceux qu'il a eu le temps d'atteindre (mesuré 74,6 % puis 82,6 % selon le
   // tirage). En faire un critère, c'était rendre le test instable pour rien.
   const ok = r.metres > 150 && r.solide === 0 && r.vehMax <= 10;
-  return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)${r.pire ? ` · pire encastrement : contre un « ${r.pire.kind} » (ia=${r.pire.ia}, sa vitesse ${r.pire.spd}, la sienne ${r.pire.moi}) en (${r.pire.ou})` : ''}` };
+  return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)${r.pire ? ` · pire encastrement : contre un « ${r.pire.kind} » de ${r.pire.liste}${r.pire.mission ? ` (véhicule de mission « ${r.pire.mission} »)` : ''}${r.pire.pilote ? ` conduit par ${r.pire.pilote}` : ''} (ia=${r.pire.ia}, occupé=${r.pire.busy}, sur rail=${r.pire.rail}, sa vitesse ${r.pire.spd}, la sienne ${r.pire.moi}), lui en (${r.pire.lui}) et moi en (${r.pire.ou})` : ''}` };
 });
 
 // ============================================================================================

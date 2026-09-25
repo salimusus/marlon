@@ -936,6 +936,98 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On devrait voir** : au bout du parcours, la cabane, le drapeau et le panneau « 🏕️ LA CABANE ». À défaut de place pour reculer, la vue passe en première personne (`cam.interieur`), comme elle le fait déjà ailleurs.
 - **Capture** : `img/r15-cabane-dedans.png` et `img/q6-arbres-cabane.png` — deux vues, deux reculs demandés différents, la même chose à l'écran : le dos du maillot en plein cadre, « LA CABANE » à moitié caché derrière la tête.
 
+### CE QUI EST ACQUIS — round 81 : les seize défauts du round 77, vérifiés un par un dans le jeu
+Tout ce qui suit est **mesuré à la manette DualSense sur `95ad841`**, monde neuf à chaque essai.
+Les seize défauts du contrôleur du round 77 sont **tous réparés pour de bon** ; je les ai rejoués
+un par un, sans relire les correctifs d'abord.
+
+- **n° 87 — la balançoire après un KO : réparé.** △ assied (« 🎠 ◯ pour sauter de la balançoire ! »),
+  16 coups de 9 ❤️ mettent KO, et 1,6 s plus tard : ❤️ 100, `P.swing` faux, **0 siège avec cavalier**
+  sur les 10 balançoires de la ville, et le personnage est debout à l'hôpital. L'enfant repart.
+- **n° 88 — le stand de tir : réparé.** Momo_king planté derrière les cibles sur la rue z = 0,
+  **40 coups** depuis la ligne de tir : **★ 0**, Momo_king **❤️ 100**, 8 cibles touchées, **0 balle en vol**
+  à la fin. Vu en capture (`img/r7-stand-butte.png`) : les trois cibles sont plaquées contre un
+  parement de madriers, on ne voit plus la chaussée à travers.
+- **n° 89 — les deux courses à la manette : réparé.** Au portique du circuit, le jeu écrit
+  « 🏁 **▢** : lancer la course » et ▢ fait passer `race.state` de `idle` à `countdown`
+  (« 🏁 En place sur la grille… départ dans 3 s ! »). Aux commandes de l'hélico, il écrit
+  « 🚁 **R1** : course d'anneaux » et R1 lance « 🚁 Passe les 11 anneaux dans l'ordre ! ».
+  ▢ continue de poser l'appareil. Les libellés nomment le bon bouton dans les deux cas.
+- **n° 90 — la cage à grimper : réparée.** De (−162 ; −136) au plancher du sommet, **stick à fond,
+  aucun saut** : y 0,15 → 2,28 → **3,05 m**, **0 image de blocage**. Elle se lit comme une cage
+  (`img/r2-cage.png` : les barreaux jaunes de la face nord sont devant l'enfant).
+- **n° 91 — l'escalier du toboggan : réparé.** De (−172 ; −123) vers le nord, à pied, sans saut :
+  y 0,15 → 0,50 → 1,70 → **2,50 m** sur la plateforme, **0 image de blocage**, et la glissade redescend.
+- **n° 92 — le ballon du city-stade : réparé.** `ground` **0,14**, bas du ballon **0,14 m**, gazon 0,14 m —
+  plus un centimètre de vide. (Le ballon du terrain du centre est resté à 0,30, c'est le sien.)
+- **n° 93 — les panneaux qui disaient « E » : réparés.** Manette branchée, les **23 panneaux gravés**
+  de la ville relus un par un : **0 qui nomme encore une touche de clavier**. « 🎠 Balançoires : E pour
+  s'asseoir » se lit « 🎠 Balançoires : **△** pour s'asseoir », « 🏀 E : jouer » → « 🏀 **△** : jouer ».
+  Vu en capture, gravé sur le bois (`img/q11-panneau-balancoires.png`).
+- **n° 94 — le panneau du manège vu de dos : réparé.** Debout sur le Chemin de la Grange à 7,5 m à l'est,
+  on voit le toit de chaume, les mâts, la piste ronde et les poneys de part et d'autre du panneau, et son
+  dos porte le texte à l'endroit (`img/r5-manege-depuis-est.png`). *Nuance* : à cette distance le texte du
+  verso est très pâle, presque une planche blanche — lisible de près, pas de loin.
+- **n° 95 — le chien passager : réparé.** « 🚗 Lucas_2014, MaxiBloc, Ines_gg montent avec toi **+ le chien 🐕**
+  · 4 places », `c.chien` **vrai**, et après 8 s de conduite (17,1 m) le chien est à `lx 0 / lz −1,05` —
+  le centre de la banquette arrière, **sa place de la table au centimètre**. Les trois amis sont à
+  (−0,50 ; +0,15), (+0,50 ; −0,80) et (−0,50 ; −0,80), tous à 0,60 m de haut, tous visibles, tous à **100 ❤️**,
+  **★ 0**. Plus personne sur les genoux de personne.
+- **n° 96 — l'accident à 2,5 km/h : réparé.** Sortie de place au parking du centre, R2 à fond, quart de
+  tour à gauche, 900 images : **0 accident**, **32,7 m parcourus**, ★ 1 seulement (un feu grillé plus loin).
+  Contre-épreuve : lancée droit dans une voiture garée, la même voiture ouvre toujours **1 accident** et
+  reste immobilisée. Le constat n'a pas été désarmé, il a été réglé.
+- **n° 97 — le message au réveil : réparé.** « 😵 KO par Karim_flash ! −7 🪙 » → « 🚑 Une ambulance a été
+  appelée » → **« 🏥 Tu te réveilles à l'hôpital, remis sur pied · −7 🪙 — repars tranquille ! »**, et la
+  phrase TIENT l'écran (priorité 2, 4,6 s) : la pastille du banc ne l'efface plus. Le porte-monnaie
+  passe bien de 25 à 18 🪙 et l'enfant sait pourquoi. Idem pour les quatre façons de mourir essayées.
+- **n° 98 — le coût d'une fusillade : réparé.** Cinq habitants abattus d'un coup : **31 962 maillages
+  avant, 32 009 au pic, 31 987 cinq secondes plus tard** — solde **+25**, pas +117. Le groupe des
+  éphémères monte de 1 à 41 et redescend. Le pas de simulation : **20,8 ms avant, 25,2 ms pendant,
+  18,2 ms après** — il revient sous sa valeur de départ. Rien ne s'accumule.
+- **n° 99 — l'enfant emporté par un véhicule : réparé, et c'est le point qui compte.**
+  **Deux parties entières « profil vierge, manette branchée et posée, on ne touche à rien »,
+  400 s de simulation chacune** (bien au-delà des 180 s de calme volontaire), à deux endroits
+  différents — le centre (0 ; 3,5) et le trottoir de la rue z = 26 (30 ; 26) :
+  **0,00 m parcouru, 0 image où le personnage bouge d'un millimètre, ❤️ jamais sous 100, ★ 0,
+  25 🪙 inchangés, aucune mort, aucune prison.** Pendant ce temps la ville vit (deux incendies,
+  les pompiers qui partent et reviennent, un gang qui casse une vitrine, une bagarre entre bots).
+  Contre-épreuve à la main : un véhicule qui roule **à 1,5 m/s** et un autre **à 0,8 m/s** droit sur
+  l'enfant immobile l'écartent **de 1,55 m sur le côté** et passent — **0 m emporté** (33,4 m avant).
+- **n° 100 — « Exporter la vidéo » : réparé.** Sur le vrai premier écran, le film n'a plus que **deux
+  boutons** : « Son : activé » et « Passer · Entrée / A ». Pas de bouton d'export.
+- **n° 101 — la vie des trois quartiers neufs : réparée.** **13 habitants**, tous nommés, tous au sol
+  (0 en l'air, 0 dans le sol). Sur **90 s de jeu**, les dix qui ont une tournée parcourent de **42,6 à
+  91,7 m à pied** ; les trois autres sont les commerçants, à leur comptoir, c'est leur place.
+  **0 socle** en vue sur le terrain de foot (`img/r8-habitants-stade.png`).
+- **n° 102 — le parcours dans les arbres : réparé.** Du sol au drapeau de la cabane **à pied, sans un
+  seul saut** : 0,15 → 2,60 (T1) → 4,00 (T2) → 5,40 (T3) → 6,80 → **7,14 m** (le drapeau), **neuf étapes,
+  0 image de blocage**. Le grand toboggan redescend jusqu'au ruisseau. C'est un vrai parcours
+  d'accrobranche à l'écran (`img/q12-bois-passerelle.png`).
+
+**Et aussi, mesuré ce round :**
+- **Le démarrage tient.** Clic sur « Entrer dans Marlon » → le film part. **Stick poussé à fond + ✕ + △
+  tenus pendant 1,5 s : le film n'est PAS sauté** et le jeu ne démarre pas. On relâche, on rappuie sur ✕ :
+  le film s'arrête et la partie commence sur « 👋 Bienvenue en ville ! stick gauche pour marcher ·
+  △ agir · ◯ sauter ». La clé `marlon.intro.seen = action-v2` est écrite : pas de film au deuxième lancement.
+- **La circulation tient les rues.** Huit voitures du trafic suivies pendant **200 s** : **0 bloquée**,
+  chemin parcouru de **683 à 1 125 m** (médiane 835 m), écart net au départ de 121 à 363 m. Le réseau
+  élargi se parcourt.
+- **Le mode TV est propre en 1920 × 1080** (`img/r14-mode-tv-1920.png`) : pseudo entier, « Marlon ·
+  Empire urbain », « Balade · 0 pts », chiffres lisibles de loin. (En 1280 × 720 les pastilles se coupent
+  en « Jou… » et « Bal… », mais aucune télé ne fait 1280 de large : ce n'est pas le cas d'usage.)
+- **Quatre façons de mourir, quatre relevages propres** : poings, explosion, flammes, gang — à chaque
+  fois debout en 92 à 96 images, ❤️ 100, une phrase qui dit où l'on est et ce que ça a coûté.
+  *Réserve* : une chute de **40 m** ne tue pas (−72 PV, il reste 28 ❤️) et le jeu annonce
+  « 🤕 Aïe ! Chute de **15** m » — la hauteur affichée est celle qui correspond à la vitesse d'impact,
+  plafonnée. « 💀 Chute mortelle ! » est donc inatteignable en pleine santé.
+- **Ce que je n'ai PAS pu juger** : la conduite d'un bout à l'autre de la ville. Mon pilote automatique
+  fonce vers le point visé sans suivre les rues ; il renverse des lampadaires et s'encastre, et ce qu'il
+  mesure c'est lui, pas la ville. Les deux mesures qui valent quelque chose sont celles ci-dessus :
+  la circulation du jeu, qui tourne sans se bloquer, et la ligne droite à la manette sur la rue z = 26
+  (31 m/s atteints, puis un accident contre une voiture du trafic — ce qui est la bonne réponse à
+  112 km/h dans une rue passante).
+
 ### CE QUI EST ACQUIS — ce que j'ai joué au round 77 et qui marche
 Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout ce qui suit est mesuré.
 - **La ville laisse enfin l'enfant tranquille** (n° 78, 84, 85). Trois parties « profil vierge, manette posée, on ne touche à rien », 320 s de simulation chacune, relevés toutes les 10 s au-delà des 180 s de calme volontaire : **❤️ jamais sous 100, ★ 0, porte-monnaie 25 🪙 inchangé, aucun gang, aucune bagarre, aucune infraction, 0 habitant à portée de coup**. C'était le défaut bloquant du round précédent ; il est mort.

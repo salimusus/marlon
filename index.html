@@ -13471,7 +13471,7 @@ const CRAIE_NIV = 0.07;     // niveau du lit de craie sur le bus « effets ». M
                             // rumeur la plus forte d'un quartier donne une crete de 0,08 ; ce lit-la donne 0,28 (RMS
                             // 0,07 contre 0,022) : on l'entend nettement sans jamais coller le limiteur (0,34 tapait 0,93).
 const CRAIE_TENUE = 0.18;   // s : on garde le crissement ouvert apres la derniere lettre, sinon il hachait
-const craieLit = { src: null, bp: null, g: null, jusqu: 0 };
+const craieLit = { src: null, bp: null, g: null, jusqu: 0, derniere: 0 };
 const maintenant = () => performance.now() / 1000;   // l'horloge de la VRAIE vie (elle tourne meme jeu en pause)
 // Monte le lit une seule fois, puis rebranche sa sortie sur le bus « effets » a chaque
 // lettre (deux fois le meme lien ne compte qu'une fois en Web Audio : c'est sans risque, et
@@ -13524,6 +13524,12 @@ function sonCraie(n) {
 // lettre ne s'ecrit : sans elle le lit restait ouvert en boucle des que le tableau
 // s'arretait (et aussi quand le joueur coupait le son en pleine phrase).
 function craieLitFerme() {
+  // DUREE DE LA DERNIERE IMAGE, en secondes de VRAIE vie. Relevee AVANT toute sortie
+  // anticipee, sinon elle se fige des que le lit est ferme et vaut n'importe quoi a la
+  // lettre suivante.
+  const t = maintenant();
+  const image = craieLit.derniere ? Math.min(1.5, t - craieLit.derniere) : 0;
+  craieLit.derniere = t;
   const g = craieLit.g; if (!g || g.gain.value <= 0.0002) return;
   // L'HORLOGE DU CRISSEMENT EST CELLE DE LA VRAIE VIE, pas celle de la partie. `simTime` ne
   // tourne plus des que le jeu est en pause — et la lecon de l'ecole est justement jouee
@@ -13531,7 +13537,12 @@ function craieLitFerme() {
   // souffle continu a 0,07 par-dessus tout le reste (mesure au bout de la chaine : plancher
   // 0,0001 -> 0,0771 apres vingt phrases ecrites au tableau). Le tableau s'ecrit deja a
   // `performance.now()` : la retombee suit la meme horloge.
-  if (settings.sound && maintenant() <= craieLit.jusqu) return;
+  // LA TENUE VAUT AU MOINS UNE IMAGE. `sonCraie` n'est appelee qu'une fois par image : des
+  // que l'image dure plus longtemps que CRAIE_TENUE (0,18 s), le lit se refermait ENTRE deux
+  // lettres et le crissement se hachait — mesure sur le banc d'essai, qui tourne a une image
+  // par seconde : le gain du lit relevait 0,0001 pendant tout le trace au lieu de 0,07, et
+  // on n'entendait plus que l'attaque seche de chaque lettre.
+  if (settings.sound && t <= craieLit.jusqu + image) return;
   const c = sfx.ctx(); if (c) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.05);
 }
 // Appele a CHAQUE image, meme interface ouverte (le jeu est en pause mais le tableau, lui,

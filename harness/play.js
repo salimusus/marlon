@@ -21695,9 +21695,24 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
   const r = await p.evaluate(() => {
     const G = __G;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 44, hour: 16, frais: true });
-    const b = G.bots.find(x => x.av && x.av.group.visible && !x.ko);
-    if (!b) return { pourquoi: 'aucun habitant visible' };
-    b.pos.set(0, 0, 49); b.av.group.position.set(0, 0, 49); b.av.group.updateMatrixWorld(true);
+    // LE CORPS EST BATI POUR LA MESURE, il n'est plus emprunte a la ville (round 79).
+    // « Le premier habitant visible » n'est pas le meme d'un lancement a l'autre, et surtout
+    // il n'est pas dans le meme ETAT D'AFFICHAGE : `detailsLOD` efface une piece devenue
+    // minuscule a l'ecran en mettant son CALQUE a zero (`o.detailLoin`), pas en la rendant
+    // invisible, et il ne repasse qu'a l'image suivante — un corps qu'on teleporte devant
+    // l'objectif garde donc l'etat qu'il avait a l'autre bout de la ville.
+    // Mesure : seul, ce test trouvait un passant de 119 maillages dessine aux trois quarts
+    // (le corps coutait 105 appels avant d'exploser) ; en suite complete il tombait sur un
+    // habitant de 239 maillages ENTIEREMENT efface (le corps ne coutait plus rien), dont les
+    // 239 eclats naissaient avec un calque neuf. La meme correction du jeu se mesurait donc
+    // +153 → +41 dans un cas et +498 → +261 dans l'autre. On batit notre propre corps, au
+    // meme endroit, avec la meme tenue et un etat d'affichage neuf : la mesure redevient la
+    // meme a chaque lancement, seul comme en suite.
+    const av = G.buildAvatar({ name: ' ', jersey: 3, pants: 0x2b3550, cap: null, num: 7 });
+    av.group.position.set(0, 0, 49); av.group.rotation.y = Math.PI;
+    if (av.tag) av.tag.visible = false;
+    av.group.updateMatrixWorld(true);
+    const b = { av };
     // camera posee a la main : la perche du jeu n'arrive jamais deux fois au meme endroit
     G.camera.position.set(0, 9, 41); G.camera.lookAt(0, 0.4, 50); G.camera.updateMatrixWorld(true);
     const gl = G.renderer.getContext(), w = G.renderer.domElement.width, h = G.renderer.domElement.height;
@@ -21724,6 +21739,7 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     // suivant (voir « la scene ne grossit pas d un test a l autre »).
     for (const d of nx) G.EPHEMERES.remove(d.m);
     G.morceaux.length = n0;
+    G.scene.remove(av.group);   // et le corps que nous avons bati : buildAvatar l'accroche a la scene
     return { morceaux: nx.length, ombres: garde.filter(Boolean).length,
       calme, douze, toutes, aucune,
       bruit: ecart(imgToutes, imgToutes2), pxDouze: ecart(imgToutes, imgDouze), pxAucune: ecart(imgToutes, imgAucune) };

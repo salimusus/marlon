@@ -141,7 +141,7 @@
         if (entreeMenu) axesBlocked = [leftMagnitude > leftNeutral, false];
         // ======= DEFAUT 104 : UN BOUTON TENU N'EST JAMAIS UN NOUVEL APPUI =======
         // `previous` etait remis a zero des que `changed` etait vrai — donc AUSSI pour la
-        // bascule game:foot -> game:vehicle, que `changementContexte` ecarte pourtant exprès
+        // bascule game:foot -> game:vehicle, que `changementContexte` ecarte pourtant expres
         // (arbitrage r76, point 2). Consequence mesuree : l'enfant appuie sur △ devant une
         // voiture, il monte, le contexte devient game:vehicle, la lecture suivante voit
         // `changed` et efface le passe, donc le MEME bouton toujours enfonce est reannonce

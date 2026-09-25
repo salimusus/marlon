@@ -19529,9 +19529,24 @@ test('la séquence complète à la manette PS5 : ✕ dégaine, L2 braque, R2 tir
   return { ok, detail: `séquence ✕ → L2 → R2 → ✕ rejouée à la manette avec les quatre armes, ${r.erreurs.length} exception · ${armes.map(dit).join(' · ')}` };
 });
 
+// UN PASSANT VOLAIT LE VERROU (r81 ; un rouge sur deux lots 440-470, avec le meme prefixe).
+// `braquerVerrouille()` appelle `ciblesVerrouillables(true)` — le « tout » — et ce mode-la
+// IGNORE LE CONE DE LA CAMERA et classe par simple distance (`note = dh`). Le test posait sa
+// cible a 14 m mais ne figeait pas le hasard et n'ecartait personne : selon l'endroit ou la
+// ville reconstruite avait seme ses habitants, un passant a trois metres — voire DERRIERE le
+// joueur — emportait le verrou, et le reticule, projete sans bornage, sortait de l'ecran.
+// Meme remede que pour les tests 178 et 390, et meme geste que le test 444 juste au-dessus :
+// graine figee AVANT la reconstruction du monde, et tout ce qui est verrouillable — les
+// autres habitants, les hommes des deux gangs, ceux du joueur et les voitures (elles ne
+// comptent que 8 m de plus, LOCK_VEHIC_TOUR, donc une voiture a 5 m gagnait aussi) — rendu
+// invisible le temps du verrouillage, puisque `ciblesVerrouillables` n'accepte que ce qui
+// est visible. Et le journal NOMME desormais la cible verrouillee : sans cela, ce test se
+// relit dix fois sans qu'on voie que ce n'est pas la bonne personne qui etait visee.
 test('la balle part là où le viseur pointe, au clavier comme à la manette', async p => {
   const r = await p.evaluate(() => {
     const G = __G, P = G.P, T = G.THREE;
+    const vraiRnd = Math.random; let graine = 20260925;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     G.jail.on = false; if (G.uiOpen) G.closeUI();
     for (const a of ['pistol', 'rifle', 'sniper']) G.owned.add('arme:' + a);
@@ -19542,9 +19557,24 @@ test('la balle part là où le viseur pointe, au clavier comme à la manette', a
     const cible = G.bots.find(x => x.av && !x.ko && !x.dead);
     cible.pos.set(0, 0, 8 + 14); cible.av.group.position.copy(cible.pos); cible.wait = 1e6;
     cible.hp = 100; cible.ko = 0; cible.dead = 0;
+    // ON DEGAGE LE CHAMP : personne d'autre ne doit pouvoir gagner le verrou
+    const caches = [];
+    for (const b of G.bots) if (b !== cible && b.av && b.av.group.visible) caches.push(b.av.group);
+    for (const Gg of (G.gangs || [])) for (const m of (Gg.membres || [])) if (m.av && m.av.group.visible) caches.push(m.av.group);
+    for (const m of ((G.gang && G.gang.membres) || [])) if (m.av && m.av.group.visible) caches.push(m.av.group);
+    for (const lot of [G.city.cars, G.city.aiCars, G.police.cars]) for (const c of (lot || [])) if (c && c.g && c.g.visible) caches.push(c.g);
+    caches.forEach(o => { o.visible = false; });
     const tirs = [];
+    const verrou = [];
     for (const arme of ['pistol', 'rifle', 'sniper']) {
       G.equipWeapon(arme); G.drawWeapon(true); G.braquerVerrouille();
+      // QUI EST VERROUILLE ? La ligne qui manquait : sans le nom et la distance de la cible,
+      // un rouge de ce test se lit comme un defaut de visee alors que c'est le verrou.
+      // `P.lock` est la FICHE de candidature (`{ ref, x, z, nom, dh }`), `P.lockRef` l'objet
+      // vise lui-meme : c'est lui qu'on compare a l'habitant que le test a plante a 14 m.
+      verrou.push({ arme, nom: (P.lock && P.lock.nom) || 'personne',
+        d: P.lock ? +Math.hypot(P.lock.x - P.pos.x, P.lock.z - P.pos.z).toFixed(1) : -1,
+        bonne: P.lockRef === cible });
       for (let i = 0; i < 6; i++) image();
       for (let k = 0; k < 4; k++) {
         P.ammo = 9; P.fireCd = 0; P.zoom = arme === 'sniper';   // la lunette est déjà épaulée
@@ -19565,15 +19595,20 @@ test('la balle part là où le viseur pointe, au clavier comme à la manette', a
       }
       G.drawWeapon(false);
     }
+    caches.forEach(o => { o.visible = true; });
     G.shots.length = 0; G.equipWeapon(null); G.clearWanted();
-    return { tirs, pvCible: cible.hp };
+    Math.random = vraiRnd;   // la graine est rendue : les tests suivants retrouvent le vrai hasard
+    return { tirs, pvCible: cible.hp, verrou };
   });
   const bons = r.tirs.filter(t => !t.rate);
   const ecartMax = bons.length ? Math.max(...bons.map(t => t.ecart)) : 99;
   const cibleMax = bons.length ? Math.max(...bons.map(t => t.dCible)) : 99;
   const dedans = bons.every(t => t.x > 5 && t.x < 95 && t.y > 5 && t.y < 95);
-  const ok = bons.length === r.tirs.length && r.tirs.length === 12 && ecartMax < 2 && cibleMax < 1.6 && dedans;
-  return { ok, detail: `douze balles (pistolet, fusil, fusil à lunette) tirées sur un habitant verrouillé à 14 m : ${r.tirs.length - bons.length} raté · l'écart entre la trajectoire de la balle et la ligne « canon → point visé » ne dépasse pas ${ecartMax} °, le point visé reste à ${cibleMax} m de la cible, et le réticule est dans le cadre à chaque coup (${bons.map(t => t.x + '/' + t.y).slice(0, 4).join(', ')}…)` };
+  // LE VERROU DOIT ETRE SUR LA BONNE PERSONNE, et c'est un critere a part entiere : tant
+  // qu'il ne l'etait pas, les trois autres mesures parlaient d'un tir vers quelqu'un d'autre.
+  const bonVerrou = r.verrou.every(v => v.bonne);
+  const ok = bons.length === r.tirs.length && r.tirs.length === 12 && ecartMax < 2 && cibleMax < 1.6 && dedans && bonVerrou;
+  return { ok, detail: `douze balles (pistolet, fusil, fusil à lunette) tirées sur un habitant verrouillé à 14 m : ${r.tirs.length - bons.length} raté · l'écart entre la trajectoire de la balle et la ligne « canon → point visé » ne dépasse pas ${ecartMax} °, le point visé reste à ${cibleMax} m de la cible, et le réticule est dans le cadre à chaque coup (${bons.map(t => t.x + '/' + t.y).slice(0, 4).join(', ')}…) · cible verrouillée : ${r.verrou.map(v => `${v.arme} → ${v.nom} à ${v.d} m (la bonne=${v.bonne})`).join(', ')} — avant, le verrouillage « tout » ignorant le cône de la caméra, un passant plus proche l'emportait une fois sur deux` };
 });
 
 test('le fusil à lunette montre vraiment sa lunette, même gâchette maintenue', async p => {

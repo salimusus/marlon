@@ -249,12 +249,14 @@ window.__SHOT = {
         }
         var classe = Object.keys(parQui).sort(function (a, b) { return parQui[b] - parQui[a]; })
           .slice(0, 3).map(function (k) { return parQui[k] + ' x ' + k; }).join(' | ');
-        // UNE VILLE NEUVE EN A QUATRE, mesures : le dome du ciel et sa doublure (2 spheres),
-        // la nappe d'eau (1 plan) et le champ d'etoiles (1 nuage de points). Au-dela, c'est un
-        // test precedent qui a laisse quelque chose — derriere le test 299 on en compte 8.
+        // UNE VILLE NEUVE EN A QUATRE, verifies un par un au round 80 : le dome du ciel, la
+        // nappe d'eau, le champ d'etoiles et le point rouge du laser — les quatre sont poses au
+        // CHARGEMENT DE LA PAGE, avant meme le traceur. (Le round 78 disait « le dome et sa
+        // doublure » : il n'y a qu'un dome, le quatrieme est le point du laser.) Au-dela, c'est
+        // un test precedent qui a laisse quelque chose.
         dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4 : '
-          + 'les deux domes du ciel, la nappe d eau et le champ d etoiles) — worldGroup est vide par la '
-          + 'reconstruction, la scene NON. Origines : ' + classe);
+          + 'le dome du ciel, la nappe d eau, le champ d etoiles et le point du laser) — worldGroup est '
+          + 'vide par la reconstruction, la scene NON. Origines : ' + classe);
       } catch (eLib) {}
       try {
         var bul = 0;

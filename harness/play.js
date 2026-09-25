@@ -12348,6 +12348,18 @@ test('quand plusieurs bots parlent au même endroit, les bulles ne se superposen
     // elle est restée à l'autre bout de la ville, et tickBubbles jugeait toutes les bulles
     // « trop loin » (au-delà de 48 m). On la pose à la main derrière le joueur.
     G.camera.position.set(G.P.pos.x, G.P.pos.y + 2.2, G.P.pos.z - 7);
+    // ET ON LA FAIT REGARDER LES HABITANTS (poste FIABILITE, round 80). On ne posait que la
+    // POSITION : l'ORIENTATION restait celle du test precedent, et `matrixWorldInverse` — la
+    // seule matrice que lit `Vector3.project` — n'etait meme pas recalculee (le moteur ne la
+    // met a jour que dans `render()`). L'empilement des bulles a une seconde regle, « ou
+    // superposees A L'ECRAN » : avec une projection heritee, quatre habitants a six metres
+    // les uns des autres pouvaient tomber au meme endroit de l'image, et le test lisait des
+    // bulles empilees alors qu'elles etaient separees. Vert lance seul, rouge derriere
+    // certains voisins : la signature d'un etat herite. On fixe donc le point de vue ET la
+    // matrice qui en decoule.
+    G.camera.lookAt(G.P.pos.x, G.P.pos.y + 2.2, G.P.pos.z + 4);
+    G.camera.updateMatrixWorld(true);
+    G.camera.matrixWorldInverse.copy(G.camera.matrixWorld).invert();
     const n = 4, av = [];
     for (let i = 0; i < n; i++) {
       const b = G.bots[i];

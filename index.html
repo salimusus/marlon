@@ -34691,10 +34691,19 @@ function gangTick(dt) {
         const proies = (joueurDansLaGuerre() ? [{ joueur: true, x: P.pos.x, z: P.pos.z, nom: myCfg.name }] : [])
           .concat(gang.membres.filter(b => !b.ko && !b.mort && b.av.group.visible)
             .map(b => ({ bot: b, x: b.pos.x, z: b.pos.z, nom: b.name })));
+        // MEME PLANTAGE, DEUXIEME TROU. La condition d'entree accepte l'embuscade des que
+        // `gang.membres.length` n'est pas nul — mais la liste des proies, elle, ECARTE les
+        // hommes a terre, morts ou invisibles. Un gang du joueur entierement au tapis (ou
+        // masque, ce que fait le banc d'essai) laissait donc `proies` VIDE, `pickOne([])`
+        // rendait `undefined` et `proie.x` jetait « Cannot read properties of undefined
+        // (reading 'x') » — la meme erreur console que `G.membres[0].x`, et elle salit toute
+        // la serie. Pas de proie : pas d'embuscade.
         const proie = pickOne(proies);
         const nb = Math.random() < 0.45 ? 2 : 1;
-        const envoyes = dispo.sort((a, b2) => Math.hypot(a.x - proie.x, a.z - proie.z) - Math.hypot(b2.x - proie.x, b2.z - proie.z)).slice(0, nb);
-        if (envoyes.length && Math.hypot(envoyes[0].x - proie.x, envoyes[0].z - proie.z) < 140) {
+        const envoyes = proie ? dispo.sort((a, b2) => Math.hypot(a.x - proie.x, a.z - proie.z) - Math.hypot(b2.x - proie.x, b2.z - proie.z)).slice(0, nb) : [];
+        // PAS DE PROIE, PAS D'EMBUSCADE : on retombe sur la decision ordinaire juste en
+        // dessous, exactement comme quand aucun homme n'est disponible pour partir.
+        if (proie && envoyes.length && Math.hypot(envoyes[0].x - proie.x, envoyes[0].z - proie.z) < 140) {
           for (const m of envoyes) m.chasse = { joueur: !!proie.joueur, bot: proie.bot || null, fin: simTime + 70 };
           msg(`⚔️ ${envoyes.length > 1 ? envoyes.length + ' hommes des' : 'Un homme des'} ${G.nom} ${envoyes.length > 1 ? 'foncent' : 'fonce'} sur ${proie.joueur ? 'toi' : proie.nom} !`, 4200);
           chat(G.chefNom, proie.joueur ? `on va s'occuper de ${myCfg.name}…` : `chopez ${proie.nom}, il est seul`, G.couleur);

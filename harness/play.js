@@ -5611,17 +5611,21 @@ test('les hommes du gang ne se tapent plus entre eux', async p => {
     res.entreEux = { bagarres: l.filter(b => b.bagarre).length,
       pvVictime: Math.round(victime.hp),
       ordresTaper: l.reduce((a, b) => a + (b.journal || []).filter(o => /prendre/.test(o.t)).length, 0) };
+    res.noms = l.map(b => b.name).join(', ');
     res.ordre = G.commandeSociale(`${l[0].name} tape ${l[4].name}`);
-    res.apresOrdre = { bagarre: !!l[0].bagarre, pv: Math.round(l[4].hp) };
+    res.apresOrdre = { bagarre: !!l[0].bagarre, pv: Math.round(l[4].hp),
+      victime: l[0].bagarre && l[0].bagarre.cible ? l[0].bagarre.cible.name : null,
+      gang: l.map(b => G.estDuGang(b) ? 1 : 0).join(''), ami: l.map(b => G.amis.has(b.name) ? 1 : 0).join('') };
     l[4].hp = 0; l[4].ko = 0;
     for (let i = 0; i < 30; i++) G.step(1 / 60, true);
-    res.zeroPV = { ko: l[4].ko > G.simTime, couche: Math.abs(l[4].av.group.rotation.x) > 1.4 };
+    res.zeroPV = { ko: l[4].ko > G.simTime, couche: Math.abs(l[4].av.group.rotation.x) > 1.4,
+      hp: Math.round(l[4].hp), rot: +l[4].av.group.rotation.x.toFixed(2), reste: +(l[4].ko - G.simTime).toFixed(1) };
     return res;
   });
   const ok = r.entreEux.bagarres === 0 && r.entreEux.pvVictime === 100 && r.entreEux.ordresTaper === 0
     && !r.apresOrdre.bagarre && r.apresOrdre.pv === 100
     && r.zeroPV.ko && r.zeroPV.couche;
-  return { ok, detail: `un membre bousculé passait en bagarre, et les gardes du corps du gang lui sautaient dessus a leur tour - on voyait « s'en prendre a un des siens » dans le journal et des hommes a 0 PV · maintenant : ${r.entreEux.bagarres} bagarre entre eux, la victime garde ses ${r.entreEux.pvVictime} PV, ${r.entreEux.ordresTaper} ordre de ce genre · meme « tape un des notres » est refuse · et un homme tombe a zero reste a terre au lieu de deambuler` };
+  return { ok, detail: `un membre bousculé passait en bagarre, et les gardes du corps du gang lui sautaient dessus a leur tour - on voyait « s'en prendre a un des siens » dans le journal et des hommes a 0 PV · maintenant : ${r.entreEux.bagarres} bagarre entre eux, la victime garde ses ${r.entreEux.pvVictime} PV, ${r.entreEux.ordresTaper} ordre de ce genre · meme « tape un des notres » est refuse · et un homme tombe a zero reste a terre au lieu de deambuler · RELEVE : ordre rendu ${r.ordre}, apres l'ordre bagarre=${r.apresOrdre.bagarre} (sur ${r.apresOrdre.victime}) pv=${r.apresOrdre.pv}, du gang ${r.apresOrdre.gang}, amis ${r.apresOrdre.ami} · a zero : ko=${r.zeroPV.ko} (${r.zeroPV.reste} s), couche=${r.zeroPV.couche} (rot ${r.zeroPV.rot}), hp=${r.zeroPV.hp} · les cinq : ${r.noms}` };
 });
 
 
@@ -7254,16 +7258,37 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     // plus silencieux. On la met en pause le temps de la mesure, sinon elle seule depassait
     // le seuil de silence et faisait echouer un test qui parle d'autre chose.
     try { G.SONV.ambT = G.simTime + 1e6; G.ambiance.stop(); } catch (e) {}
+    // QUI FAIT DU BRUIT PENDANT LA MESURE DE SILENCE ? Ce test est vert lance seul (silence
+    // 0,0004) et rouge en suite complete (0,0459) : quelque chose que la suite laisse derriere
+    // elle JOUE pendant les 900 ms de reference. Quatre heritages ont deja ete trouves a la
+    // main (sourdine de la cinematique, volume a 80 %, bille de la roulette, tonnerre) ; pour
+    // le cinquieme on ne devine plus : on note l'ORIGINE de chaque source audio creee pendant
+    // la fenetre, en espionnant le contexte lui-meme. Rien n'est cree = rien n'est note.
+    const proto = Object.getPrototypeOf(c), vus = {}, bruts = {};
+    for (const nom of ['createOscillator', 'createBufferSource']) {
+      const brut = proto[nom]; if (!brut || brut.__espion) continue;
+      bruts[nom] = brut;
+      const f = function (...a) {
+        try { const st = ((new Error()).stack || '').split('\n').slice(2, 5)
+          .map(x => x.trim().replace(/https?:\/\/[^/]+\//g, '').replace(/^at\s+/, '')).join(' < ');
+          vus[st] = (vus[st] || 0) + 1; } catch (e) {}
+        return brut.apply(this, a);
+      };
+      f.__espion = true; proto[nom] = f;
+    }
     await dodo(900); const silence = rms();
+    for (const nom of Object.keys(bruts)) proto[nom] = bruts[nom];
+    const origines = Object.entries(vus).sort((a, b) => b[1] - a[1]).slice(0, 4)
+      .map(([k, n]) => n + '\u00d7 ' + k.slice(0, 190)).join(' ;; ') || 'aucune source creee';
     G.engine.start('car', 2); G.engine.set(0.6); await dodo(900); const moteur = rms(); G.engine.stop();
     await dodo(400); G.sfx.tone(440, 0, 0.6, 'sine', 0.3); await dodo(120); const tonal = rms();
     G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
     try { ch.lim.disconnect(an); } catch (e) {}
     try { G.SONV.ambT = 0; } catch (e) {}   // la rumeur de la ville repart pour les tests suivants
-    return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume };
+    return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume, origines };
   });
   const ok = r.etat === 'running' && r.silence < 0.02 && r.moteur > 0.12 && r.moteur > r.silence + 0.1 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;
-  return { ok, detail: `le limiteur seul rabotait sans rien rendre : tout etait devenu TROP FAIBLE et, sur des enceintes de tele, on n'entendait plus rien · la chaine est maintenant celle d'un vrai mixage — compresseur doux (${r.comp.seuil} dB, ${r.comp.ratio}:1) → gain de rattrapage ×${r.makeup} → limiteur brique (${r.lim.seuil} dB, ${r.lim.ratio}:1) — et le volume par defaut est a ${Math.round(r.volume * 100)} % · mesure AU BOUT DE LA CHAINE par un analyseur : silence ${r.silence}, moteur 500 chevaux ${r.moteur} (2,5× plus fort qu'avant), note ${r.tonal} · et le bouton « Tester le son » ecoute maintenant ce qui sort au lieu de dire « ca marche » les yeux fermes (${r.mesure.etat}, niveau ${r.mesure.niveau})` };
+  return { ok, detail: `le limiteur seul rabotait sans rien rendre : tout etait devenu TROP FAIBLE et, sur des enceintes de tele, on n'entendait plus rien · la chaine est maintenant celle d'un vrai mixage — compresseur doux (${r.comp.seuil} dB, ${r.comp.ratio}:1) → gain de rattrapage ×${r.makeup} → limiteur brique (${r.lim.seuil} dB, ${r.lim.ratio}:1) — et le volume par defaut est a ${Math.round(r.volume * 100)} % · mesure AU BOUT DE LA CHAINE par un analyseur : silence ${r.silence}, moteur 500 chevaux ${r.moteur} (2,5× plus fort qu'avant), note ${r.tonal} · et le bouton « Tester le son » ecoute maintenant ce qui sort au lieu de dire « ca marche » les yeux fermes (${r.mesure.etat}, niveau ${r.mesure.niveau}) · sources audio creees pendant les 900 ms de silence : ${r.origines}` };
 });
 
 test('en interieur, la camera passe en maison de poupee : plafond efface, mur traverse transparent', async p => {
@@ -16261,16 +16286,32 @@ test('l\'équipe municipale part en fourgon, balise un chantier et répare un la
     G.breakThing(lamp, null, true);
     const emp = G.city.metiers.filter(m => m.metier === 'employe'), four = emp[0].bot.veh;
     const x0 = four.x, z0 = four.z;
+    // CE QUE LE FOURGON A DANS LA TETE AVANT DE PARTIR. metiersRepos le repose sur sa place et
+    // lui rend son moteur, mais il ne touche pas a son etat de CONDUITE : itineraire d'avant,
+    // compteur du filet, interdiction du graphe des voies, manoeuvre de degagement en cours.
+    // Tout cela est hérité du test précédent et n'existe pas quand ce test est lancé seul.
+    const herite = { ia: !!four.ia, metT: +(four.metT || 0).toFixed(0), metMieux: four.metMieux == null ? null : +four.metMieux.toFixed(0),
+      metBut: four.metBut ? `${four.metBut[0].toFixed(0)};${four.metBut[1].toFixed(0)}` : null,
+      grille: +((four.grilleJusqua || 0) - G.simTime).toFixed(0), degage: +((four.degageFin || 0) - G.simTime).toFixed(0),
+      echecs: four.srvEchecs || 0, fige: +(four.figeT || 0).toFixed(0), attente: +(four.attenteT || 0).toFixed(0),
+      place: +Math.hypot(four.x - four.home0[0], four.z - four.home0[1]).toFixed(1) };
     let t = 0, sorti = null, chantier = null, tFin = null, enFourgon = 0;
     // CE QUE LE FOURGON A VRAIMENT FAIT DE SON TEMPS. Quand ce test tombe en suite complete,
     // la seule chose qu'on lisait était « chantier balisé à null » : impossible de dire si
     // l'équipe était partie ailleurs, si elle roulait encore ou si elle était plantée. On
     // relève donc la cible choisie, la distance parcourue et les images sans un centimètre.
     let parcouru = 0, px = four.x, pz = four.z, fige = 0;
+    // OU EXACTEMENT LE FOURGON RESTE-T-IL PLANTE ? « chantier balisé à null » ne disait pas si
+    // le filet avait joué, ni à quelle distance du lampadaire il abandonnait. On relève donc
+    // les sauts du filet (un pas de plus de 1,5 m), le meilleur approche atteint et l'endroit
+    // où il passe le plus clair de son temps.
+    let sauts = 0, dmin = 1e9, dminT = 0;
     for (let i = 0; i < 120 * 60 && !tFin; i++) {
       G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
       const pas = Math.hypot(four.x - px, four.z - pz); px = four.x; pz = four.z;
-      if (pas < 1.5) parcouru += pas;   // au-delà, c'est un rangement du filet, pas un mètre roulé
+      if (pas < 1.5) parcouru += pas; else sauts++;   // au-delà, c'est un rangement du filet, pas un mètre roulé
+      const dl = Math.hypot(four.x - lamp.x, four.z - lamp.z);
+      if (dl < dmin) { dmin = dl; dminT = +t.toFixed(0); }
       if (pas < 0.002) fige++;
       if (sorti == null && Math.hypot(four.x - x0, four.z - z0) > 12) sorti = +t.toFixed(0);
       if (emp[0].etat === 'route' && Math.hypot(emp[0].bot.pos.x - four.x, emp[0].bot.pos.z - four.z) < 4) enFourgon++;
@@ -16281,11 +16322,14 @@ test('l\'équipe municipale part en fourgon, balise un chantier et répare un la
     return { veh: four.kind, sorti, chantier, tFin, enFourgon: +(enFourgon / 60).toFixed(0), dFourgon: +Math.hypot(four.x - lamp.x, four.z - lamp.z).toFixed(1), etat: emp[0].etat,
       parcouru: +parcouru.toFixed(0), fige: +(fige / 60).toFixed(0), duree: +t.toFixed(0),
       cible: ci ? `${ci.kind || 'objet'} en (${ci.x.toFixed(0)} ; ${ci.z.toFixed(0)})` : 'aucune',
-      bonneCible: ci === lamp, dDepot: +Math.hypot(lamp.x - x0, lamp.z - z0).toFixed(0) };
+      bonneCible: ci === lamp, dDepot: +Math.hypot(lamp.x - x0, lamp.z - z0).toFixed(0),
+      sauts, dmin: +dmin.toFixed(1), dminT, fin: `${four.x.toFixed(0)} ; ${four.z.toFixed(0)}`,
+      lampXZ: `${lamp.x.toFixed(0)} ; ${lamp.z.toFixed(0)}`, depot: `${x0.toFixed(0)} ; ${z0.toFixed(0)}`,
+      patience: +(four.metT || 0).toFixed(0), mieux: four.metMieux == null ? null : +four.metMieux.toFixed(1), herite };
   });
   // l'itinéraire par les voies varie avec la circulation (45 à 80 s de route) : on juge le fourgon, le chantier et la réparation dans les deux minutes
   const ok = r.veh === 'fourgon' && r.sorti != null && r.sorti < 25 && r.enFourgon >= 10 && r.chantier != null && r.tFin != null && r.tFin < 110 && r.dFourgon < 16;
-  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat}) · cible ${r.cible} (le lampadaire du test : ${r.bonneCible}, à ${r.dDepot} m du dépôt), ${r.parcouru} m roulés et ${r.fige} s à l'arrêt sur ${r.duree} s` };
+  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat}) · cible ${r.cible} (le lampadaire du test : ${r.bonneCible}, à ${r.dDepot} m du dépôt), ${r.parcouru} m roulés et ${r.fige} s à l'arrêt sur ${r.duree} s · RELEVE : ${r.sauts} saut(s) du filet, au plus près ${r.dmin} m à ${r.dminT} s, fini en (${r.fin}) pour un lampadaire en (${r.lampXZ}) et un dépôt en (${r.depot}), patience en cours ${r.patience} s (meilleur approche ${r.mieux}) · HERITE a l'entree : itineraire ${r.herite.ia}, filet ${r.herite.metT} s vers ${r.herite.metBut} (meilleur ${r.herite.metMieux}), voies interdites ${r.herite.grille} s, degagement ${r.herite.degage} s, ${r.herite.echecs} echec(s), fige ${r.herite.fige} s / attente ${r.herite.attente} s, a ${r.herite.place} m de sa place` };
 });
 
 test('reculer près d\'un feu rouge n\'est pas « griller un feu » ; le franchir dans son sens, si', async p => {
@@ -20472,7 +20516,7 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
       } return true; };
     const autres = [].concat(G.city.cars, G.city.aiCars, G.police.cars).filter(v => v && !v.heli && v !== ch);
     const DT = 1 / 20;
-    let metres = 0, solide = 0, veh = 0, vehSuite = 0, vehMax = 0, sur = 0, n = 0, vmax = 0;
+    let metres = 0, solide = 0, veh = 0, vehSuite = 0, vehMax = 0, sur = 0, n = 0, vmax = 0, pire = null;
     let px = ch.x, pz = ch.z;
     for (let i = 0; i < 2400; i++) {
       G.simTime += DT; G.cityStep(DT); G.missionTick(DT);
@@ -20482,15 +20526,20 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
       n++; metres += pas; vmax = Math.max(vmax, pas / DT);
       if (G.surLaChaussee(ch.x, ch.z, 0.9)) sur++;
       if (dansUnSolide(ch)) solide++;
-      let touche = false;
-      for (const o of autres) if (Math.abs(o.x - ch.x) < 12 && Math.abs(o.z - ch.z) < 12 && chevauche(ch, o)) { veh++; touche = true; break; }
-      if (touche) { vehSuite++; vehMax = Math.max(vehMax, vehSuite); } else vehSuite = 0;
+      let touche = false, quoi = null;
+      for (const o of autres) if (Math.abs(o.x - ch.x) < 12 && Math.abs(o.z - ch.z) < 12 && chevauche(ch, o)) { veh++; touche = true; quoi = o; break; }
+      if (touche) { vehSuite++; if (vehSuite > vehMax) { vehMax = vehSuite;
+          // QUI EXACTEMENT ? Dix images encastré, c'est le seuil ; sans le nom du véhicule et
+          // sans savoir lequel des deux avançait, on ne peut pas dire si le chauffard rentre
+          // dedans ou s'il se fait rentrer dedans.
+          pire = { kind: quoi.kind || '?', ia: !!quoi.ia, spd: +(quoi.speed || quoi.spd || 0).toFixed(1),
+            moi: +(ch.speed || 0).toFixed(1), ou: `${ch.x.toFixed(0)} ; ${ch.z.toFixed(0)}` }; } } else vehSuite = 0;
     }
     const dbg = { tour: d.tour, circuit: (d.circuit || []).length, fini: !G.mission.cur };
     Math.random = vrai;
     G.endMission(false, true);
     return { metres: +metres.toFixed(0), solide, veh, vehMax, images: n, vmax: +vmax.toFixed(1),
-      route: n ? +(100 * sur / n).toFixed(1) : null, tours: dbg.tour, dbg };
+      route: n ? +(100 * sur / n).toFixed(1) : null, tours: dbg.tour, dbg, pire };
   });
   if (r.erreur) return { ok: false, detail: r.erreur };
   // Ce que ce test garantit, c'est « il ne traverse plus rien » : 0 image dans un solide et
@@ -20501,7 +20550,7 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
   // passe dépend de ceux qu'il a eu le temps d'atteindre (mesuré 74,6 % puis 82,6 % selon le
   // tirage). En faire un critère, c'était rendre le test instable pour rien.
   const ok = r.metres > 150 && r.solide === 0 && r.vehMax <= 10;
-  return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)` };
+  return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)${r.pire ? ` · pire encastrement : contre un « ${r.pire.kind} » (ia=${r.pire.ia}, sa vitesse ${r.pire.spd}, la sienne ${r.pire.moi}) en (${r.pire.ou})` : ''}` };
 });
 
 // ============================================================================================

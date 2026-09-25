@@ -5592,6 +5592,18 @@ test('l\'atelier dit pourquoi « Valider » est grisé, et amène une voiture si
 
 test('les hommes du gang ne se tapent plus entre eux', async p => {
   const r = await p.evaluate(() => {
+    // GRAINE FIGEE. Ce test etait le seul du lot des gangs a laisser courir le hasard, et il
+    // en depend de bout en bout : les degats de chaque coup, le tirage `pickOne` des repliques
+    // et surtout la VIE DU JOUEUR. La victime qu'on met volontairement en bagarre (`fight`)
+    // s'en prend, par la conduite ordinaire de combatTick, au JOUEUR — 400 pas de simulation,
+    // une dizaine de coups de 4 a 12 points tires au hasard. Selon le tirage, l'enfant finit
+    // la mesure a 100, a 40 ou a zero ; et un joueur mort arrete la simulation, donc le
+    // dernier homme mis a zero ne tombait jamais au sol. C'est la signature exacte du test :
+    // vert lance seul, rouge en suite complete, avec les trois premieres mesures parfaites.
+    // Le banc exige des tests deterministes : on fige la graine et on la rend a la fin.
+    let graine = 20260925;
+    const vrai = Math.random;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G, res = {};
     const l = G.bots.slice(0, 5);
@@ -5620,12 +5632,14 @@ test('les hommes du gang ne se tapent plus entre eux', async p => {
     for (let i = 0; i < 30; i++) G.step(1 / 60, true);
     res.zeroPV = { ko: l[4].ko > G.simTime, couche: Math.abs(l[4].av.group.rotation.x) > 1.4,
       hp: Math.round(l[4].hp), rot: +l[4].av.group.rotation.x.toFixed(2), reste: +(l[4].ko - G.simTime).toFixed(1) };
+    res.joueur = { hp: Math.round(G.P.hp), mort: !!G.dead };
+    Math.random = vrai;
     return res;
   });
   const ok = r.entreEux.bagarres === 0 && r.entreEux.pvVictime === 100 && r.entreEux.ordresTaper === 0
     && !r.apresOrdre.bagarre && r.apresOrdre.pv === 100
     && r.zeroPV.ko && r.zeroPV.couche;
-  return { ok, detail: `un membre bousculé passait en bagarre, et les gardes du corps du gang lui sautaient dessus a leur tour - on voyait « s'en prendre a un des siens » dans le journal et des hommes a 0 PV · maintenant : ${r.entreEux.bagarres} bagarre entre eux, la victime garde ses ${r.entreEux.pvVictime} PV, ${r.entreEux.ordresTaper} ordre de ce genre · meme « tape un des notres » est refuse · et un homme tombe a zero reste a terre au lieu de deambuler · RELEVE : ordre rendu ${r.ordre}, apres l'ordre bagarre=${r.apresOrdre.bagarre} (sur ${r.apresOrdre.victime}) pv=${r.apresOrdre.pv}, du gang ${r.apresOrdre.gang}, amis ${r.apresOrdre.ami} · a zero : ko=${r.zeroPV.ko} (${r.zeroPV.reste} s), couche=${r.zeroPV.couche} (rot ${r.zeroPV.rot}), hp=${r.zeroPV.hp} · les cinq : ${r.noms}` };
+  return { ok, detail: `un membre bousculé passait en bagarre, et les gardes du corps du gang lui sautaient dessus a leur tour - on voyait « s'en prendre a un des siens » dans le journal et des hommes a 0 PV · maintenant : ${r.entreEux.bagarres} bagarre entre eux, la victime garde ses ${r.entreEux.pvVictime} PV, ${r.entreEux.ordresTaper} ordre de ce genre · meme « tape un des notres » est refuse · et un homme tombe a zero reste a terre au lieu de deambuler · RELEVE : ordre rendu ${r.ordre}, apres l'ordre bagarre=${r.apresOrdre.bagarre} (sur ${r.apresOrdre.victime}) pv=${r.apresOrdre.pv}, du gang ${r.apresOrdre.gang}, amis ${r.apresOrdre.ami} · a zero : ko=${r.zeroPV.ko} (${r.zeroPV.reste} s), couche=${r.zeroPV.couche} (rot ${r.zeroPV.rot}), hp=${r.zeroPV.hp} · les cinq : ${r.noms} · le joueur finit a ${r.joueur.hp} PV (mort : ${r.joueur.mort})` };
 });
 
 

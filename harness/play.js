@@ -13982,6 +13982,16 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // amplitude de 0,062 sur une averse qui vaut 0,008.
     const calme = () => {
       for (const kk of Object.keys(G.SONV)) if (/T$/.test(kk)) G.SONV[kk] = G.simTime + 1e6;
+      // LE TONNERRE, QUI NE PASSE PAS PAR sonEn ET QUE RIEN N'ATTRAPAIT. meteoTick tire un coup
+      // de tonnerre toutes les 14 a 34 s tant que l'averse depasse 0,35 — et ce test force
+      // justement force = 1 pendant toute la mesure. Ce sont deux appels DIRECTS a sfx
+      // (`sfx.noise(1.1, 260, .06)` et `sfx.tone(48, 0, 1.3, 'sine', .07, 32)`), donc SON.joues
+      // ne bouge pas et la fenetre n'etait meme pas declaree salie. Mesure r78 : deux fenetres
+      // sur cinq a 0,13 de crete pour une averse qui vaut 0,0081, soit un ecart de 0.1215 sur
+      // les trois fenetres du milieu quand le test en exige moins de 0,01 — c'etait la SEULE
+      // condition rouge de ce test. On mesure l'averse, pas l'orage : on repousse donc aussi
+      // ce rendez-vous-la, comme les autres.
+      G.meteo.tonnerre = G.simTime + 1e6;
       G.ambiance.stop();
       try { G.engine.stop(); } catch (e) {}
       try { G.music.stop(); } catch (e) {}

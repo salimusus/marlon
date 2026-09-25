@@ -7329,7 +7329,7 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
           const x = a[0] + ux * t, z = a[1] + uz * t;
           versProchain = parcouru < 50 ? 2.4 : Math.min(11, 2.4 + (parcouru - 50) * 0.1);
           if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
-          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; pool[k].userData.chevron = true; GPS_G.add(pool[k]); }   // marque : le banc d'essai reconnait un chevron sans dependre de sa forme (et TRACE, non scene : voir plus haut)
+          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; pool[k].userData.chevron = true; GPS_G.add(pool[k]); }   // marque : le banc d'essai reconnait un chevron sans dependre de sa forme (et GPS_G, non scene : voir LE GUIDAGE A SON NOEUD)
           const m = pool[k++], gy = groundCar(x, z, null, 0);
           m.position.set(x, gy + 0.05, z); m.lookAt(x + ux, gy + 0.05, z + uz); m.visible = true;
         }

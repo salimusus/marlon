@@ -17894,12 +17894,30 @@ function ecranDe(av, yOff) {
   if (Math.hypot(p.x - camera.position.x, p.z - camera.position.z) > 40) return null;
   _ecranV.set(p.x, p.y + yOff, p.z).project(camera); return _ecranV.z < 1 ? [_ecranV.x, _ecranV.y, _ecranV.z] : null;
 }
+// ============ UNE BULLE DE DIALOGUE MEURT DANS LA SIMULATION, PLUS AU DESSIN ============
+// MESURE (poste FIABILITE, round 80). Meme famille que les ephemeres du round 78 : la bulle
+// s'accrochait a l'avatar dans `bubble()` et ne s'en detachait que dans `tickBubbles`, appelee
+// par `frame()` — la boucle d'AFFICHAGE. Tout ce qui fait avancer le jeu sans rendre d'image
+// (un pas de simulation en rafale quand ca rame, la cinematique d'introduction, le mode
+// « manette seule », et le banc d'essai qui enchaine des centaines de step() dans un seul
+// appel de page) gardait donc la bulle POUR TOUJOURS : l'avatar portait un enfant de plus,
+// avec sa texture et son materiau, pour tous les tests suivants. Releve dans le journal r79 a
+// l'entree des quatre tests rouges : « 3 bulle(s) de dialogue encore accrochees a un
+// habitant », horodatees a 295,5 s pour une horloge reposee a 3 000 s — expirees depuis
+// longtemps. L'expiration part donc dans la simulation ; le PLACEMENT (taille apparente,
+// empilement a l'ecran), lui, a besoin de la camera et reste au dessin.
+function bullesExpirent() {
+  for (const av of allAvatars()) {
+    if (!av.bubble || simTime <= av.bubbleT) continue;
+    av.group.remove(av.bubble); av.bubble.material.map.dispose(); av.bubble.material.dispose(); av.bubble = null;
+  }
+}
 function tickBubbles() {
   const cp = camera.position;
+  bullesExpirent();   // (la simulation l'a deja fait ; on garde l'appel pour une image sans pas de simulation)
   const parlants = [];   // ceux dont la bulle est visible : on les empile plus bas
   for (const av of allAvatars()) {
     if (!av.bubble) continue;
-    if (simTime > av.bubbleT) { av.group.remove(av.bubble); av.bubble.material.map.dispose(); av.bubble.material.dispose(); av.bubble = null; continue; }
     const d = Math.hypot(av.group.position.x - cp.x, av.group.position.y + 3.35 - cp.y, av.group.position.z - cp.z);
     if (d > 48) { av.bubble.visible = false; continue; }
     av.bubble.visible = true;
@@ -18569,6 +18587,9 @@ function ephemeresTick(dt) {
     if (d.t > d.life) { EPHEMERES.remove(d.m); debris.splice(i, 1); }
   }
   fxTick(dt);
+  // les bulles de dialogue sont du meme bois : elles n'expiraient que dans la boucle
+  // d'affichage (voir bullesExpirent)
+  try { bullesExpirent(); } catch (eBul) {}
 }
 // LA SECOUSSE DE CAMÉRA : un coup qui porte se sent aussi à l'image.
 function camSecousse(amp = 0.18, duree = 0.22) {

@@ -16216,18 +16216,30 @@ test('l\'équipe municipale part en fourgon, balise un chantier et répare un la
     const emp = G.city.metiers.filter(m => m.metier === 'employe'), four = emp[0].bot.veh;
     const x0 = four.x, z0 = four.z;
     let t = 0, sorti = null, chantier = null, tFin = null, enFourgon = 0;
+    // CE QUE LE FOURGON A VRAIMENT FAIT DE SON TEMPS. Quand ce test tombe en suite complete,
+    // la seule chose qu'on lisait était « chantier balisé à null » : impossible de dire si
+    // l'équipe était partie ailleurs, si elle roulait encore ou si elle était plantée. On
+    // relève donc la cible choisie, la distance parcourue et les images sans un centimètre.
+    let parcouru = 0, px = four.x, pz = four.z, fige = 0;
     for (let i = 0; i < 120 * 60 && !tFin; i++) {
       G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
+      const pas = Math.hypot(four.x - px, four.z - pz); px = four.x; pz = four.z;
+      if (pas < 1.5) parcouru += pas;   // au-delà, c'est un rangement du filet, pas un mètre roulé
+      if (pas < 0.002) fige++;
       if (sorti == null && Math.hypot(four.x - x0, four.z - z0) > 12) sorti = +t.toFixed(0);
       if (emp[0].etat === 'route' && Math.hypot(emp[0].bot.pos.x - four.x, emp[0].bot.pos.z - four.z) < 4) enFourgon++;
       if (chantier == null && G.city.chantiers.length) chantier = +t.toFixed(0);
       if (!lamp.broken) tFin = +t.toFixed(0);
     }
-    return { veh: four.kind, sorti, chantier, tFin, enFourgon: +(enFourgon / 60).toFixed(0), dFourgon: +Math.hypot(four.x - lamp.x, four.z - lamp.z).toFixed(1), etat: emp[0].etat };
+    const ci = emp[0].cible;
+    return { veh: four.kind, sorti, chantier, tFin, enFourgon: +(enFourgon / 60).toFixed(0), dFourgon: +Math.hypot(four.x - lamp.x, four.z - lamp.z).toFixed(1), etat: emp[0].etat,
+      parcouru: +parcouru.toFixed(0), fige: +(fige / 60).toFixed(0), duree: +t.toFixed(0),
+      cible: ci ? `${ci.kind || 'objet'} en (${ci.x.toFixed(0)} ; ${ci.z.toFixed(0)})` : 'aucune',
+      bonneCible: ci === lamp, dDepot: +Math.hypot(lamp.x - x0, lamp.z - z0).toFixed(0) };
   });
   // l'itinéraire par les voies varie avec la circulation (45 à 80 s de route) : on juge le fourgon, le chantier et la réparation dans les deux minutes
   const ok = r.veh === 'fourgon' && r.sorti != null && r.sorti < 25 && r.enFourgon >= 10 && r.chantier != null && r.tFin != null && r.tFin < 110 && r.dFourgon < 16;
-  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat})` };
+  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat}) · cible ${r.cible} (le lampadaire du test : ${r.bonneCible}, à ${r.dDepot} m du dépôt), ${r.parcouru} m roulés et ${r.fige} s à l'arrêt sur ${r.duree} s` };
 });
 
 test('reculer près d\'un feu rouge n\'est pas « griller un feu » ; le franchir dans son sens, si', async p => {

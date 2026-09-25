@@ -37423,10 +37423,23 @@ function metierPassager(w, c, i, dt) {
 // collision. Le camion de pompiers en intervention est PRIORITAIRE (`urgence`), les autres
 // engins et le vélo du facteur roulent comme tout le monde mais gardent la priorité de
 // service que le joueur a demandée (bail `c.prio`, posé ci-dessous à chaque image de route).
-function metierRoule(w, tx, tz, dt, seuil = 6) {
+// `opt.filet` : LE FILET DE L'ENGIN DE TRAVAIL. Un vehicule de secours passe par
+// `etapeSecours`, qui le gare au plus pres de son but quand il n'arrive plus a s'en
+// approcher. Les engins de travail, eux, n'avaient RIEN : `metierRoule` appelle `rouleVers`
+// en direct, sans `secours`, donc ni marche arriere de degagement (c'est voulu : une equipe
+// de travaux a tout son temps et on ne veut pas la sortir de sa file) ni renoncement. Un
+// fourgon coince derriere une voiture a l'arret restait donc en travers de la rue POUR TOUTE
+// LA PARTIE, l'equipe a bord, et le lampadaire n'etait jamais repare. Mesure en suite
+// complete (test 390) : 112 s de trajet, chef a bord toute la duree, fourgon arrete a 70 m du
+// lampadaire, aucun chantier pose — alors que le meme test lance seul fait la course en 50 s.
+// Le filet ne touche pas a la conduite : il ne fait que constater que le vehicule n'a pas
+// gagne deux metres sur son but pendant toute sa patience (`patienceSecours`, 45 s au plus
+// court), et le range alors a la place libre la plus proche du but, comme on le fait deja
+// pour l'ambulance et la depanneuse.
+function metierRoule(w, tx, tz, dt, seuil = 6, opt) {
   const c = w.veh; if (!c) return metierMarche(w, tx, tz, dt);
   const dist = Math.hypot(tx - c.x, tz - c.z);
-  if (dist < seuil) { w.vroute = null; c.speed = 0; c.spd = 0; metierAuVolant(w, c, 0, dt); return dist; }
+  if (dist < seuil) { w.vroute = null; c.speed = 0; c.spd = 0; metierAuVolant(w, c, 0, dt); c.metT = 0; c.metMieux = null; return dist; }
   // le camion de pompiers qui part sur un feu : sirène, gyrophare, il passe aux feux rouges.
   // Les autres véhicules de service gardent la priorité de circulation sans forcer les feux.
   const urgence = !!c.sirene;
@@ -37441,6 +37454,18 @@ function metierRoule(w, tx, tz, dt, seuil = 6) {
   // feu brûlait ses 240 s (test 388 dans la suite complète, où la circulation le bloquait).
   const reste = rouleVers(c, tx, tz, dt, vmax, { urgence, secours: urgence });
   metierAuVolant(w, c, Math.abs(c.speed || 0), dt);
+  if (opt && opt.filet) {
+    // but neuf : la patience repart de zero (sinon un aller-retour depot -> chantier la
+    // ferait deborder des la premiere seconde du retour)
+    if (!c.metBut || Math.hypot(c.metBut[0] - tx, c.metBut[1] - tz) > 3) { c.metBut = [tx, tz]; c.metT = 0; c.metMieux = null; }
+    if (c.metMieux == null || reste < c.metMieux - 2) { c.metMieux = reste; c.metT = 0; }   // il gagne du terrain : il n'est pas coince
+    c.metT = (c.metT || 0) + dt;
+    const loin = Math.hypot(c.x - P.pos.x, c.z - P.pos.z) > SECOURS_LOIN;
+    if (c.metT > patienceSecours(c, tx, tz, loin)) {
+      c.metT = 0; c.metMieux = null;
+      try { if (convoieSecours(c, tx, tz, null)) return Math.hypot(tx - c.x, tz - c.z); } catch (e) {}
+    }
+  }
   return reste;
 }
 // ---- CE QU'IL Y A À RÉPARER ----
@@ -39384,7 +39409,7 @@ function employesTick(dt) {
     }
     case 'route': {
       if (!cible) { majEtat('repos'); return; }
-      const d = veh ? metierRoule(w0, cible.x, cible.z, dt, 10) : metierMarche(w0, cible.x, cible.z, dt, 3);
+      const d = veh ? metierRoule(w0, cible.x, cible.z, dt, 10, { filet: true }) : metierMarche(w0, cible.x, cible.z, dt, 3);
       suiteEnRoute(cible.x, cible.z);
       if (d < (veh ? 11 : 3.4)) majEtat('approche');
       return;
@@ -39438,7 +39463,7 @@ function employesTick(dt) {
     }
     case 'retour': {
       const dep = city.depot || { x: 0, z: 0 };
-      const d = veh ? metierRoule(w0, dep.x, dep.z + 9, dt, 8) : metierMarche(w0, w0.base[0], w0.base[1], dt);
+      const d = veh ? metierRoule(w0, dep.x, dep.z + 9, dt, 8, { filet: true }) : metierMarche(w0, w0.base[0], w0.base[1], dt);
       suiteEnRoute(dep.x, dep.z + 9);
       if (d < (veh ? 9 : 1.6)) {
         majEtat('repos'); for (const m of eq) m.cible = null;

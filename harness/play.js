@@ -15267,10 +15267,17 @@ test('la dépanneuse ramasse les carcasses de véhicule brûlé et les ramène a
     const vue0 = G.carcasseARamasser() === v;                 // pas tout de suite : on laisse fumer
     let appel = -1, charge = -1, auGarage = -1, fin = -1, horsRoute = 0, nRoute = 0;
     let mode = null, tarif = null, carc = false, finGarage = -1;
-    // 180 s simulées : l'enlèvement complet en prend une centaine (8 s d'appel, 30 s de route,
-    // le chargement, 35 s de retour, le déchargement et les dix secondes de réparation).
+    // 300 s simulées. Le budget était de 180 s, « l'enlèvement complet en prend une
+    // centaine » — un chiffre relevé du temps où ce test rappelait lightsTick et
+    // servicesTick à la main, ce qui faisait rouler la dépanneuse DEUX FOIS par pas, donc à
+    // deux fois sa vitesse de fiche. Depuis qu'on n'appelle plus que cityStep, la course
+    // vraie est de 165 s (8 s d'appel, 65 s de route, 2,9 s de treuil, 76 s de retour au
+    // pas avec l'épave sur le plateau, 2,9 s de déchargement et 10 s de réparation) : elle
+    // tenait de justesse dans les 180 s, et la moindre voiture en travers la faisait
+    // déborder — le test s'arrêtait alors AVANT la remise à neuf et annonçait une épave
+    // toujours noire à 100 % de dégâts. On garde donc presque le double de marge.
     let pxD = null, pzD = null;
-    for (let i = 0; i < 3600; i++) {
+    for (let i = 0; i < 6000; i++) {
       // cityStep : sans lui, les voitures de la circulation restent FIGÉES au milieu des rues
       // et bouchent le trajet de la dépanneuse (mesuré : 450 s sans jamais atteindre l'épave).
       // Et lui SEUL : il appelle deja lightsTick et servicesTick (par cityCommon → cityVie).

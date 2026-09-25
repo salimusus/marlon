@@ -22945,3 +22945,39 @@ test('a la manette, un appui de 200 ms sur △ devant une voiture met l\'enfant 
   const ok = r.auVolant === r.sur && r.basculesMax === 1 && r.basculesTotal === r.sur;
   return { ok, detail: `△ est LE bouton du jeu, et « monter en voiture » le geste le plus frequent : il repondait une fois sur deux. \`sample()\` effacait le passe des boutons a CHAQUE changement de contexte, y compris game:foot → game:vehicle, donc △ TENU etait reannonce comme un nouvel appui a chaque lecture de la manette (8 ms) : monte, descend, monte… jusqu'a 47 allers-retours dedans/dehors pour un appui de 350 ms, autant de claquements de portiere et de demarrages moteur, et l'etat final decide par la seule PARITE du nombre de lectures — 6 appuis de 200 ms sur 12 finissaient au volant · maintenant, douze appuis autour de 200 ms (${r.detail[0][0]} a ${r.detail[r.detail.length - 1][0]} lectures a 120 Hz, les deux parites) devant la ${r.kind} de (${r.x} ; ${r.z}) : ${r.auVolant}/${r.sur} finissent au volant, ${r.basculesMax} bascule au maximum (${r.basculesTotal} en tout, soit une par appui — la montee), pastille « ${r.pastille} »` };
 });
+
+test('apres un KO en ville, on se reveille les pieds sur le carrelage de l\'hopital, pas debout sur le banc de la salle d\'attente', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    await dodo(250);
+    for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    const d = G.city.medDesk;
+    // LE CARRELAGE DE L'ACCUEIL est le dessus de la dalle (26 × 22 m). On le releve LOIN de tout
+    // banc pour avoir la valeur de reference, puis on compare a celle du point de reveil.
+    const carrelage = +G.groundUnder(d.x + 1.6, d.z, null, 2.4).toFixed(3);
+    const kos = [];
+    for (let essai = 0; essai < 3; essai++) {
+      G.P.pos.set(-4 + essai * 4, 1, 8); G.P.vel.set(0, 0, 0); G.P.hp = 100;
+      for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+      G.P.koPerte = 7; G.P.hp = 0;
+      let releve = null;
+      for (let i = 0; i < 420 && releve === null; i++) { G.step(1 / 60, true); if (G.P.hp === 100) releve = i; }
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);   // la pastille de proximite a le temps de s'afficher
+      const bancs = (G.city.benches || []).map(b => Math.hypot(G.P.pos.x - b.x, G.P.pos.z - b.z));
+      const el = document.getElementById('act');
+      kos.push({ releve, x: +G.P.pos.x.toFixed(2), y: +G.P.pos.y.toFixed(3), z: +G.P.pos.z.toFixed(2),
+        sol: +G.groundUnder(G.P.pos.x, G.P.pos.z, null, G.P.pos.y + 2.4).toFixed(3),
+        banc: +Math.min(...bancs).toFixed(2), benchNear: !!G.city.benchNear,
+        pastille: el && getComputedStyle(el).display !== 'none' ? (el.textContent || '').trim().slice(0, 40) : '' });
+    }
+    return { medDesk: [+d.x.toFixed(2), +d.z.toFixed(2)], carrelage, kos,
+      bancsHopital: (G.city.benches || []).filter(b => Math.hypot(b.x - d.x, b.z - d.z) < 14).map(b => [+b.x.toFixed(2), +b.z.toFixed(2), +(b.assise != null ? b.assise : 0).toFixed(2)]) };
+  });
+  const k = r.kos;
+  const ok = k.length === 3 && k.every(o => o.releve !== null
+    && Math.abs(o.sol - r.carrelage) < 0.01                       // le sol trouve est le carrelage
+    && Math.abs(o.y - r.carrelage) < 0.02                         // et les pieds y sont posees (l'origine d'un avatar est aux PIEDS)
+    && o.banc > 1.8 && !o.benchNear && !/🪑/.test(o.pastille));
+  return { ok, detail: `defaut 105 : \`pointDeReveil()\` rendait medDesk + (1,6 ; 2,4) = (22 ; 207,9), or \`city.benches\` a un banc en (22 ; 208) — boite de 2,30 × 0,85 m, assise 0,66 m, donc de z = 207,575 a 208,425. \`groundUnder()\` trouvait ce banc, et apres CHAQUE KO en ville l'enfant se reveillait DEBOUT SUR LES LATTES, 30 cm au-dessus du carrelage (0,36 m), avec « 🪑 △ : s'asseoir » sur le banc ou il etait deja debout · le point est passe a medDesk + (1,6 ; 0,4), devant le comptoir : sur ${k.length} KO, le sol trouve est ${k.map(o => o.sol).join(' / ')} m (le carrelage de l'accueil est a ${r.carrelage} m), les pieds sont a y = ${k.map(o => o.y).join(' / ')} (30 cm plus bas qu'avant), le banc le plus proche est a ${k.map(o => o.banc).join(' / ')} m (au-dela des 1,8 m de \`benchNear\`), et la pastille dit « ${[...new Set(k.map(o => o.pastille))].join(' | ')} » · bancs de l'hopital : ${JSON.stringify(r.bancsHopital)}` };
+});

@@ -30664,7 +30664,16 @@ const RELEVE_SECOURS = 30;   // plafond quand l'ambulance nous transporte pour d
 function pointDeReveil() {
   // l'hôpital si on le connaît, sinon le point de passage : dans les deux cas, LOIN des coups
   if (jail.on && police.cell) return { x: police.cell.x, y: 0, z: police.cell.z };   // en prison, on se soigne sur place
-  if (city.on && city.medDesk) return { x: city.medDesk.x + 1.6, z: city.medDesk.z + 2.4 };
+  // DÉFAUT 105 : le point de réveil était à medDesk + (1,6 ; 2,4), c'est-à-dire (22 ; 207,9) —
+  // et `city.benches` a un banc en (22 ; 208), boîte de 2,30 × 0,85 m, assise à 0,66 m, donc
+  // de z = 207,575 à 208,425. `groundUnder()` trouvait ce banc et reposait l'enfant DESSUS :
+  // après CHAQUE KO en ville (les quatre façons de mourir, 5/5), il se réveillait debout sur
+  // les lattes, 30 cm au-dessus du carrelage (qui est à 0,36 m), et le jeu lui proposait
+  // « 🪑 △ : s'asseoir » sur le banc où il était déjà debout. On se réveille maintenant
+  // DEVANT LE COMPTOIR, à medDesk + (1,6 ; 0,4) : le carrelage sous les pieds, 1,64 m du solide
+  // le plus proche, 2,10 m du banc (au-delà des 1,8 m de `benchNear`, donc plus d'invitation à
+  // s'asseoir), et le comptoir de l'accueil en face.
+  if (city.on && city.medDesk) return { x: city.medDesk.x + 1.6, z: city.medDesk.z + 0.4 };
   if (cp) return { x: cp.x, y: cp.y + 0.15, z: cp.z + 0.5 };
   return { x: P.pos.x, z: P.pos.z };
 }

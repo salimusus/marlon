@@ -18391,19 +18391,31 @@ function explode(av) {
   av.group.traverse(o => {
     if (!o.isMesh || o.isSprite || o.isLineSegments || !o.visible) return;
     const m = new THREE.Mesh(o.geometry, o.material); m.castShadow = false;
+    // L'ECLAT NAIT DANS L'ETAT D'AFFICHAGE DE LA PIECE DONT IL VIENT (poste FIABILITE, r80).
+    // `detailsLOD` n'efface pas une piece devenue minuscule a l'ecran en la rendant invisible :
+    // il met son CALQUE a zero (`o.layers.mask = 0`, `o.detailLoin = true`, l'ancien masque mis
+    // de cote dans `o.masqueSauve`). Le clone, lui, naissait avec un calque NEUF : un corps que
+    // le tri de detail avait deja retire de l'image explosait quand meme en 239 eclats dessines
+    // plein tarif, ombres comprises — +498 appels de dessin pour une mort qu'on ne voit pas.
+    // On recopie donc l'etat d'affichage de la piece d'origine ; un eclat efface le reste, et
+    // il reprend son calque exactement comme sa piece si le tri le rallume.
+    if (o.layers && m.layers) m.layers.mask = o.layers.mask;
+    if (o.detailLoin) { m.detailLoin = true; m.masqueSauve = o.masqueSauve; }
     o.getWorldPosition(p); o.getWorldQuaternion(q); m.position.copy(p); m.quaternion.copy(q);
     EPHEMERES.add(m);   // et non `scene` : une mort posait 249 maillages directement dans la scene (voir LES EPHEMERES)
     // le rayon de la geometrie, et non celui du maillage d'origine : le clone ci-dessus ne
     // reprend pas son echelle, c'est donc bien cette taille-la qui sera dessinee
     const g = o.geometry; if (!g.boundingSphere && g.computeBoundingSphere) { try { g.computeBoundingSphere(); } catch (e) {} }
-    nes.push({ m, r: g.boundingSphere ? g.boundingSphere.radius : 0 });
+    nes.push({ m, src: o, r: g.boundingSphere ? g.boundingSphere.radius : 0 });
     debris.push({ m, vel: new THREE.Vector3(rnd(-4, 4), rnd(4, 9), rnd(-4, 4)), ang: new THREE.Vector3(rnd(-6, 6), rnd(-6, 6), rnd(-6, 6)), t: 0, life: 1.4 });
   });
   nes.sort((a, b) => b.r - a.r);
   for (let i = 0; i < nes.length && i < OMBRE_DEBRIS_MAX; i++) {
     const e = nes[i], c = camera.position;
     const d2 = (e.m.position.x - c.x) ** 2 + (e.m.position.y - c.y) ** 2 + (e.m.position.z - c.z) ** 2;
-    e.m.castShadow = d2 < (e.r * DETAIL_OMBRE_MOBILE) ** 2;
+    // `e.src.castShadow` : une piece dont le tri de detail avait deja eteint l'ombre (ombreLoin)
+    // ne doit pas la retrouver en explosant — c'est la moitie de la facture d'une mort lointaine.
+    e.m.castShadow = !!e.src.castShadow && d2 < (e.r * DETAIL_OMBRE_MOBILE) ** 2;
   }
   av.group.visible = false;
 }

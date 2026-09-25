@@ -7285,7 +7285,19 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     // du test ne passe par ce bus : le moteur est sur « moteur », la note et la mesure finale
     // sur « effets ». Ce qu'on mesure est donc rigoureusement le meme ; seul le bavardage de
     // la ville, qui n'a rien a faire dans une mesure de silence, ne vient plus s'y ajouter.
-    let voixG = null; try { voixG = ch.bus.voix.gain.value; ch.bus.voix.gain.value = 0; } catch (e) {}
+    // ET SURTOUT : « ambiance.stop() » NE COUPE PAS LA RUMEUR, IL LA FAIT DESCENDRE.
+    // C'est un setTargetAtTime de constante 0,4 s vers 0,0001 : au bout des 900 ms d'attente il
+    // en reste e^-2,25, soit 10,5 % du niveau qu'elle avait. Lance seul, le test tombe si tot
+    // dans la vie de la page que la rumeur MONTE encore (elle-meme en fondu de 0,9 s) : il en
+    // reste 0,0004. En suite complete elle tourne a plein depuis des dizaines de tests, et ces
+    // 10,5 % valent 0,03 — au-dessus du seuil de 0,02, sans qu'une ligne du jeu ait change.
+    // On coupe donc net les deux bus qui n'ont rien a faire dans une mesure de silence — celui
+    // de la RUMEUR et celui des VOIX — et on les rend a la fin.
+    // ce que la ville pese ENCORE un sixieme de seconde apres « stop » : la preuve du defaut.
+    // (on laisse 160 ms a l'analyseur : juste apres l'avoir branche, sa fenetre est vide et il
+    // rend 0 quoi qu'il se passe — c'est le piege qui rendait ce releve muet.)
+    await dodo(160); const rumeur = rms();
+    const busG = {}; try { for (const nb of ['ambiance', 'voix']) { busG[nb] = ch.bus[nb].gain.value; ch.bus[nb].gain.value = 0; } } catch (e) {}
     // QUI FAIT DU BRUIT PENDANT LA MESURE DE SILENCE ? Ce test est vert lance seul (silence
     // 0,0004) et rouge en suite complete (0,0459) : quelque chose que la suite laisse derriere
     // elle JOUE pendant les 900 ms de reference. Quatre heritages ont deja ete trouves a la
@@ -7313,11 +7325,11 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
     try { ch.lim.disconnect(an); } catch (e) {}
     try { G.SONV.ambT = 0; } catch (e) {}   // la rumeur de la ville repart pour les tests suivants
-    try { if (voixG != null) ch.bus.voix.gain.value = voixG; } catch (e) {}   // et les habitants reparlent
-    return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume, origines };
+    try { for (const nb of Object.keys(busG)) ch.bus[nb].gain.value = busG[nb]; } catch (e) {}   // la rumeur et les voix repartent
+    return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume, origines, rumeur };
   });
   const ok = r.etat === 'running' && r.silence < 0.02 && r.moteur > 0.12 && r.moteur > r.silence + 0.1 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;
-  return { ok, detail: `le limiteur seul rabotait sans rien rendre : tout etait devenu TROP FAIBLE et, sur des enceintes de tele, on n'entendait plus rien · la chaine est maintenant celle d'un vrai mixage — compresseur doux (${r.comp.seuil} dB, ${r.comp.ratio}:1) → gain de rattrapage ×${r.makeup} → limiteur brique (${r.lim.seuil} dB, ${r.lim.ratio}:1) — et le volume par defaut est a ${Math.round(r.volume * 100)} % · mesure AU BOUT DE LA CHAINE par un analyseur : silence ${r.silence}, moteur 500 chevaux ${r.moteur} (2,5× plus fort qu'avant), note ${r.tonal} · et le bouton « Tester le son » ecoute maintenant ce qui sort au lieu de dire « ca marche » les yeux fermes (${r.mesure.etat}, niveau ${r.mesure.niveau}) · sources audio creees pendant les 900 ms de silence : ${r.origines}` };
+  return { ok, detail: `le limiteur seul rabotait sans rien rendre : tout etait devenu TROP FAIBLE et, sur des enceintes de tele, on n'entendait plus rien · la chaine est maintenant celle d'un vrai mixage — compresseur doux (${r.comp.seuil} dB, ${r.comp.ratio}:1) → gain de rattrapage ×${r.makeup} → limiteur brique (${r.lim.seuil} dB, ${r.lim.ratio}:1) — et le volume par defaut est a ${Math.round(r.volume * 100)} % · mesure AU BOUT DE LA CHAINE par un analyseur : silence ${r.silence}, moteur 500 chevaux ${r.moteur} (2,5× plus fort qu'avant), note ${r.tonal} · et le bouton « Tester le son » ecoute maintenant ce qui sort au lieu de dire « ca marche » les yeux fermes (${r.mesure.etat}, niveau ${r.mesure.niveau}) · la rumeur du quartier pesait encore ${r.rumeur} un sixieme de seconde APRES « ambiance.stop() » (son fondu de 0,4 s en laissait 10 % au bout de 900 ms : c'est ce qui salissait le silence — meme lot, bus des voix seul coupe : 0.0294, bus de la rumeur coupe aussi : 0.0034) · sources audio creees pendant les 900 ms de silence : ${r.origines}` };
 });
 
 test('en interieur, la camera passe en maison de poupee : plafond efface, mur traverse transparent', async p => {

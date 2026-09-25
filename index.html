@@ -7905,6 +7905,17 @@ function policeDemarre(d) {
     d.bot = b; if (b) { b.wait = 999; b.tgt = null; b.av.group.visible = false; }
     const ch = vehiculeMission('chauffard', (x, z, h) => { const c = makeCar(0xff5c5c, x, z, h, { sport: true }); const i = city.cars.indexOf(c); if (i >= 0) city.cars.splice(i, 1); return c; }, d.appel.x, d.appel.z, 0);
     d.cible = ch; ch.busy = true;
+    // IL NE S'ENCASTRE PLUS DANS LES AUTRES VOITURES. Passe par botConduit, le chauffard
+    // n'etait garde que par les DISQUES de carBlocked : un disque est plus large que la
+    // caisse, mais il laisse passer un coin de pare-chocs entre deux de ses trois sondes, et
+    // une fois les toles imbriquees le degagement (`mou`) l'autorise a y rester le temps de la
+    // manoeuvre. Mesure en suite complete : 29 images de chauffard DANS une autre voiture,
+    // dont 20 d'affilee, pour un seuil de 10 — alors qu'il n'y en avait aucune serie lancee
+    // seul. C'est exactement la panne que la depanneuse a connue (11 images d'affilee, test
+    // 332), et le remede est le meme : `exactVeh` ajoute le controle au RECTANGLE exact des
+    // autres caisses, avec les six centimetres d'air de JEU_TOLES_CONDUITE — on s'arrete
+    // devant la tole au lieu de s'arreter dessus, donc on ne s'y imbrique jamais.
+    ch.exactVeh = true;
     d.tour = 0; d.colle = 0;
     d.circuit = [...PANNES].sort(() => Math.random() - 0.5).slice(0, 4);
   }
@@ -37481,7 +37492,23 @@ function metierRoule(w, tx, tz, dt, seuil = 6, opt) {
   // Le camion de pompiers en route vers un feu se dégage comme une ambulance (`secours`) : coincé
   // trois secondes derrière une voiture ou un poteau à 80 m du feu, il restait planté là et le
   // feu brûlait ses 240 s (test 388 dans la suite complète, où la circulation le bloquait).
-  const reste = rouleVers(c, tx, tz, dt, vmax, { urgence, secours: urgence });
+  // CELUI QUI A UN FILET A AUSSI LE DROIT DE SE DEGAGER. `secours` n'ouvre pas que la marche
+  // arriere : il arme SURTOUT le compteur `srvEchecs` de rouleVers — « deux fois coince au MEME
+  // endroit, ce n'est pas un obstacle, c'est le TRACE » — qui interdit alors le graphe des voies
+  // pendant vingt-cinq secondes et fait passer le vehicule par la grille A*, la seule qui
+  // contourne les solides. Sans lui, le fourgon des travaux recevait indefiniment le MEME
+  // itineraire par les voies, celui-la meme qui l'avait encastre.
+  // MESURE (test 390 rejoue juste derriere le test 332, la panne exacte de la suite complete) :
+  // fourgon coince en (54 ; 91), 57 s immobile SANS AUCUNE RAISON LEGALE (ni feu, ni stop, ni
+  // pieton), 15 s de marche arriere de la soupape ordinaire, 0 echec compte, le garde-fou des
+  // murs a « oui » — et 119 m roules pour 42 m d'avancee. Le lampadaire n'etait jamais repare.
+  // Le filet, lui, ne pouvait pas le sauver : il est reste tout du temps a MOINS de 55 m du
+  // joueur (fini a 38 m), donc sous la regle « on ne triche pas sous ses yeux », qui lui accorde
+  // 110 s de patience — plus que la minute que dure le chantier.
+  // On l'ouvre donc a l'equipe municipale, la seule qui demande le filet : eux aussi doivent
+  // ABOUTIR. Les pompiers l'ont deja par leur sirene, le facteur et les balayeurs ne l'ont pas
+  // (ils n'ont pas de filet) — leur conduite est inchangee.
+  const reste = rouleVers(c, tx, tz, dt, vmax, { urgence, secours: urgence || !!(opt && opt.filet) });
   metierAuVolant(w, c, Math.abs(c.speed || 0), dt);
   if (opt && opt.filet) {
     // but neuf : la patience repart de zero (sinon un aller-retour depot -> chantier la

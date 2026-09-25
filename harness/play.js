@@ -16306,13 +16306,20 @@ test('l\'équipe municipale part en fourgon, balise un chantier et répare un la
     // les sauts du filet (un pas de plus de 1,5 m), le meilleur approche atteint et l'endroit
     // où il passe le plus clair de son temps.
     let sauts = 0, dmin = 1e9, dminT = 0;
+    // POURQUOI RESTE-T-IL PLANTE ? traficRoule inscrit dans `c.raison` la raison LEGALE de son
+    // arret (feu, stop, cede, passage, pieton, file, degage) et laisse null quand il n'en a
+    // aucune. On compte donc les images sans un centimetre, raison par raison : c'est la
+    // difference entre « il attend au feu » et « il pousse contre un mur ».
+    const raisons = {}; let recule = 0, loinJoueur = 0;
     for (let i = 0; i < 120 * 60 && !tFin; i++) {
       G.step(1 / 60, true); for (const b of G.bots) G.updateBot(b, 1 / 60); t += 1 / 60;
       const pas = Math.hypot(four.x - px, four.z - pz); px = four.x; pz = four.z;
       if (pas < 1.5) parcouru += pas; else sauts++;   // au-delà, c'est un rangement du filet, pas un mètre roulé
       const dl = Math.hypot(four.x - lamp.x, four.z - lamp.z);
       if (dl < dmin) { dmin = dl; dminT = +t.toFixed(0); }
-      if (pas < 0.002) fige++;
+      if (pas < 0.002) { fige++; const k = four.recule ? 'degage' : (four.raison || 'aucune'); raisons[k] = (raisons[k] || 0) + 1; }
+      if (four.recule) recule++;
+      if (Math.hypot(four.x - G.P.pos.x, four.z - G.P.pos.z) > 55) loinJoueur++;
       if (sorti == null && Math.hypot(four.x - x0, four.z - z0) > 12) sorti = +t.toFixed(0);
       if (emp[0].etat === 'route' && Math.hypot(emp[0].bot.pos.x - four.x, emp[0].bot.pos.z - four.z) < 4) enFourgon++;
       if (chantier == null && G.city.chantiers.length) chantier = +t.toFixed(0);
@@ -16325,11 +16332,17 @@ test('l\'équipe municipale part en fourgon, balise un chantier et répare un la
       bonneCible: ci === lamp, dDepot: +Math.hypot(lamp.x - x0, lamp.z - z0).toFixed(0),
       sauts, dmin: +dmin.toFixed(1), dminT, fin: `${four.x.toFixed(0)} ; ${four.z.toFixed(0)}`,
       lampXZ: `${lamp.x.toFixed(0)} ; ${lamp.z.toFixed(0)}`, depot: `${x0.toFixed(0)} ; ${z0.toFixed(0)}`,
-      patience: +(four.metT || 0).toFixed(0), mieux: four.metMieux == null ? null : +four.metMieux.toFixed(1), herite };
+      patience: +(four.metT || 0).toFixed(0), mieux: four.metMieux == null ? null : +four.metMieux.toFixed(1), herite,
+      raisons: Object.entries(raisons).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${(n / 60).toFixed(0)} s`).join(', ') || 'aucune',
+      recule: +(recule / 60).toFixed(0), loin: +(loinJoueur / 60).toFixed(0),
+      dJoueur: +Math.hypot(four.x - G.P.pos.x, four.z - G.P.pos.z).toFixed(0),
+      voisins: [].concat(G.city.cars, G.city.aiCars, G.police.cars).filter(v => v && v !== four && !v.heli && Math.hypot(v.x - four.x, v.z - four.z) < 8)
+        .map(v => `${v.kind || '?'} a ${Math.hypot(v.x - four.x, v.z - four.z).toFixed(1)} m`).join(', ') || 'personne',
+      mur: G.vehBloque ? G.vehBloque(four, four.x, four.z, four.h, { bar: true, veh: false }) : null };
   });
   // l'itinéraire par les voies varie avec la circulation (45 à 80 s de route) : on juge le fourgon, le chantier et la réparation dans les deux minutes
   const ok = r.veh === 'fourgon' && r.sorti != null && r.sorti < 25 && r.enFourgon >= 10 && r.chantier != null && r.tFin != null && r.tFin < 110 && r.dFourgon < 16;
-  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat}) · cible ${r.cible} (le lampadaire du test : ${r.bonneCible}, à ${r.dDepot} m du dépôt), ${r.parcouru} m roulés et ${r.fige} s à l'arrêt sur ${r.duree} s · RELEVE : ${r.sauts} saut(s) du filet, au plus près ${r.dmin} m à ${r.dminT} s, fini en (${r.fin}) pour un lampadaire en (${r.lampXZ}) et un dépôt en (${r.depot}), patience en cours ${r.patience} s (meilleur approche ${r.mieux}) · HERITE a l'entree : itineraire ${r.herite.ia}, filet ${r.herite.metT} s vers ${r.herite.metBut} (meilleur ${r.herite.metMieux}), voies interdites ${r.herite.grille} s, degagement ${r.herite.degage} s, ${r.herite.echecs} echec(s), fige ${r.herite.fige} s / attente ${r.herite.attente} s, a ${r.herite.place} m de sa place` };
+  return { ok, detail: `avant : l'équipe partait à pied à 1 m/s (120 m → 80 m en 40 s), aucun chantier, réparé à 65 s · fourgon sorti à ${r.sorti} s, chef à bord ${r.enFourgon} s, chantier balisé à ${r.chantier} s, lampadaire réparé à ${r.tFin} s, fourgon garé à ${r.dFourgon} m (état ${r.etat}) · cible ${r.cible} (le lampadaire du test : ${r.bonneCible}, à ${r.dDepot} m du dépôt), ${r.parcouru} m roulés et ${r.fige} s à l'arrêt sur ${r.duree} s · RELEVE : ${r.sauts} saut(s) du filet, au plus près ${r.dmin} m à ${r.dminT} s, fini en (${r.fin}) pour un lampadaire en (${r.lampXZ}) et un dépôt en (${r.depot}), patience en cours ${r.patience} s (meilleur approche ${r.mieux}) · HERITE a l'entree : itineraire ${r.herite.ia}, filet ${r.herite.metT} s vers ${r.herite.metBut} (meilleur ${r.herite.metMieux}), voies interdites ${r.herite.grille} s, degagement ${r.herite.degage} s, ${r.herite.echecs} echec(s), fige ${r.herite.fige} s / attente ${r.herite.attente} s, a ${r.herite.place} m de sa place · IMMOBILE : ${r.raisons} ; ${r.recule} s en marche arriere ; ${r.loin} s a plus de 55 m du joueur (fini a ${r.dJoueur} m) ; voisins a l'arrivee : ${r.voisins} ; dans un mur : ${r.mur}` };
 });
 
 test('reculer près d\'un feu rouge n\'est pas « griller un feu » ; le franchir dans son sens, si', async p => {

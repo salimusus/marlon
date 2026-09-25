@@ -13992,6 +13992,27 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
       // condition rouge de ce test. On mesure l'averse, pas l'orage : on repousse donc aussi
       // ce rendez-vous-la, comme les autres.
       G.meteo.tonnerre = G.simTime + 1e6;
+      // LES DEUX SOURCES DE sonsVille QUI N'ONT AUCUN RENDEZ-VOUS. Tout le reste de la vie
+      // sonore passe par une minuterie SONV qu'on vient de repousser ; ces deux-la, non.
+      //   - LES PAS DES BOTS : le seul filtre est `b.av.group.visible`. `sansBots` les cache
+      //     a l'entree du test, mais en suite complete un voisin en rend (habitants d'un
+      //     quartier, equipe de metier, gang) et ils remarchent au milieu de l'ecoute.
+      //   - LE ROTOR DE L'HELICOPTERE : jusqu'a trois impulsions PAR IMAGE des qu'un appareil
+      //     tourne a moins de 120 m. Un helico laisse en vol par un test de police tape
+      //     par-dessus l'averse pendant toute la mesure.
+      // Mesure r78 puis r79 : deux fenetres sur cinq a 0,13 puis a 0,09 de crete pour une
+      // averse qui vaut 0,0087 — ecart 0.0857 sur les trois fenetres du milieu pour un
+      // plafond de 0,01.
+      try { for (const b of G.bots) if (b.av && b.av.group) b.av.group.visible = false; } catch (e) {}
+      try { for (const c of (G.city.cars || [])) if (c.heli) { c.spin = 0; c.rotorAcc = 0; } } catch (e) {}
+      // ET LES SONS PLACES ENCORE VIVANTS. `__SHOT.go()` les coupe a l'entree du test, mais
+      // rien ne les coupe ENTRE deux fenetres — et la boucle vide `SON.vivants` sans les
+      // arreter, ce qui les rend ensuite intouchables. Releve a l'entree en suite complete :
+      // 16 sons places encore vivants.
+      try { const cx = G.sfx.ctx();
+        if (cx && G.SON && G.SON.vivants && G.sonCoupe)
+          for (let i = G.SON.vivants.length - 1; i >= 0; i--) G.sonCoupe(G.SON.vivants[i], cx.currentTime);
+      } catch (e) {}
       G.ambiance.stop();
       try { G.engine.stop(); } catch (e) {}
       try { G.music.stop(); } catch (e) {}
@@ -14086,7 +14107,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.melange.pic > r.pluieSeule.pic * 2 && r.coups.pic > r.pluieSeule.pic * 5
     && r.pas.pic > r.pluieSeule.pic * 0.8;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif && banc;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres du milieu, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres du milieu, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}, ${r.pluieSeule.sale} fenetre(s) salies) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse, ${r.pas.sale} salies) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×, ${r.coups.sale} salies) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
 
 

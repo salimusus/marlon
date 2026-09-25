@@ -1756,6 +1756,7 @@ window.__G = {
   sonRecul: typeof sonRecul === 'function' ? sonRecul : null,
   SIRENES: typeof SIRENES !== 'undefined' ? SIRENES : null,
   urgenceDe: typeof urgenceDe === 'function' ? urgenceDe : null,
+  sonCoupe: typeof sonCoupe === 'function' ? sonCoupe : null,   // poste SON : couper un son place encore vivant (le test de la pluie refait le silence avant chaque fenetre)
   sonMarteau: typeof sonMarteau === 'function' ? sonMarteau : null,
   sonSoudure: typeof sonSoudure === 'function' ? sonSoudure : null,
   sonBalai: typeof sonBalai === 'function' ? sonBalai : null,

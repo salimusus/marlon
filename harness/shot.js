@@ -236,16 +236,25 @@ window.__SHOT = {
       //     travaux parcourt 687 m dans un cas et 621 m dans l'autre, les quatre autres
       //     vehicules de service etant desormais rigoureusement identiques.
       try {
-        var libres = 0;
+        var libres = 0, parQui = {};
         for (var li = 0; li < scene.children.length; li++) {
           var lo = scene.children[li];
-          if (lo && (lo.isMesh || lo.isPoints || lo.isLineSegments)) libres++;
+          if (!lo || !(lo.isMesh || lo.isPoints || lo.isLineSegments)) continue;
+          libres++;
+          // ON NOMME LE COUPABLE, PAS SEULEMENT LE NOMBRE (poste FIABILITE, round 80). Le
+          // traceur du HOOK note sur chaque objet la pile d'appel qui l'a pose : trois rounds
+          // ont compte cette derive sans jamais pouvoir dire d'ou elle venait.
+          var qui = (lo.userData && lo.userData.__origine) || '(pose avant le traceur)';
+          parQui[qui] = (parQui[qui] || 0) + 1;
         }
+        var classe = Object.keys(parQui).sort(function (a, b) { return parQui[b] - parQui[a]; })
+          .slice(0, 3).map(function (k) { return parQui[k] + ' x ' + k; }).join(' | ');
         // UNE VILLE NEUVE EN A QUATRE, mesures : le dome du ciel et sa doublure (2 spheres),
         // la nappe d'eau (1 plan) et le champ d'etoiles (1 nuage de points). Au-dela, c'est un
         // test precedent qui a laisse quelque chose — derriere le test 299 on en compte 8.
-        dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4) : '
-          + 'worldGroup est vide par la reconstruction, la scene NON — ils survivent meme a frais: true');
+        dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4 : '
+          + 'les deux domes du ciel, la nappe d eau et le champ d etoiles) — worldGroup est vide par la '
+          + 'reconstruction, la scene NON. Origines : ' + classe);
       } catch (eLib) {}
       try {
         var bul = 0;

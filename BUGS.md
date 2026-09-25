@@ -902,6 +902,26 @@ Captures et relevés dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **c) La place du centre étroite pour les gros véhicules — LAISSÉ, volontairement.** Sur les 9 chaussées à moins de 30 m du centre, **3 sont sous le seuil de 7,60 m** : (0 ; −4), (−26 ; 0) et (0 ; 26), 6 m chacune, pour un camion de 8,60 m. Ce sont **exactement** les trois déjà documentées au §7 de `NOTES-URBANISME.md` comme laissées sciemment au round 75, avec leur raison chiffrée : la dalle du Parking du centre et ses 16 places pour les deux premières, les trois boutiques de z = 19,5 pour la troisième. Ces trois boutiques sont la **pire valeur de la ville** (+0,30 m contre la rue z = 26) — c'est précisément sur elles que porte l'avertissement des 10 cm. Les élargir demande de déplacer le parking et les intérieurs des boutiques, posés à la main coordonnée par coordonnée : chantier à part, et il mangerait la marge. Le pilotage gère la place aujourd'hui.
 - **Test** : `le camion de pompiers n'est plus garé au travers de sa caserne, et les bancs de la rue x = 52 sont sur le trottoir`.
 
+## CONTRÔLE DU JOUEUR — round 81 (entrées 104 et suivantes, jouées à la manette DualSense sur `95ad841`)
+Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4d4-336d04aef788/scratchpad/r81`
+(scripts `body-*.js`, journaux `*.json`, images `img/`, preuve Node `ctrl.cjs`).
+
+### 104. À la manette, △ devant une voiture fait monter et descendre l'enfant en boucle : une pression sur deux le laisse à pied
+- **Gravité** : GRAVE (△ est LE bouton d'action du jeu, et « monter en voiture » est le geste le plus fréquent de la partie ; ici il répond une fois sur deux, et quand il répond il claque jusqu'à 35 portières en un tiers de seconde)
+- **Reproduire** : manette DualSense branchée, Parking du centre, se planter à 2,4 m d'un véhicule jusqu'à lire « 🚗 △ : monter » dans la pastille d'action, puis **appuyer sur △ comme on appuie vraiment — 200 ms, pas un effleurement**. Douze appuis identiques par durée, trois durées, tout en temps RÉEL (la manette est lue par son `setInterval` à 120 Hz sur l'horloge matérielle, exactement comme chez l'enfant) : `body-h.js`, `h.json`.
+- **On voit** :
+
+  | durée de l'appui | finit au volant | allers-retours dedans/dehors (pire cas) | réécritures de la bannière (pire cas) |
+  |---|---|---|---|
+  | 120 ms | **10 / 12** | 16 | 9 |
+  | 200 ms | **6 / 12** | 26 | 13 |
+  | 350 ms | **5 / 12** | 35 | 18 |
+
+  Pendant l'appui, `drive.car` bascule toutes les **8 ms** — la période de lecture de la manette. Relevé image par image sur un appui de 150 ms (`f.json`) : dedans à 4 ms, dehors à 8, dedans à 17, dehors à 25, dedans à 33… **19 bascules**. Chaque montée rejoue `enterCar` en entier : claquement de portière (`sonPortiere`), démarrage moteur (`engine.start`), le message « 🚗 Boîte automatique · 📯 klaxon · ◯ maintenu = frein à main » et l'embarquement des passagers. L'état final ne dépend que de la PARITÉ du nombre de lectures : à 350 ms, **7 fois sur 12 l'enfant reste debout à côté de sa voiture** alors que le jeu lui dit toujours « △ : monter ».
+- **Racine, prouvée hors navigateur** (`ctrl.cjs`, Node pur, déterministe) : dans `controls.js`, `sample()` remet `previous` à zéro dès que `changed` est vrai, et `changed` vaut `current !== context` — donc AUSSI pour `game:foot` → `game:vehicle`, que `changementContexte` écarte pourtant exprès (arbitrage r76, point 2 : « monter en voiture en poussant déjà le stick ne doit pas les rendre muets »). Un bouton TENU est donc réannoncé comme un NOUVEL appui à chaque lecture tant que le contexte fait l'aller-retour. Et `pollGamepad` fait `if (frame.changed) releaseGamepad(false)` avant de relire les boutons : le garde-fou `inputKeys.set()`, qui sait ignorer un second keydown pour une touche déjà tenue, est désarmé juste avant. Mesure du banc Node : bouton tenu, contexte fixe → `pressed` vaut `true` puis **8 fois `false`** (correct) ; bouton tenu, contexte qui alterne foot/vehicle → `pressed` vaut **`true` 8 fois sur 8**.
+- **On devrait voir** : un appui, une montée. Un bouton déjà enfoncé à la lecture précédente n'est jamais un nouvel appui, quel que soit le contexte — c'est déjà la règle quand le contexte ne change pas, et le banc `gamepad.js` la vérifie (ligne 17) ; il ne la vérifie simplement jamais À TRAVERS un changement de contexte, et c'est exactement le trou.
+- **Capture** : `img/q9-parking-triangle.png` — la pastille dit « 🚗 △ : monter », l'enfant est debout à côté du véhicule, et c'est l'image qu'il a sous les yeux après avoir appuyé.
+
 ### CE QUI EST ACQUIS — ce que j'ai joué au round 77 et qui marche
 Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout ce qui suit est mesuré.
 - **La ville laisse enfin l'enfant tranquille** (n° 78, 84, 85). Trois parties « profil vierge, manette posée, on ne touche à rien », 320 s de simulation chacune, relevés toutes les 10 s au-delà des 180 s de calme volontaire : **❤️ jamais sous 100, ★ 0, porte-monnaie 25 🪙 inchangé, aucun gang, aucune bagarre, aucune infraction, 0 habitant à portée de coup**. C'était le défaut bloquant du round précédent ; il est mort.

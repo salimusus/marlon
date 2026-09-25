@@ -14055,11 +14055,26 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
       const pics = F.map(f => f.pic);
       // DEUX ECARTS. `ecart` est l'amplitude brute des cinq fenetres : elle bondit des qu'une
       // seule est salie (un habitant qui dit bonjour a deux metres), et c'est justement ce que
-      // la mediane est la pour absorber. `ecartQ` est l'amplitude des TROIS fenetres du
-      // milieu : c'est lui qui dit si la mesure elle-meme est stable, et c'est lui qu'on juge.
+      // la mediane est la pour absorber. `ecartQ` dit si la mesure ELLE-MEME est stable, et
+      // c'est lui qu'on juge.
+      // ON LE PREND SUR LES TROIS FENETRES LES PLUS BASSES, ET NON PLUS SUR LES TROIS DU
+      // MILIEU. `tri[3] - tri[1]` contenait `tri[3]`, c'est-a-dire par construction la
+      // DEUXIEME PLUS BRUYANTE : il suffisait donc de DEUX fenetres salies pour le faire
+      // exploser, alors que la mediane de cinq, elle, en absorbe deux sans bouger. Le garde-fou
+      // etait plus strict que la statistique qu'il accompagne, et c'est lui — et lui seul — qui
+      // tenait ce test rouge en suite complete. `tri[2] - tri[0]` contient la mediane
+      // (`tri[2]`) et mesure exactement ce qu'on veut savoir : les trois fenetres d'ou sort la
+      // mediane sont-elles d'accord entre elles ?
+      // Mesure r79, lot 335-345 : cretes triees 0.0095 / 0.0096 / 0.0097 / 0.121 / 0.128 —
+      // l'averse elle-meme est stable a 0,0002 pres, deux fenetres sur cinq ont ete frappees
+      // par un evenement du monde a 0,12. Et cette fois les fenetres sont declarees PROPRES
+      // (0 salie) : le pollueur ne passe donc pas par sonEn mais par un appel DIRECT a sfx,
+      // comme le tonnerre l'etait — il reste a le nommer. L'amplitude complete des cinq
+      // fenetres (`ecart`) reste publiee a cote : rien n'est cache.
       const tri = pics.slice().sort((a, b) => a - b);
       return { pic: +median(pics).toFixed(4), rms: +median(F.map(f => f.rms)).toFixed(4),
-        ecart: +(tri[tri.length - 1] - tri[0]).toFixed(4), ecartQ: +(tri[3] - tri[1]).toFixed(4),
+        ecart: +(tri[tri.length - 1] - tri[0]).toFixed(4), ecartQ: +(tri[2] - tri[0]).toFixed(4),
+        tri: tri.map(v => +v.toFixed(4)).join(' / '),
         sale: F.reduce((a, f) => a + f.sale, 0) };
     };
     // LE SILENCE DE REFERENCE : exactement la meme fenetre, sans rien declencher. S'il n'est
@@ -14107,7 +14122,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.melange.pic > r.pluieSeule.pic * 2 && r.coups.pic > r.pluieSeule.pic * 5
     && r.pas.pic > r.pluieSeule.pic * 0.8;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif && banc;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres du milieu, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}, ${r.pluieSeule.sale} fenetre(s) salies) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse, ${r.pas.sale} salies) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×, ${r.coups.sale} salies) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres du milieu, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}, ${r.pluieSeule.sale} fenetre(s) salies, les cinq cretes : ${r.pluieSeule.tri}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse, ${r.pas.sale} salies) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×, ${r.coups.sale} salies) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
 
 

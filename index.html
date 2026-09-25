@@ -21154,7 +21154,17 @@ function conduireVersPoint(c, tx, tz, dt, st) {
       const hh = c.h + a;
       if (!carBlocked(c.x + Math.sin(hh) * 4.5, c.z + Math.cos(hh) * 4.5, c.solid, cr, opt, 0, hh, cL)
         && !carBlocked(c.x + Math.sin(hh) * 2, c.z + Math.cos(hh) * 2, c.solid, cr, opt, 0, hh, cL)) {
-        st.evH = hh; st.evT = T + 1.2; st.route = null; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
+        // ON NE JETTE PAS LE TRACE AVANT D'EN AVOIR UN NEUF (round 79). Ce contournement
+        // effaçait `st.route` et le refaisait à l'appel SUIVANT : pendant une image, le
+        // conducteur n'avait plus d'itinéraire du tout, et `resteSurRoute` (qui rend alors le
+        // vol d'oiseau) annonçait 111,7 m au lieu des 128,7 m qui restaient par les rues.
+        // L'image d'après, le tracé revenait — identique, point pour point — et la distance
+        // « remontait » de 16,95 m. Mesuré sur quatre graines : le MEME faux bond, au MEME
+        // endroit (49,3 ; 32,9), et c'est à lui seul les 17 m de remontée cumulée du test 478.
+        // Le compte à rebours affiché à l'enfant en souffrait aussi : il ne garde que le
+        // meilleur restant atteint, donc il se verrouillait sur le vol d'oiseau et mentait de
+        // dix-sept mètres jusqu'à la fin. `st.routeT = 0` suffit à forcer le recalcul.
+        st.evH = hh; st.evT = T + 1.2; st.routeT = 0; c.speed = Math.max(c.speed, 4); break;
       }
     }
   }
@@ -21165,7 +21175,7 @@ function conduireVersPoint(c, tx, tz, dt, st) {
   // COINCE POUR DE BON : on se degage de quelques metres vers une place LIBRE (jamais dans un
   // mur — chaque candidat est verifie), en cherchant d'abord dans la direction du point de
   // passage puis tout autour. Sans ce filet, un ami reste plante contre l'angle d'un immeuble.
-  if (st.saut !== false && st.bloqueT > 3.5 && st.route && st.route.length) {   // (le contournement juste au-dessus a pu vider le trace)
+  if (st.saut !== false && st.bloqueT > 3.5 && st.route && st.route.length) {   // (le tracé est gardé jusqu'au recalcul, il est donc toujours là)
     // ON N'EFFACE PAS L'ARDOISE, ON LA DIMINUE. Ce filet remettait `bloqueT` a zero a chaque
     // fois qu'il reposait le vehicule quelques metres plus loin. Consequence mesuree (defaut
     // n° 77) : le seuil des douze secondes de `botDriveTick`, celui qui fait DIRE au conducteur
@@ -21188,7 +21198,9 @@ function conduireVersPoint(c, tx, tz, dt, st) {
       if (pose) break;
     }
     if (pose) { c.x = pose[0]; c.z = pose[1]; burst(c.x, c.y + 1, c.z, 0x9aa4b8, 6); }
-    st.route = null; st.routeT = 0; c.speed = pose ? 5 : 0; }
+    // même règle qu'au contournement : on garde le tracé courant jusqu'à ce que le neuf soit
+    // calculé, sinon la distance annoncée retombe au vol d'oiseau le temps d'une image
+    st.routeT = 0; c.speed = pose ? 5 : 0; }
   c.y = groundUnder(c.x, c.z, c.solid, c.y || 0); c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.h;
   c.wheels.forEach(w => { w.rotation.x -= c.speed * dt / 0.3; }); vehicleSolid(c);
   return dist;

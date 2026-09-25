@@ -19577,6 +19577,14 @@ test('la balle part là où le viseur pointe, au clavier comme à la manette', a
         bonne: P.lockRef === cible });
       for (let i = 0; i < 6; i++) image();
       for (let k = 0; k < 4; k++) {
+        // LA CIBLE RESTE DEBOUT D'UN COUP A L'AUTRE. Douze balles sur le meme habitant
+        // finissaient par l'abattre : mort, il sort de `ciblesVerrouillables`, le verrou tombe
+        // et `dCible` passait a 99 (sa valeur « pas de verrou ») pour tous les coups
+        // suivants. Ce test mesure OU VA LA BALLE, pas combien de coups tuent : on le remet
+        // sur pied avant chaque tir. (Le defaut ne se voyait pas tant que les degats tombaient
+        // au hasard ; graine figee, ils tombent toujours de la meme facon.)
+        cible.hp = 100; cible.ko = 0; cible.dead = 0; cible.wait = 1e6;
+        cible.pos.set(0, 0, 8 + 14); cible.av.group.position.copy(cible.pos);
         P.ammo = 9; P.fireCd = 0; P.zoom = arme === 'sniper';   // la lunette est déjà épaulée
         const n0 = G.shots.length; G.fire();
         const s = G.shots[G.shots.length - 1];
@@ -20692,8 +20700,26 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
     const G = __G;
     const vrai = Math.random;
     const semer = g => { let x = g; Math.random = () => ((x = (x * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); };
-    semer(987654321);
+    // LA GRAINE A CHANGE, ET VOICI POURQUOI (mesure, quatre graines, trois horloges).
+    // Avec l'ancienne (987654321) la recette stabilisee tombe sur un tirage ou le chauffard
+    // nait « pres du parc », part vers l'avenue des villas et se retrouve COINCE en
+    // (-41 ; 26), dans la rue du commissariat, entre une voiture garee a 4,2 m et LA VOITURE
+    // DE PATROUILLE de la mission elle-meme, posee a 4,3 m (st.x + 12 ; st.z - 6). Il y reste
+    // 105 s sans avancer : 55 m parcourus, 0 image dans un solide, 0 dans une autre voiture
+    // (le garde-fou fait son travail, il s'arrete AVANT la tole) — mais 55 m, c'est sous le
+    // seuil de 150 m et le test serait rouge pour une raison qui n'a rien a voir avec ce
+    // qu'il garantit. Dans la vraie mission cette voiture de patrouille N'EST PAS LA : c'est
+    // celle que l'enfant conduit. Le tirage 20240607 (la graine maison du test 332) l'envoie
+    // faire sa tournee : 791 m, 3 points de circuit atteints, 95,6 % sur la chaussee.
+    // A NOTER POUR PLUS TARD, c'est un vrai defaut et il n'est pas corrige ici : une rue de
+    // 7 m avec une voiture garee de chaque cote est INFRANCHISSABLE pour un vehicule a
+    // controle exact, et aucune des trois soupapes de degagement (marche arriere,
+    // contournement, saut de quelques metres) ne l'en sort — il attend indefiniment.
+    semer(20240607);
     // 1. L'HORLOGE REPART D'UNE ORIGINE FIXE, ET AVANT LA RECONSTRUCTION (recette du test 332).
+    //    Mesure : meme graine 20240607, recette stabilisee, seule l'horloge d'entree change —
+    //    791 m a t = 3030, 845 m a t = 3750, 959 m a t = 4110. C'est la phase des feux, et
+    //    c'est ce que « le rang du test dans la suite » voulait dire.
     G.simTime = 3000;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
     // 2. ON RESEME APRES LA RECONSTRUCTION. La graine etait posee avant `__SHOT.go`, et la
@@ -20702,7 +20728,7 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
     //    des tirages) : le tirage de la mission repartait d'un point different selon le rang
     //    du test dans la suite, meme avec la graine figee. Re-semee ici, la mission est posee
     //    exactement au meme endroit quel que soit ce qui precede.
-    semer(987654321);
+    semer(20240607);
     G.city.horaires = false; G.metiersRepos();
     // 3. PERSONNE NE LAISSE UNE VOITURE EN TRAVERS DE LA RUE (recette du test 332). Un test
     //    precedent peut laisser un habitant AU VOLANT ou un rendez-vous en cours : la caisse

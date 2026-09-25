@@ -7272,6 +7272,20 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     // plus silencieux. On la met en pause le temps de la mesure, sinon elle seule depassait
     // le seuil de silence et faisait echouer un test qui parle d'autre chose.
     try { G.SONV.ambT = G.simTime + 1e6; G.ambiance.stop(); } catch (e) {}
+    // ET LA VILLE PARLE. C'est le cinquieme heritage sonore de cette famille, et il a ete
+    // NOMME par l'espion ci-dessous : pendant les 900 ms de reference, 42 oscillateurs ont ete
+    // crees par `sonEn` depuis `sonBlabla` — les bruits de bouche des habitants qui bavardent
+    // (bus « voix », portee 26 m), 21 phrases en moins d'une seconde. Ils sont declenches par
+    // botSay / bubble, donc par ce que les habitants ont a se dire : cela depend de l'ordre
+    // qu'un test precedent leur a laisse et de la distance a laquelle ils se tiennent. D'ou la
+    // signature exacte du defaut : reference a 0,0004 lance seul, 0,0459 en suite complete
+    // (seuil 0,02), avec des cretes intermittentes et rien d'autre de change.
+    // On coupe donc le bus des VOIX pendant toute la mesure, exactement comme on met la rumeur
+    // du quartier en pause juste au-dessus, et on le rend a la fin. Aucune des quatre mesures
+    // du test ne passe par ce bus : le moteur est sur « moteur », la note et la mesure finale
+    // sur « effets ». Ce qu'on mesure est donc rigoureusement le meme ; seul le bavardage de
+    // la ville, qui n'a rien a faire dans une mesure de silence, ne vient plus s'y ajouter.
+    let voixG = null; try { voixG = ch.bus.voix.gain.value; ch.bus.voix.gain.value = 0; } catch (e) {}
     // QUI FAIT DU BRUIT PENDANT LA MESURE DE SILENCE ? Ce test est vert lance seul (silence
     // 0,0004) et rouge en suite complete (0,0459) : quelque chose que la suite laisse derriere
     // elle JOUE pendant les 900 ms de reference. Quatre heritages ont deja ete trouves a la
@@ -7299,6 +7313,7 @@ test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au
     G.engine.start('car', 1); G.engine.set(0.5); const m = await G.mesureSon(500); G.engine.stop();
     try { ch.lim.disconnect(an); } catch (e) {}
     try { G.SONV.ambT = 0; } catch (e) {}   // la rumeur de la ville repart pour les tests suivants
+    try { if (voixG != null) ch.bus.voix.gain.value = voixG; } catch (e) {}   // et les habitants reparlent
     return { etat: c.state, silence, moteur, tonal, mesure: m, makeup: +ch.makeup.gain.value.toFixed(2), lim: { seuil: ch.lim.threshold.value, ratio: ch.lim.ratio.value }, comp: { seuil: ch.comp.threshold.value, ratio: ch.comp.ratio.value }, volume: G.settings.volume, origines };
   });
   const ok = r.etat === 'running' && r.silence < 0.02 && r.moteur > 0.12 && r.moteur > r.silence + 0.1 && r.makeup >= 1.5 && r.lim.seuil >= -3 && r.lim.ratio >= 12 && r.comp.ratio <= 6 && r.volume >= 0.8 && r.mesure.etat === 'running' && r.mesure.niveau > 0.05;

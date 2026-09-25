@@ -7222,6 +7222,17 @@ const MISSIONS = [
 ];
 const mission = { cur: null, step: 0, t0: 0, limit: 0, data: {} };
 const beacon = { m: null, mission: null };
+// LE GUIDAGE A SON NOEUD DANS LA SCENE (poste FIABILITE, round 80). La colonne de lumiere du
+// repere et la reserve de chevrons de la trainee sont POSEES UNE FOIS et gardees pour toute la
+// partie : elles ne peuvent aller ni dans worldGroup (la reconstruction du monde libererait
+// leur geometrie et leur materiau, partages par toute la reserve) ni dans le groupe des
+// ephemeres (elles doivent survivre a une reconstruction). Elles etaient donc accrochees
+// DIRECTEMENT a la scene — jusqu'a 91 objets de plus, definitivement. Deux couts : le releve
+// d'entree des tests comptait « 53 objet(s) poses directement dans la scene » pour 4 attendus,
+// et `ombresMobilesTick` recense la scene TROIS RACINES PAR IMAGE — 91 racines de plus, c'est
+// trente images de retard a chaque tour de recensement des ombres mobiles.
+const GPS_G = new THREE.Group(); GPS_G.name = 'gps'; GPS_G.matrixAutoUpdate = false;
+scene.add(GPS_G); GPS_G.updateMatrix();
 // Le repère (colonne de lumière + flèche du radar) était UNIQUE et partagé par tout le
 // monde : la mission, mais aussi les rendez-vous entre amis, les coups de gang, les
 // cambriolages, les plaintes... N'importe lequel pouvait l'effacer en pleine mission, et
@@ -7232,7 +7243,7 @@ function setBeacon(x, z, y = 0, src = 'autre') {
   if (empire.operation && src !== 'empire') return;
   if (src === 'mission') beacon.mission = { x, z, y };
   else if (beacon.mission) return;
-  if (!beacon.m) { const geo = new THREE.CylinderGeometry(0.7, 0.7, 60, 12, 1, true); beacon.m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); const top = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), neonMat(0x7fe0ff)); top.position.y = 4; beacon.m.add(top); beacon.top = top; scene.add(beacon.m); }
+  if (!beacon.m) { const geo = new THREE.CylinderGeometry(0.7, 0.7, 60, 12, 1, true); beacon.m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })); const top = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), neonMat(0x7fe0ff)); top.position.y = 4; beacon.m.add(top); beacon.top = top; GPS_G.add(beacon.m); }   // GPS_G, non scene : voir LE GUIDAGE A SON NOEUD
   beacon.m.position.set(x, y + 30, z); beacon.top.position.y = -26 + 2.5; beacon.m.visible = true; beacon.x = x; beacon.z = z; beacon.y = y;
 }
 function clearBeacon(src = 'autre') {
@@ -7270,16 +7281,8 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
     g.strokeStyle = 'rgba(120,246,255,.97)'; trace(19);
     const t = new THREE.CanvasTexture(c); t.anisotropy = 8; shared.add(t); return t;
   })();
-  // UN SEUL NOEUD DANS LA SCENE POUR TOUTE LA TRAINEE (poste FIABILITE, round 80).
-  // La reserve de chevrons est POSEE UNE FOIS et reutilisee : elle ne se vide jamais, et
-  // chaque chevron etait accroche DIRECTEMENT a la scene. Un long trajet en pose jusqu'a 90,
-  // et ils y restaient — invisibles, mais bien la : le releve d'entree des tests comptait
-  // « 53 objet(s) poses directement dans la scene (une ville neuve en a 4) », et surtout
-  // `ombresMobilesTick` recense la scene TROIS RACINES PAR IMAGE : quatre-vingt-dix racines
-  // de plus, c'est trente images de retard a chaque tour de recensement. La reserve a donc
-  // son noeud a elle : un seul enfant de la scene, quel que soit le nombre de chevrons.
-  const TRACE = new THREE.Group(); TRACE.name = 'gps-chevrons';
-  TRACE.matrixAutoUpdate = false; scene.add(TRACE); TRACE.updateMatrix();
+  // La reserve de chevrons rejoint le noeud du guidage (voir LE GUIDAGE A SON NOEUD) : un
+  // seul enfant de la scene, quel que soit le nombre de chevrons poses.
   const pool = [], geo = new THREE.PlaneGeometry(1.5, 1.7);
   geo.rotateX(Math.PI / 2);
   const mat = new THREE.MeshBasicMaterial({ map: CHEVRON, transparent: true, opacity: 0.95, depthWrite: false,
@@ -7325,7 +7328,7 @@ const gpsRoute = (() => {   // itinéraire GPS : chevrons cyan au sol qui suiven
           const x = a[0] + ux * t, z = a[1] + uz * t;
           versProchain = parcouru < 50 ? 2.4 : Math.min(11, 2.4 + (parcouru - 50) * 0.1);
           if (Math.hypot(x - P.pos.x, z - P.pos.z) < 2.2) continue;
-          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; pool[k].userData.chevron = true; TRACE.add(pool[k]); }   // marque : le banc d'essai reconnait un chevron sans dependre de sa forme (et TRACE, non scene : voir plus haut)
+          if (!pool[k]) { pool[k] = new THREE.Mesh(geo, mat); pool[k].renderOrder = 2; pool[k].userData.chevron = true; GPS_G.add(pool[k]); }   // marque : le banc d'essai reconnait un chevron sans dependre de sa forme (et TRACE, non scene : voir plus haut)
           const m = pool[k++], gy = groundCar(x, z, null, 0);
           m.position.set(x, gy + 0.05, z); m.lookAt(x + ux, gy + 0.05, z + uz); m.visible = true;
         }

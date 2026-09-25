@@ -21859,21 +21859,48 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     const toutes = cout(), imgToutes = pixels(), imgToutes2 = pixels();
     for (const d of nx) d.m.castShadow = false;
     const aucune = cout(), imgAucune = pixels();
-    G.renderer.info.autoReset = true;
     // ON NE LAISSE RIEN DERRIERE : les morceaux figes pollueraient le budget d'image du test
     // suivant (voir « la scene ne grossit pas d un test a l autre »).
     for (const d of nx) G.EPHEMERES.remove(d.m);
     G.morceaux.length = n0;
     G.scene.remove(av.group);   // et le corps que nous avons bati : buildAvatar l'accroche a la scene
+
+    // ======== LA MEME MORT, SUR UN CORPS QUE LE TRI DE DETAIL A DEJA EFFACE (round 80) ========
+    // `detailsLOD` n'efface pas une piece devenue minuscule a l'ecran en la rendant invisible :
+    // il met son CALQUE a zero (`layers.mask = 0`, `detailLoin`, l'ancien masque dans
+    // `masqueSauve`). Le clone d'`explode()` naissait avec un calque NEUF : un corps DEJA
+    // RETIRE DE L'IMAGE explosait quand meme en eclats dessines plein tarif, ombres comprises.
+    // On refait donc exactement la meme mesure sur un corps efface a la main comme le tri le
+    // fait : la mort ne doit plus rien couter du tout.
+    const av2 = G.buildAvatar({ name: ' ', jersey: 3, pants: 0x2b3550, cap: null, num: 7 });
+    av2.group.position.set(0, 0, 49); av2.group.rotation.y = Math.PI;
+    if (av2.tag) av2.tag.visible = false;
+    av2.group.updateMatrixWorld(true);
+    let effaces = 0;
+    av2.group.traverse(o => { if (!o.isMesh || !o.layers) return;
+      o.masqueSauve = o.layers.mask; o.layers.mask = 0; o.detailLoin = true; effaces++; });
+    const calme2 = cout();                       // le corps efface ne coute deja plus rien
+    const n2 = G.morceaux.length;
+    G.explode(av2);
+    const nx2 = G.morceaux.slice(n2);
+    for (const d of nx2) { d.vel.set(0, 0, 0); d.ang.set(0, 0, 0); d.life = 9999; }
+    const invisible = cout();
+    G.renderer.info.autoReset = true;
+    for (const d of nx2) G.EPHEMERES.remove(d.m);
+    G.morceaux.length = n2;
+    G.scene.remove(av2.group);
     return { morceaux: nx.length, ombres: garde.filter(Boolean).length,
       calme, douze, toutes, aucune,
+      effaces, eclatsEffaces: nx2.length, calme2, invisible,
       bruit: ecart(imgToutes, imgToutes2), pxDouze: ecart(imgToutes, imgDouze), pxAucune: ecart(imgToutes, imgAucune) };
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const coutDouze = r.douze - r.calme, coutToutes = r.toutes - r.calme;
+  const coutInvisible = r.invisible - r.calme2;
   const ok = r.morceaux >= 80 && r.ombres <= 12 && r.bruit === 0
-    && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
-  return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
+    && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune
+    && r.eclatsEffaces >= 80 && coutInvisible <= 2;
+  return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %) · ET UNE MORT QU'ON NE VOIT PAS NE COUTE PLUS RIEN : le meme corps, efface par le tri de detail (${r.effaces} pieces au calque zero) explosait quand meme en ${r.eclatsEffaces} eclats dessines plein tarif parce que le clone naissait avec un calque neuf ; le clone reprend maintenant le calque, les deux drapeaux du tri et le castShadow de sa piece, et la facture passe de ${r.calme2} a ${r.invisible} appels de dessin, soit +${coutInvisible}` };
 });
 
 // ================= POSTE JEUX & QUARTIERS — round 78 =================

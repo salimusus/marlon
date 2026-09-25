@@ -5590,6 +5590,11 @@ test('l\'atelier dit pourquoi « Valider » est grisé, et amène une voiture si
 });
 
 
+// CONFIRME EN LONG LOT (r80). La graine figee ci-dessous ne valait que si le test tenait AUSSI
+// apres soixante voisins : PLAGE="120-180" rend 61 reussis / 0 echoue, et les chiffres du lot
+// sont ceux du test lance seul, au point pres — 0 bagarre entre eux, victime a 100 PV, 0 ordre,
+// ko=true (13,5 s), couche=true (rot -1,57), et le joueur finit a 37 PV, mort=false. C'est ce
+// dernier nombre qui signe la graine : c'est lui qui variait de 100 a 0 d'un lot a l'autre.
 test('les hommes du gang ne se tapent plus entre eux', async p => {
   const r = await p.evaluate(() => {
     // GRAINE FIGEE. Ce test etait le seul du lot des gangs a laisser courir le hasard, et il
@@ -7260,6 +7265,11 @@ test('Ultra HD : surechantillonnage, anticrenelage multi-echantillon et passe de
   return { ok, detail: `« haute » rendait l'image a la finesse de l'ecran, point · Ultra HD la calcule a ${r.reglages.ratio}× (${r.ultra.w}×${r.ultra.h} au lieu de ${r.haute.w}×${r.haute.h} : chaque pixel affiche est la moyenne de quatre pixels calcules, plus aucun bord en escalier), avec l'anticrenelage multi-echantillon (${r.reglages.msaa ? r.reglages.samples + ' echantillons' : 'WebGL 1 : sans'}), le filtrage des textures a ${r.reglages.aniso}×, et une passe de NETTETE adaptative qui accentue les contours (+${Math.round((r.ultra.contours / r.sansNettete.contours - 1) * 100)} % de contraste de contour mesure sur les vrais pixels, luminosite conservee : ${r.ultra.lum} contre ${r.haute.lum}) · sur une tele 4K on calcule au natif (ratio ${r.tv.ratio}, plafond ${r.tv.plafond}) et la nettete fait le reste · c'est le reglage par defaut sur ordinateur et tele (« ${r.libelle} » dans les reglages, quatre niveaux), et la mesure des images fait toujours redescendre si la machine ne suit pas` };
 });
 
+// CONFIRME EN LONG LOT (r80). Les deux bus coupes ci-dessous — la RUMEUR du quartier et les
+// VOIX — sont la vraie reponse : PLAGE="180-220" rend 41 reussis / 0 echoue, et le silence
+// mesure 0.0000 la ou la suite r79 relevait 0.0459 pour un seuil de 0.02. Le reste de la chaine
+// est inchange : moteur 0.2288, bouton « Tester le son » running a 0.157. La mesure tourne sur
+// l'horloge materielle : un seul Chromium a la fois, sinon elle ment.
 test('le son SORT vraiment : compresseur, rattrapage, limiteur, et une mesure au bout de la chaine', async p => {
   const r = await p.evaluate(async () => {
     const G = __G; __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
@@ -16335,9 +16345,30 @@ test('tirer en pleine rue est un délit (avertissements), et faire exploser une 
   return { ok, detail: `avant : quatre balles, une voiture détruite, ⭐ 0 et personne · maintenant (${r.kind}), 1er tir : avertissement ${r.tirs[0].avert}/4 · ${r.tirs.map(t => '★' + t.wanted + '/' + t.dmg + '%').join(' ')} · détruite=${r.dead}, recherché ★${r.wanted}, gravité ${r.crimeLevel}, « ${r.msgW.slice(0, 50)} »` };
 });
 
+// CONFIRME EN LONG LOT (r80). Le droit de se degager rendu a l'equipe municipale (`secours` des
+// qu'il y a un filet, dans metierRoule) tient apres ses voisins : PLAGE="370-395" rend 26
+// reussis / 0 echoue — fourgon sorti a 19 s, chef a bord 57 s, chantier balise a 60 s,
+// lampadaire repare a 69 s (jamais en 110 s avant), fourgon gare a 11 m, « dans un mur » = false,
+// 0 saut du filet. En suite r79 le chantier n'etait jamais balise.
+// ET LA GRAINE (voir ci-dessous) : lance SEUL, le test rend maintenant trois fois de suite les
+// memes chiffres a la decimale — 19 / 60 / 62 / 71 s et 10,9 m — la ou il donnait onze verts et
+// un rouge sur douze. Les deux mesures (seule et en lot) restent differentes, parce que l'etat
+// trouve a l'entree du test n'est pas le meme ; ce que la graine supprime, c'est la loterie A
+// POSITION EGALE, qui est ce qui faisait retomber ce test d'un round a l'autre.
 test('l\'équipe municipale part en fourgon, balise un chantier et répare un lampadaire cassé en moins d\'une minute', async p => {
   const r = await p.evaluate(async () => {
     const G = __G;
+    // GRAINE FIGEE. Ce test ne tirait rien au sort lui-meme, mais TOUT ce qu'il mesure depend du
+    // hasard de la ville : le trace que le graphe des voies rend au fourgon, la circulation qui
+    // le retient, et les decisions des quarante habitants. Mesure du defaut : douze lancements
+    // SEUL, meme code, monde rebati a chaque fois — onze verts et UN rouge. Et les marges sont
+    // minces : le fourgon sort a 19 s pour une limite de 25, et se gare a 11 m pour une limite
+    // de 16. Un test qui tombe une fois sur douze est un test qui fera retomber la suite, et le
+    // banc exige des tests deterministes. On fige donc la graine avant meme la reconstruction du
+    // monde — comme les tests 178 et 465 — et on la rend a la fin.
+    let graine = 20260925;
+    const vrai = Math.random;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     __SHOT.go({ world: 4, x: 27, y: 1, z: 118, hour: 9, frais: true });
     G.city.horaires = false;
     const lamp = G.breakables.find(b => b.kind === 'lamp' && Math.hypot(b.x - 45.5, b.z - 13.2) < 2) || G.breakables.find(b => b.kind === 'lamp');
@@ -16384,6 +16415,7 @@ test('l\'équipe municipale part en fourgon, balise un chantier et répare un la
       if (!lamp.broken) tFin = +t.toFixed(0);
     }
     const ci = emp[0].cible;
+    Math.random = vrai;   // la graine est rendue : les tests suivants retrouvent le vrai hasard
     return { veh: four.kind, sorti, chantier, tFin, enFourgon: +(enFourgon / 60).toFixed(0), dFourgon: +Math.hypot(four.x - lamp.x, four.z - lamp.z).toFixed(1), etat: emp[0].etat,
       parcouru: +parcouru.toFixed(0), fige: +(fige / 60).toFixed(0), duree: +t.toFixed(0),
       cible: ci ? `${ci.kind || 'objet'} en (${ci.x.toFixed(0)} ; ${ci.z.toFixed(0)})` : 'aucune',
@@ -20542,6 +20574,14 @@ test('aucun véhicule ne flotte ni ne s\'enfonce : les roues touchent le sol sur
 // le convoi à escorter. Ils suivaient bien un tracé A*, mais leur conduite avançait
 // `c.x += sin(h) × v × dt` SANS AUCUN contrôle de collision : ni mur, ni mobilier, ni autre
 // voiture, ni feu rouge. Ils passent maintenant par `botConduit`, comme tout le reste.
+// CONFIRME EN LONG LOT, DEUX FOIS (r80). Ce test avait ete rendu avec un avertissement :
+// « fragile a la position dans la suite, independamment de moi » — tombe une fois en lot
+// 455-466, vert seul et vert en lot 460-466 avec le meme code. Depuis que le chauffard recoit
+// `exactVeh` (voir policeDemarre), PLAGE="440-470" a ete joue DEUX FOIS de suite et rend les
+// memes chiffres a l'unite pres : 461 m, 0 image dans un solide, 0 image dans une autre voiture
+// (0 d'affilee), 64.5 % du temps sur la chaussee. En suite r79 : 29 images dans une autre
+// voiture, dont 20 d'affilee, pour un seuil de 10. La graine figee ci-dessous est ce qui rend
+// ces deux lots identiques : sans elle, le tirage du circuit changeait la mesure.
 test('le chauffard de la mission de police roule par les rues : il ne traverse plus ni mur ni voiture', async p => {
   const r = await p.evaluate(() => {
     const G = __G;

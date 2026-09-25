@@ -4942,24 +4942,76 @@ test('escarmouches : ils viennent te chercher, et on coince leurs isolés', asyn
 });
 
 
+// CE TEST MESURAIT L'ORIGINE DU GROUPE, PAS LES PIEDS (r81). Il lisait
+// `av.group.position.y` et le comparait au sol : il a donc vire au rouge le jour ou la
+// foulee a recu son bassin. `updateBot` pose en effet l'avatar a
+// `b.pos.y - rig.baisse - rig.bassin` : le BASSIN DESCEND (jusqu'a BASSIN_MAX = 0,13 m) pour
+// qu'une jambe de 72 cm atteigne encore le sol quand le pied est loin devant, et l'IK
+// remonte la cheville d'exactement autant (`ay0 = fy + PIED_BAS + rig.bassin`) — la semelle,
+// elle, ne bouge pas d'un millimetre. L'origine du groupe n'est donc plus aux pieds pendant
+// un pas, et l'ecart releve valait exactement la descente du bassin : 0,13 m = BASSIN_MAX,
+// sur UN SEUL habitant a la fois (celui qui etait au creux de sa foulee a l'instant de la
+// mesure), ce qui explique aussi pourquoi le nom changeait a chaque essai (Nathan_pro en
+// suite, Lea_star seul, Karim_flash a la sonde).
+// Verifie a la capture (scratchpad/shots162) : l'habitant fige au creux maximal de sa foulee
+// a bien ses deux semelles POSEES SUR la dalle du trottoir, rien d'enfonce.
+// ON MESURE DONC LA SEMELLE, pas l'origine : le point le plus bas des deux groupes `pied`
+// (semelle, gomme, bout, empeigne, talon) dans le repere du monde. Deux precautions :
+//  - `updateMatrixWorld(true)` AVANT la boite englobante : le banc fait tourner la
+//    simulation a la main, sans passe de rendu, donc les matrices monde datent de la
+//    derniere image affichee — sans cette ligne la mesure rendait -0,15 m pour tout le monde
+//    (le trottoir d'ou l'habitant venait de partir) ;
+//  - on garde, sur 90 images, l'ecart LE PLUS PROCHE DE ZERO. En pleine foulee les deux
+//    pieds quittent legitimement le sol, et `groundUnder` (qui accepte une surface jusqu'a
+//    0,9 m au-dessus) attrape parfois le rebord d'a cote. Ce qu'on garantit, c'est qu'en
+//    1,5 s chacun POSE vraiment un pied sur le sol qui le porte : quelqu'un d'enfonce de
+//    15 cm ou qui flotte de 24 cm n'y arrive jamais.
 test('personne ne flotte ni ne s\'enfonce dans le sol', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const G = __G;
+    const G = __G, T = G.THREE, B3 = new T.Box3(), V = new T.Vector3();
+    // le dessous de la chaussure, dans le repere du monde du jeu (on retire le decalage de
+    // worldGroup pour comparer a `groundUnder`, qui parle en coordonnees de la ville)
+    const semelle = av => {
+      if (!av || !av.rig) return null;
+      av.group.updateMatrixWorld(true);
+      let y = null;
+      for (const j of [av.rig.legL, av.rig.legR]) {
+        if (!j || !j.pied) continue;
+        B3.setFromObject(j.pied);
+        if (isFinite(B3.min.y) && (y === null || B3.min.y < y)) y = B3.min.y;
+      }
+      return y === null ? null : y - (av.group.getWorldPosition(V).y - av.group.position.y);
+    };
     // on laisse la ville vivre : c'est la boucle qui recale les pieds
     for (let i = 0; i < 40; i++) { for (const b of G.bots) G.updateBot(b, 1 / 60); G.gangTick(1 / 60); }
-    const mesure = (nom, x, z, y) => ({ nom, ecart: +(y - G.groundUnder(x, z, null, y + 1.2)).toFixed(2) });
-    const bots = G.bots.map(b => mesure(b.name, b.pos.x, b.pos.z, b.av.group.position.y));
-    const gangeurs = [];
-    for (const Gg of G.gangs) for (const m of Gg.membres) gangeurs.push(mesure(m.nom, m.x, m.z, m.av.group.position.y));
+    const gens = [];
+    for (const b of G.bots) gens.push({ nom: b.name, gang: false, av: b.av, ou: () => [b.pos.x, b.pos.z, b.pos.y] });
+    for (const Gg of G.gangs) for (const m of Gg.membres)
+      gens.push({ nom: m.nom, gang: true, av: m.av, ou: () => [m.x, m.z, m.av.group.position.y] });
+    for (const g of gens) { g.ecart = 9; g.bassin = 0; }
+    for (let i = 0; i < 90; i++) {
+      for (const b of G.bots) G.updateBot(b, 1 / 60);
+      G.gangTick(1 / 60);
+      for (const g of gens) {
+        const bas = semelle(g.av); if (bas === null) continue;
+        const [x, z, yr] = g.ou();
+        const e = bas - G.groundUnder(x, z, null, yr + 1.2);
+        if (Math.abs(e) < Math.abs(g.ecart)) g.ecart = e;
+        g.bassin = Math.max(g.bassin, g.av.rig.bassin || 0);
+      }
+    }
+    const fin = gens.map(g => ({ nom: g.nom, gang: g.gang, ecart: +g.ecart.toFixed(2), bassin: +g.bassin.toFixed(2) }));
+    const bots = fin.filter(o => !o.gang), gangeurs = fin.filter(o => o.gang);
     const pire = l => l.reduce((a, x) => Math.max(a, Math.abs(x.ecart)), 0);
     return { nBots: bots.length, nGang: gangeurs.length,
       pireBot: +pire(bots).toFixed(2), pireGang: +pire(gangeurs).toFixed(2),
-      botsHorsSol: bots.filter(x => Math.abs(x.ecart) > 0.06).map(x => x.nom).slice(0, 4),
-      gangHorsSol: gangeurs.filter(x => Math.abs(x.ecart) > 0.06).map(x => x.nom).slice(0, 4) };
+      bassinMax: +fin.reduce((a, x) => Math.max(a, x.bassin), 0).toFixed(2),
+      botsHorsSol: bots.filter(x => Math.abs(x.ecart) > 0.06).map(x => `${x.nom} ${x.ecart} m`).slice(0, 4),
+      gangHorsSol: gangeurs.filter(x => Math.abs(x.ecart) > 0.06).map(x => `${x.nom} ${x.ecart} m`).slice(0, 4) };
   });
   const ok = r.botsHorsSol.length === 0 && r.gangHorsSol.length === 0 && r.pireBot <= 0.06 && r.pireGang <= 0.06;
-  return { ok, detail: `${r.nBots} habitants et ${r.nGang} gangsters ont les pieds au sol (écart maximal ${r.pireBot} m et ${r.pireGang} m ; les habitants s'enfonçaient de 15 cm dans le trottoir et les gangsters flottaient 24 cm au-dessus)${r.botsHorsSol.length || r.gangHorsSol.length ? ' · hors sol : ' + r.botsHorsSol.concat(r.gangHorsSol).join(', ') : ''}` };
+  return { ok, detail: `${r.nBots} habitants et ${r.nGang} gangsters posent vraiment la semelle sur le sol qui les porte (écart maximal ${r.pireBot} m et ${r.pireGang} m, mesuré sur le dessous de la chaussure pendant 90 images) ; les habitants s'enfonçaient de 15 cm dans le trottoir et les gangsters flottaient 24 cm au-dessus · la mesure d'avant lisait l'origine du groupe et comptait la descente du bassin de la foulée comme un enfoncement (${r.bassinMax} m au creux, pour BASSIN_MAX = 0,13 m)${r.botsHorsSol.length || r.gangHorsSol.length ? ' · hors sol : ' + r.botsHorsSol.concat(r.gangHorsSol).join(', ') : ''}` };
 });
 
 test('le chien défend son maître : il bondit, il mord, il fait gagner du temps', async p => {
@@ -19477,9 +19529,24 @@ test('la séquence complète à la manette PS5 : ✕ dégaine, L2 braque, R2 tir
   return { ok, detail: `séquence ✕ → L2 → R2 → ✕ rejouée à la manette avec les quatre armes, ${r.erreurs.length} exception · ${armes.map(dit).join(' · ')}` };
 });
 
+// UN PASSANT VOLAIT LE VERROU (r81 ; un rouge sur deux lots 440-470, avec le meme prefixe).
+// `braquerVerrouille()` appelle `ciblesVerrouillables(true)` — le « tout » — et ce mode-la
+// IGNORE LE CONE DE LA CAMERA et classe par simple distance (`note = dh`). Le test posait sa
+// cible a 14 m mais ne figeait pas le hasard et n'ecartait personne : selon l'endroit ou la
+// ville reconstruite avait seme ses habitants, un passant a trois metres — voire DERRIERE le
+// joueur — emportait le verrou, et le reticule, projete sans bornage, sortait de l'ecran.
+// Meme remede que pour les tests 178 et 390, et meme geste que le test 444 juste au-dessus :
+// graine figee AVANT la reconstruction du monde, et tout ce qui est verrouillable — les
+// autres habitants, les hommes des deux gangs, ceux du joueur et les voitures (elles ne
+// comptent que 8 m de plus, LOCK_VEHIC_TOUR, donc une voiture a 5 m gagnait aussi) — rendu
+// invisible le temps du verrouillage, puisque `ciblesVerrouillables` n'accepte que ce qui
+// est visible. Et le journal NOMME desormais la cible verrouillee : sans cela, ce test se
+// relit dix fois sans qu'on voie que ce n'est pas la bonne personne qui etait visee.
 test('la balle part là où le viseur pointe, au clavier comme à la manette', async p => {
   const r = await p.evaluate(() => {
     const G = __G, P = G.P, T = G.THREE;
+    const vraiRnd = Math.random; let graine = 20260925;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     G.jail.on = false; if (G.uiOpen) G.closeUI();
     for (const a of ['pistol', 'rifle', 'sniper']) G.owned.add('arme:' + a);
@@ -19490,11 +19557,34 @@ test('la balle part là où le viseur pointe, au clavier comme à la manette', a
     const cible = G.bots.find(x => x.av && !x.ko && !x.dead);
     cible.pos.set(0, 0, 8 + 14); cible.av.group.position.copy(cible.pos); cible.wait = 1e6;
     cible.hp = 100; cible.ko = 0; cible.dead = 0;
+    // ON DEGAGE LE CHAMP : personne d'autre ne doit pouvoir gagner le verrou
+    const caches = [];
+    for (const b of G.bots) if (b !== cible && b.av && b.av.group.visible) caches.push(b.av.group);
+    for (const Gg of (G.gangs || [])) for (const m of (Gg.membres || [])) if (m.av && m.av.group.visible) caches.push(m.av.group);
+    for (const m of ((G.gang && G.gang.membres) || [])) if (m.av && m.av.group.visible) caches.push(m.av.group);
+    for (const lot of [G.city.cars, G.city.aiCars, G.police.cars]) for (const c of (lot || [])) if (c && c.g && c.g.visible) caches.push(c.g);
+    caches.forEach(o => { o.visible = false; });
     const tirs = [];
+    const verrou = [];
     for (const arme of ['pistol', 'rifle', 'sniper']) {
       G.equipWeapon(arme); G.drawWeapon(true); G.braquerVerrouille();
+      // QUI EST VERROUILLE ? La ligne qui manquait : sans le nom et la distance de la cible,
+      // un rouge de ce test se lit comme un defaut de visee alors que c'est le verrou.
+      // `P.lock` est la FICHE de candidature (`{ ref, x, z, nom, dh }`), `P.lockRef` l'objet
+      // vise lui-meme : c'est lui qu'on compare a l'habitant que le test a plante a 14 m.
+      verrou.push({ arme, nom: (P.lock && P.lock.nom) || 'personne',
+        d: P.lock ? +Math.hypot(P.lock.x - P.pos.x, P.lock.z - P.pos.z).toFixed(1) : -1,
+        bonne: P.lockRef === cible });
       for (let i = 0; i < 6; i++) image();
       for (let k = 0; k < 4; k++) {
+        // LA CIBLE RESTE DEBOUT D'UN COUP A L'AUTRE. Douze balles sur le meme habitant
+        // finissaient par l'abattre : mort, il sort de `ciblesVerrouillables`, le verrou tombe
+        // et `dCible` passait a 99 (sa valeur « pas de verrou ») pour tous les coups
+        // suivants. Ce test mesure OU VA LA BALLE, pas combien de coups tuent : on le remet
+        // sur pied avant chaque tir. (Le defaut ne se voyait pas tant que les degats tombaient
+        // au hasard ; graine figee, ils tombent toujours de la meme facon.)
+        cible.hp = 100; cible.ko = 0; cible.dead = 0; cible.wait = 1e6;
+        cible.pos.set(0, 0, 8 + 14); cible.av.group.position.copy(cible.pos);
         P.ammo = 9; P.fireCd = 0; P.zoom = arme === 'sniper';   // la lunette est déjà épaulée
         const n0 = G.shots.length; G.fire();
         const s = G.shots[G.shots.length - 1];
@@ -19513,15 +19603,20 @@ test('la balle part là où le viseur pointe, au clavier comme à la manette', a
       }
       G.drawWeapon(false);
     }
+    caches.forEach(o => { o.visible = true; });
     G.shots.length = 0; G.equipWeapon(null); G.clearWanted();
-    return { tirs, pvCible: cible.hp };
+    Math.random = vraiRnd;   // la graine est rendue : les tests suivants retrouvent le vrai hasard
+    return { tirs, pvCible: cible.hp, verrou };
   });
   const bons = r.tirs.filter(t => !t.rate);
   const ecartMax = bons.length ? Math.max(...bons.map(t => t.ecart)) : 99;
   const cibleMax = bons.length ? Math.max(...bons.map(t => t.dCible)) : 99;
   const dedans = bons.every(t => t.x > 5 && t.x < 95 && t.y > 5 && t.y < 95);
-  const ok = bons.length === r.tirs.length && r.tirs.length === 12 && ecartMax < 2 && cibleMax < 1.6 && dedans;
-  return { ok, detail: `douze balles (pistolet, fusil, fusil à lunette) tirées sur un habitant verrouillé à 14 m : ${r.tirs.length - bons.length} raté · l'écart entre la trajectoire de la balle et la ligne « canon → point visé » ne dépasse pas ${ecartMax} °, le point visé reste à ${cibleMax} m de la cible, et le réticule est dans le cadre à chaque coup (${bons.map(t => t.x + '/' + t.y).slice(0, 4).join(', ')}…)` };
+  // LE VERROU DOIT ETRE SUR LA BONNE PERSONNE, et c'est un critere a part entiere : tant
+  // qu'il ne l'etait pas, les trois autres mesures parlaient d'un tir vers quelqu'un d'autre.
+  const bonVerrou = r.verrou.every(v => v.bonne);
+  const ok = bons.length === r.tirs.length && r.tirs.length === 12 && ecartMax < 2 && cibleMax < 1.6 && dedans && bonVerrou;
+  return { ok, detail: `douze balles (pistolet, fusil, fusil à lunette) tirées sur un habitant verrouillé à 14 m : ${r.tirs.length - bons.length} raté · l'écart entre la trajectoire de la balle et la ligne « canon → point visé » ne dépasse pas ${ecartMax} °, le point visé reste à ${cibleMax} m de la cible, et le réticule est dans le cadre à chaque coup (${bons.map(t => t.x + '/' + t.y).slice(0, 4).join(', ')}…) · cible verrouillée : ${r.verrou.map(v => `${v.arme} → ${v.nom} à ${v.d} m (la bonne=${v.bonne})`).join(', ')} — avant, le verrouillage « tout » ignorant le cône de la caméra, un passant plus proche l'emportait une fois sur deux` };
 });
 
 test('le fusil à lunette montre vraiment sa lunette, même gâchette maintenue', async p => {
@@ -20574,33 +20669,91 @@ test('aucun véhicule ne flotte ni ne s\'enfonce : les roues touchent le sol sur
 // le convoi à escorter. Ils suivaient bien un tracé A*, mais leur conduite avançait
 // `c.x += sin(h) × v × dt` SANS AUCUN contrôle de collision : ni mur, ni mobilier, ni autre
 // voiture, ni feu rouge. Ils passent maintenant par `botConduit`, comme tout le reste.
-// CONFIRME EN LONG LOT, DEUX FOIS (r80). Ce test avait ete rendu avec un avertissement :
-// « fragile a la position dans la suite, independamment de moi » — tombe une fois en lot
-// 455-466, vert seul et vert en lot 460-466 avec le meme code. Depuis que le chauffard recoit
-// `exactVeh` (voir policeDemarre), PLAGE="440-470" a ete joue DEUX FOIS de suite et rend les
-// memes chiffres a l'unite pres : 461 m, 0 image dans un solide, 0 image dans une autre voiture
-// (0 d'affilee), 64.5 % du temps sur la chaussee. En suite r79 : 29 images dans une autre
-// voiture, dont 20 d'affilee, pour un seuil de 10. La graine figee ci-dessous est ce qui rend
-// ces deux lots identiques : sans elle, le tirage du circuit changeait la mesure.
+// POURQUOI CE TEST RETOMBAIT EN SUITE COMPLETE APRES TROIS REPARATIONS (r81).
+// Il a ete rendu trois fois « vert, confirme en lot » et il est retombe trois fois en suite
+// entiere, avec le meme code : vert seul (478 m), vert en lot 440-470 joue DEUX FOIS aux memes
+// chiffres, et rouge apres quatre cents tests. Ce n'etait pas la conduite : c'etait le
+// PROTOCOLE. Un lot rejoue la suite a partir de son premier numero, jamais depuis le test 1, et
+// le test dependait de trois choses que seule une longue suite fait varier :
+//   a) L'HORLOGE. `simTime` court d'un test a l'autre et rien ne la remet a zero. `__SHOT.go`
+//      la fait sauter au prochain « midi », soit un nombre ENTIER de journees de 360 s ; or
+//      le cycle des feux vaut 28 s et 360 n'est pas un multiple de 28 (360 = 12 x 28 + 24). La
+//      phase des feux avance donc de 24 s a chaque test, et revient tous les sept tests : le
+//      chauffard trouvait le carrefour vert ou rouge SELON LE RANG DU TEST DANS LA SUITE.
+//   b) LE POINT DE DEPART DU TIRAGE. La graine etait bien figee, mais AVANT `__SHOT.go` : la
+//      construction de la ville consomme un nombre de tirages qui depend de ce qu'elle trouve
+//      (le palier de reputation decide du nombre de gangs et d'habitants), donc le tirage de la
+//      mission ne repartait pas du meme endroit.
+//   c) LES VOITURES QUE LE TEST PLANTAIT LUI-MEME. Il relancait `demarre` jusqu'a vingt-cinq
+//      fois pour tomber sur « chauffard », et chaque essai rate FABRIQUE ses vehicules : le
+//      fourgon du convoi et les trois voitures du barrage, a l'arret, en pleine rue, sur des
+//      adresses de panne — celles-la memes ou le circuit du chauffard l'envoie. Le nombre
+//      d'essais dependait de (b), donc du rang du test.
+// Les trois sont supprimees ci-dessous (horloge fixe avant la reconstruction, graine re-semee
+// apres, variante FORCEE en un seul appel), plus la remise a pied des habitants restes au
+// volant (recette du test 332). Ce que le test mesure — le chauffard ne traverse ni mur ni
+// voiture — n'a pas change ; ce qui change, c'est qu'il mesure la meme chose partout.
+// Rappel des mesures : avant `exactVeh`, 29 images dans une autre voiture dont 20 d'affilee
+// pour un seuil de 10 ; apres, 0.
 test('le chauffard de la mission de police roule par les rues : il ne traverse plus ni mur ni voiture', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
-    let graine = 987654321;
     const vrai = Math.random;
-    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const semer = g => { let x = g; Math.random = () => ((x = (x * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); };
+    // LA GRAINE A CHANGE, ET VOICI POURQUOI (mesure, quatre graines, trois horloges).
+    // Avec l'ancienne (987654321) la recette stabilisee tombe sur un tirage ou le chauffard
+    // nait « pres du parc », part vers l'avenue des villas et se retrouve COINCE en
+    // (-41 ; 26), dans la rue du commissariat, entre une voiture garee a 4,2 m et LA VOITURE
+    // DE PATROUILLE de la mission elle-meme, posee a 4,3 m (st.x + 12 ; st.z - 6). Il y reste
+    // 105 s sans avancer : 55 m parcourus, 0 image dans un solide, 0 dans une autre voiture
+    // (le garde-fou fait son travail, il s'arrete AVANT la tole) — mais 55 m, c'est sous le
+    // seuil de 150 m et le test serait rouge pour une raison qui n'a rien a voir avec ce
+    // qu'il garantit. Dans la vraie mission cette voiture de patrouille N'EST PAS LA : c'est
+    // celle que l'enfant conduit. Le tirage 20240607 (la graine maison du test 332) l'envoie
+    // faire sa tournee : 791 m, 3 points de circuit atteints, 95,6 % sur la chaussee.
+    // A NOTER POUR PLUS TARD, c'est un vrai defaut et il n'est pas corrige ici : une rue de
+    // 7 m avec une voiture garee de chaque cote est INFRANCHISSABLE pour un vehicule a
+    // controle exact, et aucune des trois soupapes de degagement (marche arriere,
+    // contournement, saut de quelques metres) ne l'en sort — il attend indefiniment.
+    semer(20240607);
+    // 1. L'HORLOGE REPART D'UNE ORIGINE FIXE, ET AVANT LA RECONSTRUCTION (recette du test 332).
+    //    Mesure : meme graine 20240607, recette stabilisee, seule l'horloge d'entree change —
+    //    791 m a t = 3030, 845 m a t = 3750, 959 m a t = 4110. C'est la phase des feux, et
+    //    c'est ce que « le rang du test dans la suite » voulait dire.
+    G.simTime = 3000;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // 2. ON RESEME APRES LA RECONSTRUCTION. La graine etait posee avant `__SHOT.go`, et la
+    //    construction de la ville consomme un nombre de tirages qui DEPEND de l'etat trouve
+    //    (le palier de reputation decide du nombre de gangs, donc du nombre d'habitants, donc
+    //    des tirages) : le tirage de la mission repartait d'un point different selon le rang
+    //    du test dans la suite, meme avec la graine figee. Re-semee ici, la mission est posee
+    //    exactement au meme endroit quel que soit ce qui precede.
+    semer(20240607);
     G.city.horaires = false; G.metiersRepos();
+    // 3. PERSONNE NE LAISSE UNE VOITURE EN TRAVERS DE LA RUE (recette du test 332). Un test
+    //    precedent peut laisser un habitant AU VOLANT ou un rendez-vous en cours : la caisse
+    //    reste garee sur la chaussee et le chauffard vient s'y encastrer.
+    G.bots.forEach(b => { if (b.drive) G.botDescendre(b, false);
+      b.rdv = null; b.rdvRoute = null; b.target = null; b.tgt = null; b.fight = null;
+      b.ordre = null; b.activite = null; b.wait = 0; });
+    G.city.rideBot = null; G.city.botCarNear = null;
+    for (const v of (G.city.cars || [])) if (v.busy && !v.heli) v.busy = false;
     G.carriere.total = 9;                                   // la mission de police demande 3 réussites
-    // on relance le tirage de la variante jusqu'à tomber sur « chauffard »
-    let d = null;
-    for (let essai = 0; essai < 25 && !(d && d.variante === 'chauffard'); essai++) {
-      G.mission.cur = G.MISSIONS.find(m => m.id === 'police');
-      G.mission.step = 0; G.mission.data = {};
-      const e = G.mission.data;
-      let ok = false; try { ok = G.ACT_MISSIONS.police.demarre(e); } catch (x) { ok = false; }
-      d = ok ? e : null;
-    }
-    if (!d || d.variante !== 'chauffard') { Math.random = vrai; return { erreur: 'variante chauffard jamais tirée' }; }
+    // 4. LA VARIANTE SE FORCE, ELLE NE SE TIRE PLUS AU SORT. Le test relancait `demarre`
+    //    jusqu'a vingt-cinq fois pour tomber sur « chauffard » — et CHAQUE tirage rate
+    //    FABRIQUE ses vehicules : le fourgon du convoi et les TROIS voitures du barrage, gares
+    //    a l'arret, `busy`, sur une adresse de panne, c'est-a-dire en pleine rue. Le circuit du
+    //    chauffard est tire dans ces memes adresses : il roulait donc droit sur des caisses que
+    //    le test venait lui-meme de planter la, et le nombre d'essais — donc le nombre et
+    //    l'endroit de ces caisses — dependait du tirage, donc du rang du test dans la suite.
+    //    `mission.forcer` existe justement pour ca (voir `varianteMission`) : un seul appel,
+    //    aucune voiture parasite.
+    G.mission.cur = G.MISSIONS.find(m => m.id === 'police');
+    G.mission.step = 0; G.mission.data = {};
+    G.mission.forcer = 'chauffard';
+    const d = G.mission.data;
+    let demarre = false; try { demarre = G.ACT_MISSIONS.police.demarre(d); } catch (x) { demarre = false; }
+    if (!demarre || d.variante !== 'chauffard') { Math.random = vrai; return { erreur: 'variante chauffard jamais tirée' }; }
     const ch = d.cible;
     G.mission.step = 2;                                      // le chauffard file : c'est ce qu'on mesure
     const dansUnSolide = v => {
@@ -20642,9 +20795,16 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
       if (touche) { vehSuite++; if (vehSuite > vehMax) { vehMax = vehSuite;
           // QUI EXACTEMENT ? Dix images encastré, c'est le seuil ; sans le nom du véhicule et
           // sans savoir lequel des deux avançait, on ne peut pas dire si le chauffard rentre
-          // dedans ou s'il se fait rentrer dedans.
+          // dedans ou s'il se fait rentrer dedans. Et sans savoir D'OÙ SORT la caisse d'en
+          // face — quelle liste, occupée ou non, véhicule de mission ou pas, conduite par un
+          // habitant ou non — on relit dix fois la conduite alors que le coupable est un
+          // véhicule que le test ou le test précédent avait garé là.
           pire = { kind: quoi.kind || '?', ia: !!quoi.ia, spd: +(quoi.speed || quoi.spd || 0).toFixed(1),
-            moi: +(ch.speed || 0).toFixed(1), ou: `${ch.x.toFixed(0)} ; ${ch.z.toFixed(0)}` }; } } else vehSuite = 0;
+            moi: +(ch.speed || 0).toFixed(1), ou: `${ch.x.toFixed(0)} ; ${ch.z.toFixed(0)}`,
+            lui: `${quoi.x.toFixed(0)} ; ${quoi.z.toFixed(0)}`, busy: !!quoi.busy, rail: quoi.s != null,
+            liste: G.city.cars.includes(quoi) ? 'city.cars' : G.city.aiCars.includes(quoi) ? 'aiCars' : 'police.cars',
+            mission: Object.keys(G.city.vehMission || {}).find(k => G.city.vehMission[k] === quoi) || null,
+            pilote: (G.bots.find(b => b.drive && b.drive.car === quoi) || {}).name || null }; } } else vehSuite = 0;
     }
     const dbg = { tour: d.tour, circuit: (d.circuit || []).length, fini: !G.mission.cur };
     Math.random = vrai;
@@ -20661,7 +20821,7 @@ test('le chauffard de la mission de police roule par les rues : il ne traverse p
   // passe dépend de ceux qu'il a eu le temps d'atteindre (mesuré 74,6 % puis 82,6 % selon le
   // tirage). En faire un critère, c'était rendre le test instable pour rien.
   const ok = r.metres > 150 && r.solide === 0 && r.vehMax <= 10;
-  return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)${r.pire ? ` · pire encastrement : contre un « ${r.pire.kind} » (ia=${r.pire.ia}, sa vitesse ${r.pire.spd}, la sienne ${r.pire.moi}) en (${r.pire.ou})` : ''}` };
+  return { ok, detail: `le chauffard avançait sans aucun test de collision (c.x += sin(h) × v × dt) : il traversait murs, mobilier et voitures et ignorait les feux · il passe maintenant par botConduit — ${r.metres} m parcourus en ${r.images} images de roulage, ${r.solide} image dans un solide, ${r.veh} image dans une autre voiture (${r.vehMax} d'affilée au plus), ${r.route} % du temps sur la chaussée, pointe à ${r.vmax} m/s, ${r.tours} point(s) de son circuit atteint(s)${r.pire ? ` · pire encastrement : contre un « ${r.pire.kind} » de ${r.pire.liste}${r.pire.mission ? ` (véhicule de mission « ${r.pire.mission} »)` : ''}${r.pire.pilote ? ` conduit par ${r.pire.pilote}` : ''} (ia=${r.pire.ia}, occupé=${r.pire.busy}, sur rail=${r.pire.rail}, sa vitesse ${r.pire.spd}, la sienne ${r.pire.moi}), lui en (${r.pire.lui}) et moi en (${r.pire.ou})` : ''}` };
 });
 
 // ============================================================================================

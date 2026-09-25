@@ -7929,6 +7929,16 @@ function policeDemarre(d) {
     // 332), et le remede est le meme : `exactVeh` ajoute le controle au RECTANGLE exact des
     // autres caisses, avec les six centimetres d'air de JEU_TOLES_CONDUITE — on s'arrete
     // devant la tole au lieu de s'arreter dessus, donc on ne s'y imbrique jamais.
+    // RECTIFICATIF (r81) — le diagnostic ecrit au round 80 disait que le chauffard « n'est
+    // dans AUCUNE des trois listes que balaie separerVehicules, puisqu'il est retire de
+    // city.cars a sa naissance ». C'EST FAUX, et repartir de la ferait chercher au mauvais
+    // endroit : la fabrique ci-dessus le retire bien de `city.cars`, mais `vehiculeMission`
+    // l'y REMET aussitot (`city.cars.push(c)`, voir la fonction) — il est donc balaye a
+    // chaque image comme toutes les autres voitures. `exactVeh` ne sert pas a remplacer un
+    // ecartement absent, il sert a ne jamais AVOIR BESOIN de lui : `separerVehicules` ne
+    // rouvre les toles qu'APRES coup, et il refuse le pas qui pousserait une caisse dans une
+    // facade — deux voitures coincees entre un mur et un pare-chocs restent alors imbriquees
+    // aussi longtemps que le conducteur rappuie dessus. On s'arrete avant, c'est tout.
     ch.exactVeh = true;
     d.tour = 0; d.colle = 0;
     d.circuit = [...PANNES].sort(() => Math.random() - 0.5).slice(0, 4);

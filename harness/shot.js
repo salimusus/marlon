@@ -236,22 +236,33 @@ window.__SHOT = {
       //     travaux parcourt 687 m dans un cas et 621 m dans l'autre, les quatre autres
       //     vehicules de service etant desormais rigoureusement identiques.
       try {
-        var libres = 0;
+        var libres = 0, parQui = {};
         for (var li = 0; li < scene.children.length; li++) {
           var lo = scene.children[li];
-          if (lo && (lo.isMesh || lo.isPoints || lo.isLineSegments)) libres++;
+          if (!lo || !(lo.isMesh || lo.isPoints || lo.isLineSegments)) continue;
+          libres++;
+          // ON NOMME LE COUPABLE, PAS SEULEMENT LE NOMBRE (poste FIABILITE, round 80). Le
+          // traceur du HOOK note sur chaque objet la pile d'appel qui l'a pose : trois rounds
+          // ont compte cette derive sans jamais pouvoir dire d'ou elle venait.
+          var qui = (lo.userData && lo.userData.__origine) || '(pose avant le traceur)';
+          parQui[qui] = (parQui[qui] || 0) + 1;
         }
-        // UNE VILLE NEUVE EN A QUATRE, mesures : le dome du ciel et sa doublure (2 spheres),
-        // la nappe d'eau (1 plan) et le champ d'etoiles (1 nuage de points). Au-dela, c'est un
-        // test precedent qui a laisse quelque chose — derriere le test 299 on en compte 8.
-        dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4) : '
-          + 'worldGroup est vide par la reconstruction, la scene NON — ils survivent meme a frais: true');
+        var classe = Object.keys(parQui).sort(function (a, b) { return parQui[b] - parQui[a]; })
+          .slice(0, 3).map(function (k) { return parQui[k] + ' x ' + k; }).join(' | ');
+        // UNE VILLE NEUVE EN A QUATRE, verifies un par un au round 80 : le dome du ciel, la
+        // nappe d'eau, le champ d'etoiles et le point rouge du laser — les quatre sont poses au
+        // CHARGEMENT DE LA PAGE, avant meme le traceur. (Le round 78 disait « le dome et sa
+        // doublure » : il n'y a qu'un dome, le quatrieme est le point du laser.) Au-dela, c'est
+        // un test precedent qui a laisse quelque chose.
+        dit(libres > 4, libres + ' objet(s) poses directement dans la scene (une ville neuve en a 4 : '
+          + 'le dome du ciel, la nappe d eau, le champ d etoiles et le point du laser) — worldGroup est '
+          + 'vide par la reconstruction, la scene NON. Origines : ' + classe);
       } catch (eLib) {}
       try {
         var bul = 0;
         if (typeof bots !== 'undefined') for (var bi = 0; bi < bots.length; bi++)
           if (bots[bi].av && bots[bi].av.bubble) bul++;
-        dit(bul, bul + ' bulle(s) de dialogue encore accrochees a un habitant (elles n\u2019expirent que dans la boucle d\u2019affichage)');
+        dit(bul, bul + ' bulle(s) de dialogue encore accrochees a un habitant (posees il y a moins de 4,5 s de jeu, ou laissees par un test qui n a plus fait tourner la simulation)');
       } catch (eBul) {}
       // LES SONS EN BOUCLE : c'est le residu le plus sournois, il ne se voit nulle part a
       // l'ecran et il fausse toutes les mesures de niveau des tests audio.
@@ -507,6 +518,19 @@ window.__SHOT = {
       if (typeof defi !== 'undefined') defi.on = null;
       if (typeof mission !== 'undefined' && mission.cur) endMission(false, true);
     } catch (e) {}
+    // LES BULLES DE DIALOGUE. Depuis le round 80 elles expirent dans la SIMULATION et non plus
+    // dans la boucle d'affichage (voir bullesExpirent dans index.html), mais un test qui
+    // s'arrete moins de 4,5 s de jeu apres la derniere phrase d'un habitant en laisse encore
+    // une accrochee — et un panneau de plus sur un avatar, c'est un enfant de plus a mesurer
+    // pour le test suivant. On les decroche : l'etat est parfaitement rattrapable en jouant.
+    try {
+      if (typeof allAvatars === 'function') for (const avB of allAvatars()) {
+        if (!avB || !avB.bubble) continue;
+        avB.group.remove(avB.bubble);
+        try { avB.bubble.material.map.dispose(); avB.bubble.material.dispose(); } catch (eB1) {}
+        avB.bubble = null; avB.bubbleT = 0;
+      }
+    } catch (eB2) {}
     // ================= LES SERVICES DE LA VILLE : ON REND LA VILLE AU REPOS ==========    // Tout ce qui suit repare un DRAPEAU PERSISTANT. Les services municipaux (accidents,
     // police en constat, depanneuse, ambulance, pompiers, equipes de metier) posent des
     // drapeaux sur des objets qui, eux, survivent a loadWorld et meme a frais: true :
@@ -711,6 +735,18 @@ window.__SHOT = {
       try { var vIn = document.getElementById('volIn');
         if (vIn) { vIn.value = String(Math.round(__SHOT.volume0 * 100));
           var vVal = document.getElementById('volVal'); if (vVal) vVal.textContent = Math.round(__SHOT.volume0 * 100) + ' %'; } } catch (e26g) {}
+    } catch (e27) {}
+    // ============ L'INVENTAIRE A SON PROPRE try (poste FIABILITE, round 80) ============
+    // POURQUOI ON COUPE ICI. Les remises a zero n. 1 a 13 ci-dessus et l'inventaire ci-dessous
+    // vivaient dans UN SEUL try. Or la partie haute appelle du jeu (metiersRepos, eteintFeu,
+    // ambulanceAbandon, clearWanted, settleVehicle...) : la moindre exception dans l'une d'elles
+    // sautait TOUT ce qui suit, c'est-a-dire le portefeuille, les achats, la tenue, la
+    // musculature, le chien et le menage du stockage — sans un mot, puisque le catch est muet.
+    // Symptome exact releve dans le journal r79 : « portefeuille a 400 au lieu de 25 » a
+    // l'entree du test 178 et « 1 achat de plus qu'au premier chargement » a l'entree du test
+    // 390, alors que les deux lignes qui les reposent existaient deja. Deux try separes : une
+    // panne de menage de la ville ne peut plus emporter l'inventaire du joueur (et inversement).
+    try {
       // --- 14. L'INVENTAIRE DU JOUEUR. C'est le residu que MEME un monde neuf ne repare pas :
       // owned (les achats), le portefeuille, les grenades et l'arme en main vivent EN DEHORS du
       // monde, loadWorld ne les touche pas. Or chaque test qui s'offre un fusil a lunette ou un
@@ -811,7 +847,7 @@ window.__SHOT = {
         try { for (const cle of ['superobby.perf', 'superobby.progress', 'superobby.carriere', 'superobby.stats',
           'superobby.guerre', 'superobby.jail', 'superobby.grenades', 'superobby.muni', 'superobby.turbo']) localStorage.removeItem(cle); } catch (e39) {}
       }
-    } catch (e27) {}
+    } catch (e27b) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce
     // rappel ils n'en revenaient jamais et les tests suivants trouvaient une ville deserte.
     try {

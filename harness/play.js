@@ -12278,8 +12278,13 @@ test('les chevrons du GPS se lisent sur le bitume comme sur la dalle du Techno-P
     };
     const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     G.setBeacon(40, 60, 0, 'mission'); G.gpsRoute.update();
-    const chev = G.scene.children.filter(o => o.isMesh && o.material && o.material.map
-      && o.material.map.image && o.material.map.image.width === 128 && o.geometry.type === 'PlaneGeometry');
+    // ON PARCOURT LA SCENE, ON NE LIT PLUS SES ENFANTS DIRECTS (poste FIABILITE, round 80) :
+    // la reserve de chevrons a desormais son noeud a elle (GPS_G) au lieu d'etre accrochee
+    // chevron par chevron a la scene, et ce filtre-la n'en trouvait plus aucun. On se repere
+    // a la marque `userData.chevron`, posee exprès pour le banc, comme les deux autres tests
+    // du GPS le font deja.
+    const chev = [];
+    G.scene.traverse(o => { if (o.isMesh && o.userData && o.userData.chevron) chev.push(o); });
     const m = chev.length ? chev[0] : null;
     let clair = 0, sombre = 1, opaques = 0, doux = 0;
     if (m) {
@@ -12382,6 +12387,18 @@ test('quand plusieurs bots parlent au même endroit, les bulles ne se superposen
     // elle est restée à l'autre bout de la ville, et tickBubbles jugeait toutes les bulles
     // « trop loin » (au-delà de 48 m). On la pose à la main derrière le joueur.
     G.camera.position.set(G.P.pos.x, G.P.pos.y + 2.2, G.P.pos.z - 7);
+    // ET ON LA FAIT REGARDER LES HABITANTS (poste FIABILITE, round 80). On ne posait que la
+    // POSITION : l'ORIENTATION restait celle du test precedent, et `matrixWorldInverse` — la
+    // seule matrice que lit `Vector3.project` — n'etait meme pas recalculee (le moteur ne la
+    // met a jour que dans `render()`). L'empilement des bulles a une seconde regle, « ou
+    // superposees A L'ECRAN » : avec une projection heritee, quatre habitants a six metres
+    // les uns des autres pouvaient tomber au meme endroit de l'image, et le test lisait des
+    // bulles empilees alors qu'elles etaient separees. Vert lance seul, rouge derriere
+    // certains voisins : la signature d'un etat herite. On fixe donc le point de vue ET la
+    // matrice qui en decoule.
+    G.camera.lookAt(G.P.pos.x, G.P.pos.y + 2.2, G.P.pos.z + 4);
+    G.camera.updateMatrixWorld(true);
+    G.camera.matrixWorldInverse.copy(G.camera.matrixWorld).invert();
     const n = 4, av = [];
     for (let i = 0; i < n; i++) {
       const b = G.bots[i];
@@ -21808,20 +21825,75 @@ test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rech
 //   - ce que vaut une ville NEUVE : si la reconstruction du monde ne ramene plus la scene a
 //     son etat de depart, c'est qu'une famille d'objets lui echappe.
 // Et l'invariant de structure : apres une reconstruction, le groupe des ephemeres est VIDE.
+//
+// ---- RENFORCE AU ROUND 80 : ON SALIT NOUS-MEMES, PUIS ON REBATIT ----
+// Les deux plafonds (200 / 400) ne voyaient rien venir : ils laissaient passer une derive de
+// quatre-vingt-dix objets. C'est exactement ce qui s'est produit — la reserve de chevrons du
+// GPS (jusqu'a 90 maillages, jamais videe) et les quatre maillages du temps qu'il fait
+// etaient accroches DIRECTEMENT a la scene, et le releve d'entree des quatre tests rouges de
+// la suite r79 comptait « 53 a 69 objet(s) poses directement dans la scene » pour 4 attendus.
+// Un plafond ne suffit donc pas : le test SALIT maintenant la scene comme le ferait n'importe
+// quel test de la suite (une trainee de GPS d'un bout a l'autre de la ville, une averse, une
+// chute de neige, une mort), rebatit le monde, et exige de RETOMBER SUR LE MEME COMPTE, au
+// nombre pres. Une famille d'objets qui echappe a la reconstruction ne peut plus passer.
+// LES QUATRE OBJETS D'UNE VILLE NEUVE : le dome du ciel et sa doublure, la nappe d'eau et le
+// champ d'etoiles (le point rouge du laser est le quatrieme maillage, pose au chargement).
+// ET L'INVENTAIRE, meme famille : le portefeuille et les achats vivent EN DEHORS du monde,
+// aucune reconstruction ne les touche — seule la remise a zero de __SHOT.go() les repose.
 test('la scene ne grossit pas d un test a l autre : les objets directement dans scene ne derivent pas', async p => {
   const r = await p.evaluate(() => {
-    const avant = __SHOT.fuites();                                        // l'heritage des tests precedents
+    const G = __G;
+    // CE QUI EST POSE DIRECTEMENT DANS LA SCENE, ET D'OU CA VIENT. Le traceur du HOOK note la
+    // pile d'appel sur chaque objet ajoute a `scene` : un echec NOMME le coupable.
+    const compte = () => {
+      let libres = 0; const qui = {};
+      for (const o of G.scene.children) {
+        if (!(o.isMesh || o.isPoints || o.isLineSegments)) continue;
+        libres++;
+        const k = (o.userData && o.userData.__origine) || '(chargement de la page)';
+        qui[k] = (qui[k] || 0) + 1;
+      }
+      return { total: G.scene.children.length, libres, qui };
+    };
+    const dit = c => Object.keys(c.qui).sort((a, b) => c.qui[b] - c.qui[a]).slice(0, 3)
+      .map(k => c.qui[k] + ' x ' + k);
+    const eph = () => { const g = G.scene.children.find(o => o.name === 'ephemeres'); return g ? g.children.length : -1; };
+
+    const heritage = __SHOT.fuites();                                     // l'heritage des tests precedents
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
-    const apres = __SHOT.fuites();                                        // une ville neuve : la reference
-    const g = __G.scene.children.find(o => o.name === 'ephemeres');
-    const dit = c => c.classement.slice(0, 5).map(e => e.objets + ' obj / ' + e.maillages + ' maillages ← ' + e.ou);
-    return { avant: avant.total, apres: apres.total, ephemeres: g ? g.children.length : -1,
-      pireAvant: dit(avant), pireApres: dit(apres) };
+    const ref = compte();                                                 // une ville neuve : la reference
+
+    // ---- ON SALIT LA SCENE COMME LE FERAIT N'IMPORTE QUEL TEST ----
+    // 1. une trainee de GPS d'un bout a l'autre de la ville : jusqu'a 90 chevrons + le repere
+    G.setBeacon(-150, 150, 0, 'mission'); G.gpsRoute.update();
+    // 2. la pluie puis la neige : les quatre maillages du temps qu'il fait
+    try { G.meteoSet('pluie', 600); } catch (e) {}
+    for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+    try { G.meteoSet('neige', 600); } catch (e) {}
+    for (let i = 0; i < 20; i++) G.step(1 / 60, true);
+    // 3. une mort : cent a deux cent cinquante eclats, qui ne doivent pas finir dans la scene
+    const av = G.buildAvatar({ name: ' ', jersey: 2, pants: 0x303030, cap: null, num: 3 });
+    av.group.position.set(0, 0, 14); av.group.updateMatrixWorld(true);
+    G.explode(av);
+    const eclats = G.morceaux.length, ephSale = eph();
+    const sale = compte();
+    // 4. et l'inventaire : de l'argent et une arme que le premier chargement n'avait pas
+    G.wallet = 4000; G.owned.add('arme:sniper');
+
+    // ---- ON REBATIT : TOUT DOIT REVENIR A LA REFERENCE ----
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const apres = compte();
+    return { heritage: heritage.total, pireHeritage: heritage.classement.slice(0, 3)
+        .map(e => e.objets + ' obj / ' + e.maillages + ' maillages ← ' + e.ou),
+      ref: ref.libres, refTotal: ref.total, sale: sale.libres, apres: apres.libres, apresTotal: apres.total,
+      eclats, ephSale, ephemeres: eph(), pire: dit(apres),
+      sous: G.wallet, argent0: __SHOT.argent0,
+      sniper: G.owned.has('arme:sniper'), sniper0: __SHOT.achats0.indexOf('arme:sniper') >= 0 };
   });
-  // 115 objets pour une ville neuve (mesure du round 76) ; 200 laisse de la marge a un quartier
-  // de plus, 400 a l'heritage normal d'un test voisin (balles en vol, grenades posees).
-  const ok = r.apres <= 200 && r.avant <= 400 && r.ephemeres === 0;
-  return { ok, detail: `avant : la mort d'un personnage posait 249 maillages directement dans \`scene\`, qui ne vieillissaient que dans la boucle d'affichage — 2 612 objets releves a l'entree d'un test pour 135 attendus, ~5 000 appels de dessin herites, et le budget d'image a 15 166 au lieu de 9 621 · maintenant tout ce qui est ephemere (morceaux d'explosion, ondes de choc, impacts) vit dans le groupe \`ephemeres\` que la reconstruction du monde vide d'office · heritage des tests precedents : ${r.avant} objets (plafond 400) → ${r.pireAvant.join(' · ')} · ville neuve : ${r.apres} objets (plafond 200), groupe des ephemeres vide=${r.ephemeres === 0} → ${r.pireApres.join(' · ')}` };
+  const propre = r.apres === r.ref && r.apresTotal <= 200 && r.ephemeres === 0;
+  const inventaire = r.sous === r.argent0 && r.sniper === r.sniper0;
+  const ok = r.ref <= 4 && propre && inventaire && r.heritage <= 400 && r.eclats >= 60;
+  return { ok, detail: `avant : la mort d'un personnage posait 249 maillages directement dans \`scene\`, qui ne vieillissaient que dans la boucle d'affichage — 2 612 objets releves a l'entree d'un test pour 135 attendus, ~5 000 appels de dessin herites, et le budget d'image a 15 166 au lieu de 9 621 · puis, au round 79, la reserve de chevrons du GPS et les maillages du temps qu'il fait laissaient encore 53 a 69 objets poses directement dans la scene pour 4 attendus · maintenant on SALIT et on rebatit : ville neuve ${r.ref} objets libres (plafond 4), salie ${r.sale} (trainee de GPS, averse, chute de neige, ${r.eclats} eclats d'une mort dont ${r.ephSale} dans le groupe des ephemeres), rebatie ${r.apres} — l'ecart doit etre nul · ${r.apresTotal} enfants de la scene au total (plafond 200), groupe des ephemeres vide=${r.ephemeres === 0} · inventaire repose par la remise a zero : portefeuille ${r.sous} (attendu ${r.argent0}), fusil a lunette ${r.sniper} (attendu ${r.sniper0}) · heritage des tests precedents : ${r.heritage} objets (plafond 400) → ${r.pireHeritage.join(' · ')} · ce qui reste pose dans la scene : ${r.pire.join(' · ') || 'rien de trace'}` };
 });
 
 // ---- POSTE DIVERS (round 77) : CE QUE COUTE UNE MORT ----
@@ -21875,21 +21947,48 @@ test('une mort ne coute plus une fusillade d\'appels de dessin, et l\'ombre de l
     const toutes = cout(), imgToutes = pixels(), imgToutes2 = pixels();
     for (const d of nx) d.m.castShadow = false;
     const aucune = cout(), imgAucune = pixels();
-    G.renderer.info.autoReset = true;
     // ON NE LAISSE RIEN DERRIERE : les morceaux figes pollueraient le budget d'image du test
     // suivant (voir « la scene ne grossit pas d un test a l autre »).
     for (const d of nx) G.EPHEMERES.remove(d.m);
     G.morceaux.length = n0;
     G.scene.remove(av.group);   // et le corps que nous avons bati : buildAvatar l'accroche a la scene
+
+    // ======== LA MEME MORT, SUR UN CORPS QUE LE TRI DE DETAIL A DEJA EFFACE (round 80) ========
+    // `detailsLOD` n'efface pas une piece devenue minuscule a l'ecran en la rendant invisible :
+    // il met son CALQUE a zero (`layers.mask = 0`, `detailLoin`, l'ancien masque dans
+    // `masqueSauve`). Le clone d'`explode()` naissait avec un calque NEUF : un corps DEJA
+    // RETIRE DE L'IMAGE explosait quand meme en eclats dessines plein tarif, ombres comprises.
+    // On refait donc exactement la meme mesure sur un corps efface a la main comme le tri le
+    // fait : la mort ne doit plus rien couter du tout.
+    const av2 = G.buildAvatar({ name: ' ', jersey: 3, pants: 0x2b3550, cap: null, num: 7 });
+    av2.group.position.set(0, 0, 49); av2.group.rotation.y = Math.PI;
+    if (av2.tag) av2.tag.visible = false;
+    av2.group.updateMatrixWorld(true);
+    let effaces = 0;
+    av2.group.traverse(o => { if (!o.isMesh || !o.layers) return;
+      o.masqueSauve = o.layers.mask; o.layers.mask = 0; o.detailLoin = true; effaces++; });
+    const calme2 = cout();                       // le corps efface ne coute deja plus rien
+    const n2 = G.morceaux.length;
+    G.explode(av2);
+    const nx2 = G.morceaux.slice(n2);
+    for (const d of nx2) { d.vel.set(0, 0, 0); d.ang.set(0, 0, 0); d.life = 9999; }
+    const invisible = cout();
+    G.renderer.info.autoReset = true;
+    for (const d of nx2) G.EPHEMERES.remove(d.m);
+    G.morceaux.length = n2;
+    G.scene.remove(av2.group);
     return { morceaux: nx.length, ombres: garde.filter(Boolean).length,
       calme, douze, toutes, aucune,
+      effaces, eclatsEffaces: nx2.length, calme2, invisible,
       bruit: ecart(imgToutes, imgToutes2), pxDouze: ecart(imgToutes, imgDouze), pxAucune: ecart(imgToutes, imgAucune) };
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
   const coutDouze = r.douze - r.calme, coutToutes = r.toutes - r.calme;
+  const coutInvisible = r.invisible - r.calme2;
   const ok = r.morceaux >= 80 && r.ombres <= 12 && r.bruit === 0
-    && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune;
-  return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %)` };
+    && coutDouze < coutToutes * 0.45 && r.pxDouze < 0.35 && r.pxDouze < r.pxAucune
+    && r.eclatsEffaces >= 80 && coutInvisible <= 2;
+  return { ok, detail: `avant, CHAQUE morceau d'un corps qui explose portait son ombre et le garde-fou des ombres mobiles ne pouvait rien voir (son recensement est etale sur les images, un debris ne vit que 1,4 s) · ${r.morceaux} morceaux pour un habitant : ${r.ombres} portent encore une ombre · cout de la mort, meme image et meme camera, passe d'ombres comprise : +${coutToutes} appels de dessin avant, +${coutDouze} maintenant (sans aucune ombre : +${r.aucune - r.calme}) · et L'IMAGE NE CHANGE PAS : ${r.pxDouze} % de pixels differents de l'ancien rendu, contre ${r.pxAucune} % si on supprimait toutes les ombres (bruit de fond de la mesure : ${r.bruit} %) · ET UNE MORT QU'ON NE VOIT PAS NE COUTE PLUS RIEN : le meme corps, efface par le tri de detail (${r.effaces} pieces au calque zero) explosait quand meme en ${r.eclatsEffaces} eclats dessines plein tarif parce que le clone naissait avec un calque neuf ; le clone reprend maintenant le calque, les deux drapeaux du tri et le castShadow de sa piece, et la facture passe de ${r.calme2} a ${r.invisible} appels de dessin, soit +${coutInvisible}` };
 });
 
 // ================= POSTE JEUX & QUARTIERS — round 78 =================

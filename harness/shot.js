@@ -711,6 +711,18 @@ window.__SHOT = {
       try { var vIn = document.getElementById('volIn');
         if (vIn) { vIn.value = String(Math.round(__SHOT.volume0 * 100));
           var vVal = document.getElementById('volVal'); if (vVal) vVal.textContent = Math.round(__SHOT.volume0 * 100) + ' %'; } } catch (e26g) {}
+    } catch (e27) {}
+    // ============ L'INVENTAIRE A SON PROPRE try (poste FIABILITE, round 80) ============
+    // POURQUOI ON COUPE ICI. Les remises a zero n. 1 a 13 ci-dessus et l'inventaire ci-dessous
+    // vivaient dans UN SEUL try. Or la partie haute appelle du jeu (metiersRepos, eteintFeu,
+    // ambulanceAbandon, clearWanted, settleVehicle...) : la moindre exception dans l'une d'elles
+    // sautait TOUT ce qui suit, c'est-a-dire le portefeuille, les achats, la tenue, la
+    // musculature, le chien et le menage du stockage — sans un mot, puisque le catch est muet.
+    // Symptome exact releve dans le journal r79 : « portefeuille a 400 au lieu de 25 » a
+    // l'entree du test 178 et « 1 achat de plus qu'au premier chargement » a l'entree du test
+    // 390, alors que les deux lignes qui les reposent existaient deja. Deux try separes : une
+    // panne de menage de la ville ne peut plus emporter l'inventaire du joueur (et inversement).
+    try {
       // --- 14. L'INVENTAIRE DU JOUEUR. C'est le residu que MEME un monde neuf ne repare pas :
       // owned (les achats), le portefeuille, les grenades et l'arme en main vivent EN DEHORS du
       // monde, loadWorld ne les touche pas. Or chaque test qui s'offre un fusil a lunette ou un
@@ -811,7 +823,7 @@ window.__SHOT = {
         try { for (const cle of ['superobby.perf', 'superobby.progress', 'superobby.carriere', 'superobby.stats',
           'superobby.guerre', 'superobby.jail', 'superobby.grenades', 'superobby.muni', 'superobby.turbo']) localStorage.removeItem(cle); } catch (e39) {}
       }
-    } catch (e27) {}
+    } catch (e27b) {}
     // Les tests qui ont besoin d'un terrain degage poussent les figurants a 400 m ; sans ce
     // rappel ils n'en revenaient jamais et les tests suivants trouvaient une ville deserte.
     try {

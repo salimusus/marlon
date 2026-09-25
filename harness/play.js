@@ -4942,24 +4942,76 @@ test('escarmouches : ils viennent te chercher, et on coince leurs isolés', asyn
 });
 
 
+// CE TEST MESURAIT L'ORIGINE DU GROUPE, PAS LES PIEDS (r81). Il lisait
+// `av.group.position.y` et le comparait au sol : il a donc vire au rouge le jour ou la
+// foulee a recu son bassin. `updateBot` pose en effet l'avatar a
+// `b.pos.y - rig.baisse - rig.bassin` : le BASSIN DESCEND (jusqu'a BASSIN_MAX = 0,13 m) pour
+// qu'une jambe de 72 cm atteigne encore le sol quand le pied est loin devant, et l'IK
+// remonte la cheville d'exactement autant (`ay0 = fy + PIED_BAS + rig.bassin`) — la semelle,
+// elle, ne bouge pas d'un millimetre. L'origine du groupe n'est donc plus aux pieds pendant
+// un pas, et l'ecart releve valait exactement la descente du bassin : 0,13 m = BASSIN_MAX,
+// sur UN SEUL habitant a la fois (celui qui etait au creux de sa foulee a l'instant de la
+// mesure), ce qui explique aussi pourquoi le nom changeait a chaque essai (Nathan_pro en
+// suite, Lea_star seul, Karim_flash a la sonde).
+// Verifie a la capture (scratchpad/shots162) : l'habitant fige au creux maximal de sa foulee
+// a bien ses deux semelles POSEES SUR la dalle du trottoir, rien d'enfonce.
+// ON MESURE DONC LA SEMELLE, pas l'origine : le point le plus bas des deux groupes `pied`
+// (semelle, gomme, bout, empeigne, talon) dans le repere du monde. Deux precautions :
+//  - `updateMatrixWorld(true)` AVANT la boite englobante : le banc fait tourner la
+//    simulation a la main, sans passe de rendu, donc les matrices monde datent de la
+//    derniere image affichee — sans cette ligne la mesure rendait -0,15 m pour tout le monde
+//    (le trottoir d'ou l'habitant venait de partir) ;
+//  - on garde, sur 90 images, l'ecart LE PLUS PROCHE DE ZERO. En pleine foulee les deux
+//    pieds quittent legitimement le sol, et `groundUnder` (qui accepte une surface jusqu'a
+//    0,9 m au-dessus) attrape parfois le rebord d'a cote. Ce qu'on garantit, c'est qu'en
+//    1,5 s chacun POSE vraiment un pied sur le sol qui le porte : quelqu'un d'enfonce de
+//    15 cm ou qui flotte de 24 cm n'y arrive jamais.
 test('personne ne flotte ni ne s\'enfonce dans le sol', async p => {
   const r = await p.evaluate(() => {
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
-    const G = __G;
+    const G = __G, T = G.THREE, B3 = new T.Box3(), V = new T.Vector3();
+    // le dessous de la chaussure, dans le repere du monde du jeu (on retire le decalage de
+    // worldGroup pour comparer a `groundUnder`, qui parle en coordonnees de la ville)
+    const semelle = av => {
+      if (!av || !av.rig) return null;
+      av.group.updateMatrixWorld(true);
+      let y = null;
+      for (const j of [av.rig.legL, av.rig.legR]) {
+        if (!j || !j.pied) continue;
+        B3.setFromObject(j.pied);
+        if (isFinite(B3.min.y) && (y === null || B3.min.y < y)) y = B3.min.y;
+      }
+      return y === null ? null : y - (av.group.getWorldPosition(V).y - av.group.position.y);
+    };
     // on laisse la ville vivre : c'est la boucle qui recale les pieds
     for (let i = 0; i < 40; i++) { for (const b of G.bots) G.updateBot(b, 1 / 60); G.gangTick(1 / 60); }
-    const mesure = (nom, x, z, y) => ({ nom, ecart: +(y - G.groundUnder(x, z, null, y + 1.2)).toFixed(2) });
-    const bots = G.bots.map(b => mesure(b.name, b.pos.x, b.pos.z, b.av.group.position.y));
-    const gangeurs = [];
-    for (const Gg of G.gangs) for (const m of Gg.membres) gangeurs.push(mesure(m.nom, m.x, m.z, m.av.group.position.y));
+    const gens = [];
+    for (const b of G.bots) gens.push({ nom: b.name, gang: false, av: b.av, ou: () => [b.pos.x, b.pos.z, b.pos.y] });
+    for (const Gg of G.gangs) for (const m of Gg.membres)
+      gens.push({ nom: m.nom, gang: true, av: m.av, ou: () => [m.x, m.z, m.av.group.position.y] });
+    for (const g of gens) { g.ecart = 9; g.bassin = 0; }
+    for (let i = 0; i < 90; i++) {
+      for (const b of G.bots) G.updateBot(b, 1 / 60);
+      G.gangTick(1 / 60);
+      for (const g of gens) {
+        const bas = semelle(g.av); if (bas === null) continue;
+        const [x, z, yr] = g.ou();
+        const e = bas - G.groundUnder(x, z, null, yr + 1.2);
+        if (Math.abs(e) < Math.abs(g.ecart)) g.ecart = e;
+        g.bassin = Math.max(g.bassin, g.av.rig.bassin || 0);
+      }
+    }
+    const fin = gens.map(g => ({ nom: g.nom, gang: g.gang, ecart: +g.ecart.toFixed(2), bassin: +g.bassin.toFixed(2) }));
+    const bots = fin.filter(o => !o.gang), gangeurs = fin.filter(o => o.gang);
     const pire = l => l.reduce((a, x) => Math.max(a, Math.abs(x.ecart)), 0);
     return { nBots: bots.length, nGang: gangeurs.length,
       pireBot: +pire(bots).toFixed(2), pireGang: +pire(gangeurs).toFixed(2),
-      botsHorsSol: bots.filter(x => Math.abs(x.ecart) > 0.06).map(x => x.nom).slice(0, 4),
-      gangHorsSol: gangeurs.filter(x => Math.abs(x.ecart) > 0.06).map(x => x.nom).slice(0, 4) };
+      bassinMax: +fin.reduce((a, x) => Math.max(a, x.bassin), 0).toFixed(2),
+      botsHorsSol: bots.filter(x => Math.abs(x.ecart) > 0.06).map(x => `${x.nom} ${x.ecart} m`).slice(0, 4),
+      gangHorsSol: gangeurs.filter(x => Math.abs(x.ecart) > 0.06).map(x => `${x.nom} ${x.ecart} m`).slice(0, 4) };
   });
   const ok = r.botsHorsSol.length === 0 && r.gangHorsSol.length === 0 && r.pireBot <= 0.06 && r.pireGang <= 0.06;
-  return { ok, detail: `${r.nBots} habitants et ${r.nGang} gangsters ont les pieds au sol (écart maximal ${r.pireBot} m et ${r.pireGang} m ; les habitants s'enfonçaient de 15 cm dans le trottoir et les gangsters flottaient 24 cm au-dessus)${r.botsHorsSol.length || r.gangHorsSol.length ? ' · hors sol : ' + r.botsHorsSol.concat(r.gangHorsSol).join(', ') : ''}` };
+  return { ok, detail: `${r.nBots} habitants et ${r.nGang} gangsters posent vraiment la semelle sur le sol qui les porte (écart maximal ${r.pireBot} m et ${r.pireGang} m, mesuré sur le dessous de la chaussure pendant 90 images) ; les habitants s'enfonçaient de 15 cm dans le trottoir et les gangsters flottaient 24 cm au-dessus · la mesure d'avant lisait l'origine du groupe et comptait la descente du bassin de la foulée comme un enfoncement (${r.bassinMax} m au creux, pour BASSIN_MAX = 0,13 m)${r.botsHorsSol.length || r.gangHorsSol.length ? ' · hors sol : ' + r.botsHorsSol.concat(r.gangHorsSol).join(', ') : ''}` };
 });
 
 test('le chien défend son maître : il bondit, il mord, il fait gagner du temps', async p => {

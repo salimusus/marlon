@@ -23682,3 +23682,77 @@ test('les 30 entrees de la ville laissent passer l\'enfant, mobilier compris', a
   const ok = r.length === 2 && r.every(o => o.portes >= 30 && o.bouchees.length === 0);
   return { ok, detail: `le demi-gabarit du joueur est P.hw = 0,40 m (0,80 m de large) ; on exige 1,00 m devant une baie — 10 cm de jeu de chaque cote, parce que la collision du joueur est une boite alignee sur les axes et qu'en deca il accroche le montant a chaque image · ${r.map(o => `graine ${o.graine} : ${o.portes} entrees declarees, ${o.bouchees.length} sous 1,00 m (dont ${o.parMeuble} a cause d'un meuble)${o.bouchees.length ? ' → ' + JSON.stringify(o.bouchees.slice(0, 4)) : ''} ; la plus serree laisse ${o.pire.libre} m`).join(' · ')}` };
 });
+
+// ====== UN TROTTOIR NE MENE PLUS DANS UN MUR (round 83, item 4) ======
+// `trottoirs()` posait une bande de 1,80 m le long de CHAQUE rue, coupee uniquement par les
+// autres rues : elle ne regardait ni les murs, ni les clotures, ni les piliers de portail.
+// RELEVE AVANT (graine 6174) : 45 trottoirs sur 311 laissaient moins que le gabarit du joueur
+// (2 x P.hw = 0,80 m) et le pire en laissait 0,00 m — l'enfant est jete sur la chaussee, la ou
+// roulent les voitures. LA QUESTION QUI DECIDE : 40 des 45 obstacles ne mordent PAS la
+// chaussee ; ils sont chez eux, c'est la bande de pave qui a ete tiree par-dessus eux. On ne
+// deplace donc AUCUNE architecture : `recoupeLesTrottoirs()` RETRECIT le pave la ou il reste
+// 0,90 m et l'INTERROMPT, bordure comprise, la ou il ne passe pas.
+// Le chiffre qui compte : la SURFACE PAVEE posee la ou l'enfant ne peut pas passer,
+// 336 m2 -> 16 m2, et 186,8 m de trottoir menteur -> 11,8 m.
+test('aucun trottoir ne mene dans un mur : le pave s\'arrete la ou le passage s\'arrete', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, vrai = Math.random, sorties = [];
+    const PASSE = 2 * G.P.hw;                 // 0,80 m : le gabarit strict de l'enfant
+    try {
+      for (const graine of [6174, 987654321]) {
+        let g0 = graine >>> 0;
+        Math.random = () => ((g0 = (Math.imul(g0, 1664525) + 1013904223) >>> 0) / 4294967296);
+        __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+        const c = G.city, S = G.solids;
+        const roul = new Set();
+        for (const v of [].concat(c.cars || [], c.aiCars || [], G.police.cars || [])) if (v && v.solid) roul.add(v.solid);
+        const gene = o => !roul.has(o) && !o.veh && !o.ai && !o.pol && !o.sol && !o.trottoir && !o.porte
+          && !o.marche && o.y + o.h / 2 > 0.6 && o.y - o.h / 2 < 1.9;
+        const CASE = 8, gr = new Map();
+        for (const o of S) { if (!gene(o)) continue;
+          for (let i = Math.floor((o.x - o.w / 2) / CASE); i <= Math.floor((o.x + o.w / 2) / CASE); i++)
+            for (let j = Math.floor((o.z - o.d / 2) / CASE); j <= Math.floor((o.z + o.d / 2) / CASE); j++) {
+              const k = i + ',' + j; if (!gr.has(k)) gr.set(k, []); gr.get(k).push(o); } }
+        const pres = (x, z, rr) => { const out = [], vu = new Set();
+          for (let i = Math.floor((x - rr) / CASE); i <= Math.floor((x + rr) / CASE); i++)
+            for (let j = Math.floor((z - rr) / CASE); j <= Math.floor((z + rr) / CASE); j++) {
+              const a = gr.get(i + ',' + j); if (!a) continue; for (const o of a) if (!vu.has(o)) { vu.add(o); out.push(o); } }
+          return out; };
+        let aire = 0, morte = 0, longMorte = 0, pires = [], sous = 0;
+        for (const t of (c.trottoirs || [])) {
+          const aZ = t.alongZ, L = aZ ? t.d : t.w, W = (aZ ? t.w : t.d) / 2, c0 = aZ ? t.x : t.z, a0 = (aZ ? t.z : t.x) - L / 2;
+          const pas = 0.25, n = Math.max(2, Math.round(L / pas)), dl = L / n;
+          let mini = 2 * W;
+          for (let i = 0; i <= n; i++) {
+            const sl = a0 + i * dl, cx = aZ ? t.x : sl, cz = aZ ? sl : t.z, occ = [];
+            for (const o of pres(cx, cz, W + 2.6)) {
+              const ol = aZ ? o.z : o.x, d2 = (aZ ? o.d : o.w) / 2;
+              if (Math.abs(ol - sl) > d2 + pas / 2) continue;
+              const ot = aZ ? o.x : o.z, dt = (aZ ? o.w : o.d) / 2;
+              if (Math.abs(ot - c0) > W + dt) continue;
+              occ.push([Math.max(c0 - W, ot - dt), Math.min(c0 + W, ot + dt)]);
+            }
+            occ.sort((a, b) => a[0] - b[0]);
+            let libre = 0, bord = c0 - W;
+            for (const [a, b] of occ) { if (a - bord > libre) libre = a - bord; if (b > bord) bord = b; }
+            if (c0 + W - bord > libre) libre = c0 + W - bord;
+            aire += 2 * W * dl;
+            if (libre < PASSE) { morte += 2 * W * dl; longMorte += dl; }
+            if (libre < mini) mini = libre;
+          }
+          if (mini < PASSE) { sous++; if (pires.length < 5) pires.push({ x: +t.x.toFixed(1), z: +t.z.toFixed(1), libre: +mini.toFixed(2) }); }
+        }
+        sorties.push({ graine, trottoirs: (c.trottoirs || []).length, sous,
+          aire: +aire.toFixed(0), morte: +morte.toFixed(0), pct: +(morte / aire * 100).toFixed(2),
+          longMorte: +longMorte.toFixed(1), pires,
+          recoupe: c.recoupe ? { avant: c.recoupe.avant, gardes: c.recoupe.gardes, retrecis: c.recoupe.retrecis,
+            coupes: c.recoupe.coupes, retires: c.recoupe.retires, marches: c.recoupe.marches,
+            fermes: c.recoupe.fermes.length, pire: c.recoupe.pire } : null });
+      }
+    } finally { Math.random = vrai; }
+    return sorties;
+  });
+  const ok = r.length === 2 && r.every(o => o.pct < 0.3 && o.longMorte < 20 && o.trottoirs > 350
+    && o.recoupe && o.recoupe.pire >= 0.9 && o.recoupe.coupes > 20);
+  return { ok, detail: `« refais les routes mieux organisees, plus fluides, plus larges » : un trottoir a 0,00 m de large jette l'enfant sur la chaussee · la bande de 1,80 m etait posee sans regarder les murs ; elle est maintenant RETRECIE (jamais sous 0,90 m) ou INTERROMPUE, bordure comprise, et aucune architecture n'a bouge · ${r.map(o => `graine ${o.graine} : ${o.recoupe.avant} trottoirs -> ${o.trottoirs} (${o.recoupe.gardes} intacts, ${o.recoupe.retrecis} retrecis, ${o.recoupe.coupes} coupes, ${o.recoupe.retires} retire, ${o.recoupe.marches} marches posees devant une estrade, ${o.recoupe.fermes} passages fermes recenses) ; le plus etroit pave fait ${o.recoupe.pire} m ; surface pavee ou l'enfant ne passe pas : ${o.morte} m2 sur ${o.aire} (${o.pct} %), soit ${o.longMorte} m de trottoir menteur ; ${o.sous} trottoir dont le minimum tombe sous 0,80 m${o.pires.length ? ' ' + JSON.stringify(o.pires) : ''}`).join(' \u00b7 ')}` };
+});

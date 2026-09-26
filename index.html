@@ -6224,6 +6224,157 @@ function degageDecorSurRoutes() {
 // toujours SUR LE TROTTOIR OU DERRIERE, jamais sur la chaussee, jamais devant une porte, un
 // portail, un passage pieton ou dans un quartier deja amenage.
 const TROTTOIR_L = 1.8;
+// LA LARGEUR MINIMALE D'UN TROTTOIR. Le joueur fait 2 x P.hw = 0,80 m ; on lui laisse 5 cm de
+// jeu de chaque cote. En dessous, ce n'est plus un trottoir : c'est un ruban qui l'envoie sur
+// la chaussee, la ou roulent les voitures, la police et les camions.
+const TROTTOIR_MIN = 0.9;
+// UN TRONCON DE TROTTOIR : la dalle, sa bordure cote chaussee, et la fiche. `larg` permet de le
+// poser PLUS ETROIT que 1,80 m, et `decal` de l'ecarter de l'axe de la bande (vers l'interieur
+// des terres) quand un mur mange le bord oppose.
+function poseTrottoir(r, alongZ, side, cx, cz, len, larg, decal = 0) {
+  const mx = alongZ ? cx + decal : cx, mz = alongZ ? cz : cz + decal;
+  const t = TROTTOIR.clone(); t.needsUpdate = true; t.repeat.set(alongZ ? 1 : len / 2, alongZ ? len / 2 : 1);
+  const mat = new THREE.MeshLambertMaterial({ map: t });
+  const o = box(mx, 0.07, mz, alongZ ? larg : len, 0.14, alongZ ? len : larg, 0, { material: mat, noEdges: true, noShadow: true, studs: false, noRoute: true, trottoir: true });
+  // la bordure, cote chaussee : elle suit le BORD de la dalle, et s'arrete avec elle. C'est ce
+  // qui rend une interruption VISIBLE au lieu de laisser croire qu'on peut passer.
+  const bx = alongZ ? mx - side * (larg / 2 - 0.12) : mx, bz = alongZ ? mz : mz - side * (larg / 2 - 0.12);
+  const bord = box(bx, 0.09, bz, alongZ ? 0.24 : len, 0.18, alongZ ? len : 0.24, 0x8f98ab, { deco: true, noEdges: true, noShadow: true, studs: false });
+  const fiche = { x: mx, z: mz, w: alongZ ? larg : len, d: alongZ ? len : larg, alongZ, side, route: r, o, bord };
+  city.trottoirs.push(fiche);
+  return fiche;
+}
+// ============ ON RECOUPE LES TROTTOIRS SUR CE QUI EXISTE VRAIMENT (round 83, item 4) ============
+// `trottoirs()` pose une bande de 1,80 m le long de CHAQUE rue, coupee uniquement par les autres
+// rues : elle ne regarde ni les murs, ni les clotures, ni les piliers de portail. RELEVE AVANT,
+// graine 6174 : **45 trottoirs sur 311** laissent moins que le gabarit du joueur (0,80 m), et le
+// pire en laisse **0,00 m** — l'enfant est jete sur la chaussee.
+// LA QUESTION QUI DECIDE DE TOUT : le trottoir est-il mal pose, ou le batiment ? Mesure :
+// **40 des 45 obstacles ne mordent PAS la chaussee**. Ils sont chez eux ; c'est la bande de
+// 1,80 m qui a ete tiree par-dessus eux. On ne deplace donc AUCUNE architecture : on RETRECIT
+// le trottoir la ou il reste au moins 0,90 m, et on l'INTERROMPT proprement (bordure comprise)
+// la ou il ne passe pas. Cout en marge geometrique : ZERO.
+function recoupeLesTrottoirs() {
+  const anciens = city.trottoirs || [];
+  city.trottoirs = [];
+  // ce qui arrete le joueur : tout sauf les vehicules, les trottoirs eux-memes, les reperes de
+  // porte et le MOBILIER (il est deja range par `rangeLeMobilier`, et un banc sur un trottoir
+  // est normal — on ne va pas decouper la dalle sous ses pieds).
+  const roulants = new Set();
+  for (const c of [].concat(city.cars || [], city.aiCars || [], police.cars || [], raceKarts || [])) if (c && c.solid) roulants.add(c.solid);
+  const gene = o => !roulants.has(o) && !o.veh && !o.ai && !o.pol && !o.sol && !o.trottoir && !o.porte
+    && !o.meuble && o.y + o.h / 2 > 0.6 && o.y - o.h / 2 < 1.9;
+  // GRILLE LOCALE, pas `solidsAutour` : la grille spatiale du jeu est invalidee et reconstruite
+  // au fil de la passe, et un obstacle manque sans qu'on le sache. Ici on range une bonne fois
+  // ce qui arrete le joueur, et on ne rate rien. (Mesure du defaut : les deux trottoirs de
+  // (28,6 ; -140) et (37,6 ; 34) restaient entiers alors qu'un mur les ferme.)
+  const CASE_T = 8, grilleT = new Map();
+  for (const o of solids) { if (!gene(o)) continue;
+    for (let i = Math.floor((o.x - o.w / 2) / CASE_T); i <= Math.floor((o.x + o.w / 2) / CASE_T); i++)
+      for (let j = Math.floor((o.z - o.d / 2) / CASE_T); j <= Math.floor((o.z + o.d / 2) / CASE_T); j++) {
+        const k = i + ',' + j; if (!grilleT.has(k)) grilleT.set(k, []); grilleT.get(k).push(o); } }
+  const autourT = (x, z, r) => { const out = [], vu = new Set();
+    for (let i = Math.floor((x - r) / CASE_T); i <= Math.floor((x + r) / CASE_T); i++)
+      for (let j = Math.floor((z - r) / CASE_T); j <= Math.floor((z + r) / CASE_T); j++) {
+        const a = grilleT.get(i + ',' + j); if (!a) continue;
+        for (const o of a) if (!vu.has(o)) { vu.add(o); out.push(o); } }
+    return out; };
+  const bilan = { avant: anciens.length, gardes: 0, retrecis: 0, coupes: 0, retires: 0, marches: 0, pire: TROTTOIR_L, fermes: [] };
+  const marchesPosees = [];
+  for (const t of anciens) {
+    const alongZ = t.alongZ, L = alongZ ? t.d : t.w, W = (alongZ ? t.w : t.d) / 2;
+    const c0 = alongZ ? t.x : t.z, a0 = (alongZ ? t.z : t.x) - L / 2;
+    const pas = 0.25, n = Math.max(2, Math.round(L / pas));
+    // pour chaque station : le plus large intervalle libre en travers de la bande
+    const libres = [];
+    for (let i = 0; i <= n; i++) {
+      const sl = a0 + i * L / n, cx = alongZ ? t.x : sl, cz = alongZ ? sl : t.z;
+      const occ = []; let haut = 0;
+      for (const o of autourT(cx, cz, W + 2.6)) {
+        const ol = alongZ ? o.z : o.x, dl = (alongZ ? o.d : o.w) / 2;
+        if (Math.abs(ol - sl) > dl + pas / 2) continue;
+        const ot = alongZ ? o.x : o.z, dt = (alongZ ? o.w : o.d) / 2;
+        if (Math.abs(ot - c0) > W + dt) continue;
+        occ.push([Math.max(c0 - W, ot - dt), Math.min(c0 + W, ot + dt)]);
+        // CE QU'IL FAUDRAIT ENJAMBER POUR PASSER TOUT DROIT : on ne retient que ce qui couvre
+        // l'AXE de la bande. Une cloture posee au bord lointain du trottoir n'est pas ce qui
+        // barre le passage ; la prendre en compte faisait passer la terrasse du parc nord
+        // (0,85 m, 162 stations bouchees) pour un mur de 2,80 m, et elle n'avait pas sa marche.
+        if (ot - dt <= c0 && ot + dt >= c0) haut = Math.max(haut, o.y + o.h / 2);
+      }
+      occ.sort((p, q) => p[0] - q[0]);
+      let a = c0 - W, b = c0 - W, bord = c0 - W;
+      for (const [u, v] of occ) { if (u - bord > b - a) { a = bord; b = u; } if (v > bord) bord = v; }
+      if (c0 + W - bord > b - a) { a = bord; b = c0 + W; }
+      libres.push([sl, a, b, haut]);
+    }
+    // on regroupe les stations en troncons dont l'intersection reste >= TROTTOIR_MIN
+    const runs = [];
+    let cur = null;
+    for (const [sl, a, b] of libres) {
+      if (b - a < TROTTOIR_MIN) { cur = null; continue; }
+      if (!cur) { cur = { s0: sl, s1: sl, a, b }; runs.push(cur); continue; }
+      const na = Math.max(cur.a, a), nb = Math.min(cur.b, b);
+      if (nb - na < TROTTOIR_MIN) { cur = { s0: sl, s1: sl, a, b }; runs.push(cur); continue; }
+      cur.a = na; cur.b = nb; cur.s1 = sl;
+    }
+    // on efface l'ancienne dalle et sa bordure, puis on repose les troncons retenus
+    // « ENTIER » VEUT DIRE ENTIER. Une tolerance d'une station et demie laissait passer les
+    // trottoirs dont SEULE la premiere station est bouchee : ceux de (28,6 ; -140) et
+    // (37,6 ; 34) restaient a 0,00 m de passage, un mur en travers de leur bout.
+    const entier = runs.length === 1 && runs[0].s1 - runs[0].s0 >= L - 1e-6 && runs[0].b - runs[0].a >= 2 * W - 0.01;
+    if (entier) { city.trottoirs.push(t); bilan.gardes++; continue; }
+    if (t.o && t.o.mesh) { worldGroup.remove(t.o.mesh); const i = solids.indexOf(t.o); if (i >= 0) solids.splice(i, 1); }
+    if (t.bord && t.bord.mesh) worldGroup.remove(t.bord.mesh);
+    let poses = 0;
+    for (const rn of runs) {
+      const len = rn.s1 - rn.s0 + pas;
+      if (len < 1.2) continue;
+      const larg = Math.min(2 * W, rn.b - rn.a), ctr = (rn.a + rn.b) / 2, mid = (rn.s0 + rn.s1) / 2;
+      poseTrottoir(t.route, alongZ, t.side, alongZ ? ctr : mid, alongZ ? mid : ctr, len, larg, 0);
+      poses++;
+      if (larg < bilan.pire) bilan.pire = +larg.toFixed(2);
+    }
+    if (!poses) bilan.retires++;
+    else if (poses > 1) bilan.coupes++;
+    else bilan.retrecis++;
+    // UNE MARCHE PLUTOT QU'UN MUR DEPLACE. Mesure : sur les 216 objets qui ferment au moins une
+    // station de trottoir, **12 ne sont pas des murs** mais des ESTRADES dont le dessus est à
+    // 0,70 à 1,00 m — soit 10 à 40 cm au-dessus du pas de l'enfant (`STEP_UP` = 0,60 m). La plus
+    // lourde est la terrasse du parc nord, 40 × 30 m à 0,85 m : à elle seule elle bouche 162
+    // stations et arrête l'enfant net. On ne la déplace pas, on ne la rabote pas : on POSE UNE
+    // MARCHE DE CHAQUE CÔTÉ du passage fermé. L'enfant monte en deux fois et continue.
+    // Coût en marge géométrique horizontale : **zéro centimètre**, on n'a rien pris à personne.
+    // La marche culmine à 0,56 m au plus : l'enfant la monte (`STEP_UP` = 0,60 m) et elle n'est
+    // jamais posée sur la chaussée ni à moins de 70 cm d'une rive — aucune voiture ne la touche.
+    {
+      let k = 0;
+      while (k < libres.length) {
+        if (libres[k][2] - libres[k][1] >= TROTTOIR_MIN) { k++; continue; }
+        let k2 = k, haut = 0;
+        while (k2 < libres.length && libres[k2][2] - libres[k2][1] < TROTTOIR_MIN) { haut = Math.max(haut, libres[k2][3]); k2++; }
+        // les deux abords du passage fermé : juste avant la première station et juste après la dernière
+        // ON GARDE LA LISTE DES PASSAGES QU'ON NE SAIT PAS OUVRIR : c'est le vrai reste a faire.
+        bilan.fermes.push({ x: +(alongZ ? c0 : libres[k][0]).toFixed(1), z: +(alongZ ? libres[k][0] : c0).toFixed(1),
+          long: +((libres[k2 - 1][0] - libres[k][0]) + pas).toFixed(1), haut: +haut.toFixed(2) });
+        if (haut > 0.6 && haut <= 1.05) {
+          const h = Math.min(0.56, Math.max(0.3, haut - 0.45)), larg = Math.min(2 * W, 1.6);
+          for (const sl of [libres[k][0] - 0.8, libres[k2 - 1][0] + 0.8]) {
+            const mx = alongZ ? c0 : sl, mz = alongZ ? sl : c0;
+            if (marchesPosees.some(m => Math.abs(m[0] - mx) < 1.3 && Math.abs(m[1] - mz) < 1.3)) continue;
+            if ((city.routes || []).some(rr => Math.abs(mx - rr.x) < rr.w / 2 + 0.7 && Math.abs(mz - rr.z) < rr.d / 2 + 0.7)) continue;
+            box(mx, h / 2, mz, alongZ ? larg : 1.4, h, alongZ ? 1.4 : larg, 0xa9b2bf, { studs: false, noEdges: true, noRoute: true, marche: true });
+            marchesPosees.push([mx, mz]); bilan.marches++;
+          }
+        }
+        k = k2;
+      }
+    }
+  }
+  navSale(); sgridSale();
+  bilan.apres = city.trottoirs.length;
+  return bilan;
+}
 function trottoirs() {
   city.trottoirs = [];
   const routes = city.routes || [];
@@ -6256,13 +6407,7 @@ function trottoirs() {
         if (RALLY.mesh && mx > RALLY.x1 - 2 && mx < RALLY.x2 + 2 && mz > RALLY.z1 - 2 && mz < RALLY.z2 + 2) continue;
         if (Math.hypot(mx - RACE_C.x, mz - RACE_C.z) < RACE_C.r + 9) continue;   // pas sous les barrieres de l'anneau
         if (city.sea && mx > city.sea.x1 - 1 && mx < city.sea.x2 + 1 && mz > city.sea.z1 - 1 && mz < city.sea.z2 + 1) continue;
-        const t = TROTTOIR.clone(); t.needsUpdate = true; t.repeat.set(alongZ ? 1 : len / 2, alongZ ? len / 2 : 1);
-        const mat = new THREE.MeshLambertMaterial({ map: t });
-        const o = box(mx, 0.07, mz, alongZ ? TROTTOIR_L : len, 0.14, alongZ ? len : TROTTOIR_L, 0, { material: mat, noEdges: true, noShadow: true, studs: false, noRoute: true, trottoir: true });
-        // la bordure, cote chaussee
-        const bx = alongZ ? cx - side * (TROTTOIR_L / 2 - 0.12) : mx, bz = alongZ ? mz : cz - side * (TROTTOIR_L / 2 - 0.12);
-        box(bx, 0.09, bz, alongZ ? 0.24 : len, 0.18, alongZ ? len : 0.24, 0x8f98ab, { deco: true, noEdges: true, noShadow: true, studs: false });
-        city.trottoirs.push({ x: mx, z: mz, w: alongZ ? TROTTOIR_L : len, d: alongZ ? len : TROTTOIR_L, alongZ, side, route: r, o });
+        poseTrottoir(r, alongZ, side, alongZ ? cx : mx, alongZ ? mz : cz, len, TROTTOIR_L);
         n++;
       }
     }
@@ -7474,6 +7619,10 @@ const WORLDS = [
       B('cabines d\'ascenseur', degageLesCabines);
       // TOUT LE MOBILIER, APRÈS TOUT LE MONDE : c'est le dernier moment où une rue, un mur ou un
       // véhicule peut encore apparaître sous un banc. On déplace, on ne supprime jamais.
+      // LES TROTTOIRS D'ABORD : on recoupe la bande de 1,80 m sur ce qui existe vraiment — murs,
+      // clotures, piliers — sans deplacer aucune architecture. ENSUITE seulement on range le
+      // mobilier : il doit garantir ses 0,90 m sur le trottoir REEL, pas sur celui d'avant.
+      B('recoupe des trottoirs', () => { city.recoupe = recoupeLesTrottoirs(); });
       B('rangement du mobilier', () => { city.range = rangeLeMobilier(); });
       B('architecture et voirie', () => { city.art = MarlonCityDetail.build(THREE, city, worldGroup); });
       navSale(); buildNav();

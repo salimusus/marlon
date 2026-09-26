@@ -773,3 +773,133 @@ Lint **5 ✅**. `traffic.js` **14/14**, `vehicle-contact.js` **6/6**, `city-deta
 Deux tests ajoutés à la fin de `harness/play.js` (les numéros bougent à chaque fusion, on ne les
 écrit pas en dur) : « aucun mobilier urbain ne mord la chaussee, et le trottoir reste
 marchable » et « les 30 entrees de la ville laissent passer l'enfant, mobilier compris ».
+
+---
+
+# ROUND 83 — ITEM 4 : LE CHANTIER DE VOIRIE (les trottoirs qui mènent dans un mur)
+
+`trottoirs()` posait une bande de **1,80 m le long de CHAQUE rue**, coupée uniquement par les
+**autres rues**. Elle ne regardait ni les murs, ni les clôtures, ni les piliers de portail. Un
+trottoir à 0,00 m de large n'est pas un détail : **il jette l'enfant sur la chaussée**.
+
+## 1. Le classement, chiffré (graine 6174 ; les 5 graines donnent 44 à 45)
+
+**45 trottoirs sur 311** laissent moins que le gabarit du joueur (`2 × P.hw` = **0,80 m**).
+
+| ce qui ferme | nombre |
+|--------------|--------|
+| clôture (8 m et plus, fine) | **14** |
+| autre (dalles, estrades, jardinières) | **12** |
+| mur de bâtiment | **11** |
+| pilier de portail (0,80 × 3,60 m) | **4** |
+| bâti divers | 1 |
+| mobilier | 3 |
+
+### La question qui décide de tout
+
+**Le trottoir est-il mal posé, ou le bâtiment ?** Critère mesuré : l'obstacle mord-il AUSSI la
+chaussée ? Réponse : **40 des 45 ne la mordent pas**. Ils sont chez eux ; c'est la bande de pavé
+qui a été tirée par-dessus eux. Les 5 autres sont des dalles basses et des jardinières
+(h = 0,12 à 1,50 m), pas des bâtiments. **Aucune architecture n'est à déplacer.**
+
+### Le chiffre qui résume le mensonge
+
+| | avant |
+|---|-------|
+| surface pavée totale | 17 121 m² |
+| **surface pavée là où l'enfant ne peut pas passer** | **336 m² (1,96 %)** |
+| **longueur de trottoir menteur** | **186,8 m** |
+
+## 2. La réparation : `recoupeLesTrottoirs()`
+
+Une passe appelée **avant** le rangement du mobilier (celui-ci doit garantir ses 0,90 m sur le
+trottoir RÉEL, pas sur celui d'avant). Elle échantillonne chaque bande tous les 25 cm, calcule
+le plus large intervalle libre en travers, et :
+
+- **(a) elle RÉTRÉCIT et DÉCALE** le pavé là où il reste au moins **0,90 m** (`TROTTOIR_MIN`
+  = 0,80 m de gabarit + 5 cm de jeu de chaque côté) — **45 tronçons** ;
+- **(b) elle INTERROMPT** le pavé, **bordure comprise**, là où il ne passe pas — **32 coupés**,
+  **1 retiré** en entier. La bordure s'arrête avec la dalle : l'interruption se VOIT, au lieu du
+  ruban de 8 cm qui ressemblait à un passage ;
+- **(c) elle ne déplace AUCUN mur.** À la place, là où l'obstacle n'est pas un mur mais une
+  **estrade** dont le dessus est à 0,60–1,05 m (10 à 40 cm au-dessus du pas de l'enfant,
+  `STEP_UP` = 0,60 m), elle **pose une marche de chaque côté** : l'enfant monte en deux fois.
+  **15 marches**, hautes de 0,30 à 0,56 m, jamais à moins de 70 cm d'une rive.
+
+233 trottoirs sont gardés intacts. Total : **311 → 377 tronçons**.
+
+## 3. Les mesures APRÈS
+
+| mesure | avant | après |
+|--------|-------|-------|
+| trottoirs sous 0,80 m | **45 / 311** | **0 / 377** |
+| trottoir le plus étroit posé | 0,00 m | **0,90 m** (jamais moins, par construction) |
+| **surface pavée où l'enfant ne passe pas** | **336 m²** | **16 m² (−95 %)** |
+| **longueur de trottoir menteur** | **186,8 m** | **11,8 m** |
+| surface pavée totale | 17 121 m² | 15 631 m² (−1 490 m² de pavé mensonger) |
+| trottoirs fermés par un MEUBLE | 3 | **0** |
+
+## 4. Les 97 passages fermés recensés (`city.recoupe.fermes`)
+
+| ce qu'il faudrait enjamber | nombre | ce qu'on a fait |
+|----------------------------|--------|-----------------|
+| **mur** (dessus > 1,05 m) | **75** | on ne le déplace pas — voir §6 |
+| **pincement** (rien de haut sur l'axe, deux objets qui serrent des deux bords) | 14 | le pavé s'interrompt |
+| **estrade** (dessus 0,60 à 1,05 m) | 8 | **15 marches posées** |
+
+Les trois plus longs : **40,5 m** en (39,9 ; 288,4) — la terrasse du parc nord, ceinte d'une
+clôture de **2,45 m** ; **26,2 m** en (−177,1 ; −160,4), un bloc de 1,50 m ; **17,0 m** en
+(114,4 ; −160,4), une rangée de jardinières de 0,80 m (celle-là a ses marches).
+
+## 5. La preuve par le jeu, et ce qu'elle dit vraiment
+
+L'enfant **suit le pavé** (à chaque image il vise le centre du trottoir 3 m devant lui, comme un
+joueur qui longe le trottoir), 900 pas de simulation à 1/60 s, sur les cinq pires :
+
+| site (longueur à parcourir) | avance AVANT | images sur la chaussée | avance APRÈS | images sur la chaussée |
+|---|---|---|---|---|
+| promenade du parc nord (58,7 ; 288,4) — 75,7 m | 18,70 m | 0 | 18,70 m | 0 |
+| **rue du hameau (−150,4 ; 295,2) — 51,7 m** | **1,02 m** | 0 | **8,10 m** | 0 |
+| traverse de La Zone (−150 ; −160,4) — 57,2 m | 1,20 m | 0 | 1,20 m | 0 |
+| rue de l'ouest (−178,3 ; 5,9) — 13,6 m | 7,67 m | 0 | 7,67 m | 0 |
+| desserte du concessionnaire (−107,4 ; 16) — 21 m | 1,13 m | 0 | 1,13 m | 0 |
+
+**Et je dis ce que ça veut dire, sans l'arranger.** Sur quatre de ces cinq sites, la recoupe
+**n'ouvre pas le passage** : le pincement y descend sous 0,80 m, il n'existe aucune bande de
+0,90 m à cet endroit, et c'est un **mur** (2,45 m, 1,50 m…) qui barre. Le gain y est ailleurs :
+le pavé ne ment plus, il s'arrête — bordure comprise — avant le mur. Un seul des cinq, la rue du
+hameau, s'ouvre vraiment grâce à deux marches : **1,02 → 8,10 m**.
+
+**Le chiffre « images sur la chaussée » vaut 0 partout, avant comme après** : dans cette mesure
+l'enfant qui suit le pavé ne descend pas sur la route, **il s'arrête net contre le mur**. Un
+enfant réel contournerait, et c'est là qu'il passerait sur la chaussée — mais ce n'est pas ce
+que mesure ce banc, et je ne vais pas prétendre le contraire.
+
+## 6. LES 10 CM DE MARGE — mesurés, pas invoqués
+
+| | avant | après |
+|---|-------|-------|
+| chaussées | 91 | **91** |
+| largeurs (m : nombre) | 5:1 · 6:4 · 7:5 · 8:19 · 9:18 · 11:32 · 13:12 | **identiques** |
+| bâtiments / intérieurs | 44 / 24 | **44 / 24** |
+| **pire chevauchement bâti ↔ chaussée** | **+0,300 m** (boutique 7,6 × 7,6 en (−18 ; 19,5) contre la rue (0 ; 26)) | **+0,300 m**, le même |
+
+**Zéro centimètre pris à qui que ce soit.** Cet item n'a déplacé aucun mur, aucun bâtiment,
+aucune dalle, aucune chaussée : il a seulement RETIRÉ du pavé et AJOUTÉ 15 marches. Le mandat sur
+« le mur d'en face » n'a pas été utilisé, et je recommande de ne pas l'utiliser : les 75 murs
+recensés au §4 coûteraient chacun un déplacement horizontal, donc de la marge, pour un gain que
+la mesure du §5 ne garantit pas.
+
+## 7. Un défaut du banc corrigé au passage
+
+`harness/stubs.js` : le jeu écrit `$('stBar').parentNode.classList` dès que l'enfant se met à
+courir, et le stub rendait des éléments **sans parent** — le banc Node mourait sur
+« Cannot read properties of null ». Chaque élément créé par `getElementById` a maintenant un
+parent, comme dans un vrai document. Sans cela, **aucune** preuve par la marche n'était possible.
+
+## 8. Bancs
+
+Lint **5 ✅**. `traffic.js` **14/14**, `vehicle-contact.js` **6/6**, `city-detail.js` **10/10**,
+`strategy.js` 7/0, `empire.js` 15/0, `save-strategy.js` 4/0, `cosmetic-performance.js` vert.
+Un test ajouté à la fin de `harness/play.js` (sans numéro en dur) : « aucun trottoir ne mene
+dans un mur : le pave s'arrete la ou le passage s'arrete ».

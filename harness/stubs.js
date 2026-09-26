@@ -257,7 +257,10 @@ const document = {
   body: makeEl('body'), head: makeEl('head'), documentElement: makeEl('html'),
   createElement: tag => makeEl(tag), createElementNS: (ns, tag) => makeEl(tag),
   createTextNode: t => ({ textContent: t }), createDocumentFragment: () => makeEl('fragment'),
-  getElementById(id) { if (!elements.has(id)) elements.set(id, makeEl('div', id)); return elements.get(id); },
+  // UN ELEMENT ORPHELIN N'A PAS DE PARENT, et le jeu ecrit `$('stBar').parentNode.classList`
+  // des que l'enfant se met a courir : le banc mourait sur « Cannot read properties of null ».
+  // Chaque element cree ici recoit donc un parent, comme dans un vrai document.
+  getElementById(id) { if (!elements.has(id)) { const el = makeEl('div', id); if (!el.parentNode) makeEl('div', id + '-parent').appendChild(el); elements.set(id, el); } return elements.get(id); },
   querySelector(sel) { const m = /^#([\w-]+)$/.exec(sel); if (m) return document.getElementById(m[1]);
     if (sel === 'meta[name=theme-color]') return makeEl('meta'); return makeEl('div'); },
   querySelectorAll: () => [], getElementsByTagName: () => [], getElementsByClassName: () => [],

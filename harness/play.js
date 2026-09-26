@@ -19876,6 +19876,26 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
     // ON NE SUPPRIME PLUS JAMAIS UNE FICHE. Un vehicule qui perd son but (service qui rentre au
     // depot) voit seulement son chronometre en cours remis a zero : sa fiche, son identite et
     // son PIRE ARRET restent au registre.
+    // POURQUOI CE VEHICULE NE BOUGE PAS ? On le NOMME, comme le test des habitacles nomme le
+    // morceau qui depasse. Sans ca, un blocage releve en suite complete (etat laisse par les
+    // voisins) n'est pas reproductible seul et on ne peut rien en faire.
+    const pourquoi = c => {
+      let sol = null, bd = 99;
+      try { for (const sd of G.solids) { if (!sd || !sd.box) continue; const b = sd.box;
+        const dx = Math.max(b.min.x - c.x, 0, c.x - b.max.x), dz = Math.max(b.min.z - c.z, 0, c.z - b.max.z);
+        const d = Math.hypot(dx, dz); if (d < bd) { bd = d; sol = { d: +d.toFixed(2), haut: +b.max.y.toFixed(2) }; } } } catch (e) {}
+      let veh = null, vd = 99;
+      try { for (const l of [G.city.cars, G.city.aiCars, G.police && G.police.cars]) for (const v of (l || [])) {
+        if (v === c || v.heli) continue; const d = Math.hypot(v.x - c.x, v.z - c.z);
+        if (d < vd) { vd = d; veh = { d: +d.toFixed(2), kind: v.kind || 'voiture', busy: !!v.busy, roule: +(v.speed || 0).toFixed(1), fond: !!v.spd }; } } } catch (e) {}
+      const rt = (G.city.routes || []).find(r => Math.abs(c.x - r.x) < r.w / 2 && Math.abs(c.z - r.z) < r.d / 2);
+      return { raison: c.raison || '-', figeT: +(c.figeT || 0).toFixed(1), bloqueT: +(c.bloqueT || 0).toFixed(1),
+        attenteT: +(c.attenteT || 0).toFixed(1), recule: !!c.recule, degage: +((c.degageFin || 0) - G.simTime).toFixed(1),
+        repos: +((c.degageRepos || 0) - G.simTime).toFixed(1),
+        parTole: G.vehBloque ? !!G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true }) : null,
+        parMur: G.vehBloque ? !!G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false }) : null,
+        sol, veh, largeurRue: rt ? rt.w : null };
+    };
     const mesure = (images, saboter) => {
       const etats = new Map(); let ech = 0, relevs = 0;
       for (let k = 0; k < images; k++) {
@@ -19895,15 +19915,16 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
           const bouge = Math.hypot(c.x - e.x, c.z - e.z); e.x = c.x; e.z = c.z;
           if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
             e.planteT += dt * 6;
-            if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-']; }
+            if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-'];
+              if (e.planteT > 3) e.cause = pourquoi(c); }
           } else e.planteT = 0;
         }
       }
-      const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null;
-      etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; }
-        if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou }); });
+      const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null, pireCause = null;
+      etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; pireCause = e.cause || null; }
+        if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou, cause: e.cause || null }); });
       return { suivis: etats.size, relevs, echantillons: ech, bloques: bloques.length, liste: bloques.slice(0, 5),
-        pire: +pireGlobal.toFixed(1), pireOu, pireKind, parReleve: +(ech / Math.max(1, relevs)).toFixed(2) };
+        pire: +pireGlobal.toFixed(1), pireOu, pireKind, pireCause, parReleve: +(ech / Math.max(1, relevs)).toFixed(2) };
     };
     const bilan = mesure(60 * 90, null);
     // ===================== LA CONTRE-EPREUVE =====================
@@ -19929,7 +19950,7 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
   // le test n'est vert que s'il est AUSSI capable d'etre rouge : la contre-epreuve doit sonner
   const ok = b.bloques === 0 && b.suivis >= 4 && b.pire < 5 && !!k && k.bloques >= 1 && k.pire > 5;
   return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées ; puis, la métrique corrigée mais AMNÉSIQUE (la fiche du véhicule était supprimée dès qu'il perdait son itinéraire — c'est-à-dire dès qu'il se bloquait) : « 1 véhicule suivi, plus long arrêt 2,8 s », alors que ses propres 8 082 relevés sur 900 échantillons en annonçaient 8,98 · maintenant, fiche gardée : `
-    + `90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${b.suivis} véhicules AVEC un but suivis sur ${b.echantillons} relevés (${b.parReleve} par échantillon), ${b.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${b.pire} s${b.pireOu ? ` (${b.pireKind} en ${b.pireOu[0]} ; ${b.pireOu[1]})` : ''} — il durait 5,5 s avant DEGAGE_BLOQUE`
+    + `90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${b.suivis} véhicules AVEC un but suivis sur ${b.echantillons} relevés (${b.parReleve} par échantillon), ${b.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${b.pire} s${b.pireOu ? ` (${b.pireKind} en ${b.pireOu[0]} ; ${b.pireOu[1]})` : ''} — il durait 5,5 s avant DEGAGE_BLOQUE${b.pireCause ? ` · POURQUOI : ${JSON.stringify(b.pireCause)}` : ''}`
     + ` · CONTRE-ÉPREUVE, même ville, même fonction de mesure, un seul véhicule cloué sur place 10 s (${k ? k.cobaye.kind + ' en ' + k.cobaye.x + ' ; ' + k.cobaye.z : 'aucun cobaye'}) : ${k ? k.bloques : 0} bloqué(s) signalé(s), plus long arrêt ${k ? k.pire : 0} s — le test SAIT donc encore devenir rouge` };
 });
 

@@ -11065,6 +11065,7 @@ function traficPose(c) {   // pose UN vehicule sur une voie libre, au hasard, da
     c.x = p.px; c.z = p.pz; c.h = e.sens; c.speed = 0; c.ia = null; c.libre = null;
     c.figeT = c.attenteT = c.bloqueT = c.fileT = c.feuT = c.passT = c.pietT = 0;
     c.degageFin = c.degageRepos = c.dTourStop = c.departNonT = c.destT = 0;
+    c.degageEchecs = 0; c.degageDepart = null; c.degageJuge = false;
     c.dTour = c.stopOK = c.sireneVeh = c.voieSir = null; c.stopDep = c.ecart = 0;
     c.double = c.recule = c.stopped = false; c.raison = null; c.routeRefaire = false; c.departVoie = -1;
     c.reel = c.reelL = 0; c.reelX = c.reelLX = c.x; c.reelZ = c.reelLZ = c.z; c.reelT = c.reelLT = simTime;
@@ -11767,16 +11768,42 @@ function traficRoule(c, dt, opt) {
   //   — SANS RAISON LEGALE, vite (DEGAGE_SANS_RAISON) : on est plante ;
   //   — MEME AVEC UNE BONNE RAISON, plus tard (DEGAGE_QUAND_MEME) : une file qui ne repart pas
   //     est une file dont la tete est coincee, et « file » n'est plus une excuse a ce stade.
+  // CE DEGAGEMENT A-T-IL LIBERE QUOI QUE CE SOIT ? On le juge a la fin de la manoeuvre, sur le
+  // deplacement REEL depuis son depart. Un degagement qui ne bouge pas d'un centimetre n'a rien
+  // a « se reposer » : le repos de 2,5 s existe pour qu'un vehicule ne recule pas sans arret,
+  // pas pour faire attendre celui qui n'a pas recule du tout.
+  if (c.degageDepart && !c.degageJuge && simTime > (c.degageFin || 0)) {
+    c.degageJuge = true;
+    if (Math.hypot(c.x - c.degageDepart[0], c.z - c.degageDepart[1]) < 0.35) { c.degageEchecs = (c.degageEchecs || 0) + 1; c.degageRepos = 0; }
+    else c.degageEchecs = 0;
+  }
   if (simTime > (c.degageFin || 0)
       && ((c.figeT || 0) > DEGAGE_SANS_RAISON || (c.attenteT || 0) > DEGAGE_QUAND_MEME
           || ((c.bloqueT || 0) > DEGAGE_BLOQUE && !excuseLegale(c.raison)))
       && simTime > (c.degageRepos || 0)) {
     c.degageFin = simTime + DEGAGE_DUREE; c.degageSens = (c.degageSens === 1) ? -1 : 1;
     c.degageRepos = simTime + DEGAGE_DUREE + DEGAGE_REPOS;
+    c.degageDepart = [c.x, c.z]; c.degageJuge = false;
     c.figeT = 0; c.attenteT = 0; c.bloqueT = 0;
     // le trace qu'on suivait nous a menes la : on en redemande un autre, et on renonce a la
     // voie de depart convoitee si c'est elle qui exigeait une manoeuvre impossible.
     st.refaire = 0; if (opt.pilote) renonceDepart(c);
+  }
+  // LA SOUPAPE ULTIME ETAIT AFFAMEE PAR CELLE DU DESSOUS, et c'est pour ca qu'un vehicule
+  // pouvait rester plante indefiniment. « figeT > 20 → on va circuler ailleurs » est le
+  // garde-fou qui garantit que la ville ne se fige jamais — mais le degagement ci-dessus remet
+  // `figeT` ET `attenteT` a zero a chaque tentative, donc ces deux compteurs n'atteignaient
+  // JAMAIS leur seuil des lors que le degagement tournait en boucle. Mesure (test 450 rejoue
+  // dans son lot 446-450) : un camion immobile 6,9 s en (-52 ; 136) avec figeT = 1,4 s,
+  // attenteT = 1,4 s, ni tole ni mur au contact a sa pose actuelle, et un fourgon `busy` laisse
+  // en travers a 6,82 m de son centre — c'est-a-dire 30 cm de son pare-chocs, que `gapDevant`
+  // ne voyait pas (raison « - », donc aucune file annoncee). Il reculait, ne bougeait pas d'un
+  // centimetre, se reposait 2,5 s, recommencait. On compte donc les degagements INFRUCTUEUX :
+  // au deuxieme, la circulation de fond va reprendre sa route ailleurs, exactement comme le
+  // fait figeT > 20. Apres : pire arret sans raison 3,4 s au lieu de 6,9 s.
+  if (!opt.pilote && (c.degageEchecs || 0) >= 2) {
+    c.degageEchecs = 0; c.degageDepart = null; c.degageRepos = 0;
+    if (traficPose(c)) return;
   }
   let mou = false;
   if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {

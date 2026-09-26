@@ -23539,7 +23539,7 @@ test('un delit perime ne rend pas l\'enfant provocateur, et une vraie provocatio
       provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
     G.jail.on = false; if (G.uiOpen) G.closeUI();
     P.hp = 100; G.vie.debut = G.simTime - 1000; G.vie.t = 0;
-    const bag = (G.ACTIVITES || []).find(a => a.k === 'bagarre');
+    const bag = (G.ACTIVITES || []).find(a => a.k === 'bagarre') || { k: 'bagarre', e: '\u{1F624}', n: 'bagarre', poids: 1 };
     const vrai = Math.random;
     // TIRAGE FORCE de l'activite « bagarre », avec le hasard bloque sur la valeur qui, avant
     // la garde du defaut 84, envoyait tout le monde sur le joueur (0,1 < 0,6).

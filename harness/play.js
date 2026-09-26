@@ -23755,3 +23755,60 @@ test('sur les plateformes du parcours dans les arbres, un tronc ne ferme plus la
     && bouges.length === 0;
   return { ok, detail: `les quatre troncs de 0,84 m qui portent chaque plateforme etaient attrapes par les rayons de COTE du cone de camera a 2,10 m, alors que le rayon d'AXE ne rencontrait RIEN dans les onze metres : la perche tombait a 1,80 m pour 9 m demandes, douze releves sur douze · un poteau (moins de ${r.poteau} m dans les deux sens au sol) ne ferme plus que le rayon d'axe · plateformes : ${r.tours.map(s => s.nom + ' ' + s.d + ' m').join(', ')} · passerelles : ${r.passerelles.map(s => s.nom + ' ' + s.d + ' m').join(', ')} (4,48 et 5,62 m avant) · aucun mur entre la camera et le joueur, aucune camera dans un solide · TEMOINS inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}${bouges.length ? ' · ONT BOUGE : ' + bouges.map(s => s.nom + ' ' + s.d + ' au lieu de ' + att[s.nom]).join(', ') : ''}` };
 });
+
+// ============ L'ASCENSEUR NE SE DEROBE PLUS SOUS SON PASSAGER (round 83) ============
+// `L.y += (L.target - L.y) * min(1, dt * 2.2)` n'a aucune borne de vitesse : sur la course de
+// 12,85 m des immeubles, 0,47 m des la PREMIERE image, soit 28,3 m/s (102 km/h). Le plancher
+// se derobait sous le passager, qui restait en l'air dans la cage.
+// MESURE AVANT (descente complete, ecart mesure entre les pieds et le dessus du plancher) :
+//   immeuble 12,85 m : 2,48 s, pointe 28,3 m/s, ecart maximal 5,108 m
+//   villa     4,75 m : 2,03 s, pointe 10,4 m/s, ecart maximal 1,069 m
+// (a la MONTEE l'ecart etait deja nul : le plancher pousse le joueur.)
+// Deux corrections : la vitesse est plafonnee a LIFT_VMAX, et la cabine EMMENE son passager
+// comme une plate-forme mobile — le plafond seul ne suffit pas, il faudrait descendre a
+// 2 m/s (7,27 s au lieu de 2,48) pour tenir 5 cm d'ecart.
+test('l\'ascenseur ne se derobe plus sous son passager, et le trajet reste court', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    const releve = () => { let n = 0; while (G.mort && n++ < 60) { P.hp = 100; P.aTerreT = G.simTime - 1000; G.step(1 / 60, true); } };
+    // une course complete, comptee en PAS DE SIMULATION (le banc ne rend qu'une image par seconde)
+    const course = (L, versLeHaut) => {
+      L.target = versLeHaut ? L.high : L.low;
+      L.y = versLeHaut ? L.low : L.high;
+      L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
+      L.cd = G.simTime + 1e6;                        // la cabine ne repart pas d'elle-meme
+      P.pos.set(L.x, L.y + 0.1, L.z); P.vel.set(0, 0, 0); P.hp = 100;
+      let pas = 0, ecart = 0, vMax = 0, yPrec = L.y;
+      while (pas < 4000 && Math.abs(L.y - L.target) > 0.05) {
+        G.step(1 / 60, true); pas++;
+        const v = Math.abs(L.y - yPrec) * 60; if (v > vMax) vMax = v; yPrec = L.y;
+        const e = P.pos.y - (L.y + 0.10);            // le dessus du plancher est a L.y + 0,10
+        if (e > ecart) ecart = e;
+      }
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      return { sens: versLeHaut ? 'montee' : 'descente', course: +(L.high - L.low).toFixed(2),
+        secondes: +(pas / 60).toFixed(2), pointe: +vMax.toFixed(1), ecart: +ecart.toFixed(3), hp: P.hp };
+    };
+    releve(); __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const lifts = G.city.lifts || [];
+    const immeuble = lifts.filter(l => l.toit)[0], villa = lifts.filter(l => !l.toit)[0];
+    const essais = [];
+    for (const [nom, L] of [['immeuble', immeuble], ['villa', villa]]) {
+      if (!L) continue;
+      releve(); essais.push(Object.assign({ nom }, course(L, false)));
+      releve(); essais.push(Object.assign({ nom }, course(L, true)));
+    }
+    releve();
+    // combien d'arrets par cabine ? (aucun etage intermediaire dans ce jeu : low et high)
+    const paliers = lifts.map(L => 2);
+    return { essais, vmax: G.LIFT_VMAX, nb: lifts.length, paliers: Math.max(...paliers) };
+  });
+  const e = r.essais;
+  const ok = e.length === 4
+    && e.every(s => s.ecart <= 0.05)                       // le passager reste sur le plancher
+    && e.every(s => s.pointe <= r.vmax + 0.2)              // la cabine ne depasse pas son plafond
+    && e.every(s => s.hp === 100)                          // et le trajet ne coute pas un point de vie
+    && e.filter(s => s.nom === 'immeuble').every(s => s.secondes <= 5.5)   // le trajet reste court
+    && e.filter(s => s.nom === 'villa').every(s => s.secondes <= 3.5);
+  return { ok, detail: `la cabine partait a 28,3 m/s (0,47 m des la premiere image sur une course de 12,85 m) : son plancher se derobait sous le passager, qui se retrouvait jusqu'a 5,108 m au-dessus dans la cage (1,069 m a la villa) · la vitesse est plafonnee a ${r.vmax} m/s et la cabine EMMENE son passager comme une plate-forme mobile · ${e.map(s => `${s.nom} ${s.sens} (${s.course} m) : ${s.secondes} s, pointe ${s.pointe} m/s, ecart max au plancher ${s.ecart} m, ${s.hp} PV`).join(' · ')} · avant : 2,48 s et 2,03 s, donc +1,89 s sur la plus longue course et +0,32 s a la villa · ${r.nb} ascenseurs, ${r.paliers} arrets chacun (pas d'etage intermediaire) · le plafond SEUL ne suffisait pas : a 4 m/s sans le portage l'ecart reste de 23,3 cm, et il faudrait 2 m/s (7,27 s) pour tenir 5 cm` };
+});

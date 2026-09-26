@@ -15120,6 +15120,8 @@ function voileTick(dt, wantX, wantZ) {
   }
   if (simTime > (P.voileSnd || 0)) { P.voileSnd = simTime + 1.2; sfx.noise(.25, 700, .015); }
 }
+// m/s : la vitesse maximale d'une cabine d'ascenseur. Voir le calcul dans liftTick.
+const LIFT_VMAX = 4;
 function liftTick(L, dt) {
   {
     const onIt = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && Math.abs(P.pos.y - L.y) < 1.4 && !drive.car && !P.sit && !P.ride;
@@ -15145,11 +15147,42 @@ function liftTick(L, dt) {
     const dansCage = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && P.pos.y > L.y - 0.3;
     if (!dansCage) L.passager = false;
     if (L.passager && L.target < L.y - 0.05) chuteOublie();
-    const before = L.y; L.y += (L.target - L.y) * Math.min(1, dt * 2.2);
+    // ============ LA CABINE NE DÉPASSE PLUS 4 m/s (round 83, cause du défaut ci-dessus) ============
+    // L'approche exponentielle `(cible − y) × 2,2` n'a AUCUNE borne de vitesse : sur la course
+    // de 12,85 m des immeubles elle déplace la cabine de 0,47 m DÈS LA PREMIÈRE IMAGE, soit
+    // 28,3 m/s — 102 km/h (mesuré : vitesse de pointe 28,3 m/s). C'est la cause de tout : le
+    // plancher se dérobait sous le passager. On garde l'exponentielle — c'est elle qui donne le
+    // départ et l'arrivée en douceur, et le plafond ne touche QUE le milieu de la course — mais
+    // on borne le pas. MESURES en pas de simulation, descente complète 13,20 → 0,35 m :
+    //   sans plafond : 2,48 s (pointe 28,3 m/s)      8 m/s : 3,07 s      6 m/s : 3,48 s
+    //   4 m/s        : 4,37 s                        3 m/s : 5,32 s      2 m/s : 7,27 s
+    // La montée donne exactement les mêmes durées. Course de la villa (4,75 m) : 2,03 → 2,35 s.
+    // 4 m/s (14 km/h) est la vitesse d'un ascenseur de gratte-ciel réel ; elle coûte 1,9 s de
+    // plus qu'avant sur la plus longue course du jeu et 0,3 s sur celle de la villa, ce qu'un
+    // enfant ne remarque pas, et elle fait disparaître l'absurdité des 102 km/h.
+    // (Les cabines n'ont que DEUX arrêts, `low` et `high` — aucun étage intermédiaire.)
+    const avance = (L.target - L.y) * Math.min(1, dt * 2.2), bond = LIFT_VMAX * dt;
+    const before = L.y; L.y += clamp(avance, -bond, bond);
     L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
     if (onIt) {
       // pendant le trajet la cabine retient le joueur ; à l'arrivée elle le relâche, sinon on ne pourrait jamais sortir
       if (moving) { P.pos.x = clamp(P.pos.x, L.x - 1.3, L.x + 1.3); P.pos.z = clamp(P.pos.z, L.z - 1.3, L.z + 1.3); }
+      // ============ LA CABINE EMMÈNE SON PASSAGER (round 83) ============
+      // LE PLAFOND DE VITESSE NE SUFFIT PAS À LUI SEUL, et c'est mesuré. Quand la cabine
+      // descend à v, le joueur est reposé sur le plancher avec une vitesse verticale NULLE :
+      // relativement à la cabine il repart donc vers le haut à v et retombe en v² / 2g.
+      // ÉCART MAXIMAL AU PLANCHER, plafond seul, sans ce qui suit (descente de 12,85 m) :
+      //   4 m/s → 23,3 cm (4,37 s)    2 m/s → 5,0 cm (7,27 s)    1,7 m/s → 3,5 cm (8,33 s)
+      // Tenir les 5 cm par la seule vitesse coûte donc 7,3 s de trajet au lieu de 2,5 — presque
+      // trois fois plus long, pour un ascenseur qu'un enfant prend dix fois par partie.
+      // On fait donc ce que fait déjà une plate-forme mobile (voir `movers` dans step) : le
+      // plancher EMMÈNE ce qui est posé dessus. Mesuré avec les deux : écart 0,000 m à la
+      // descente comme à la montée, sur les deux ascenseurs, et 4,37 s de trajet.
+      // Seulement en DESCENTE (en montée le plancher pousse déjà : écart déjà nul avant ce
+      // round), seulement si le joueur était POSÉ sur le plancher (à moins de 4 cm au-dessus)
+      // et ne monte pas : un saut dans la cabine reste un saut.
+      const chute = L.y - before;
+      if (chute < 0 && P.vel.y <= 0.01 && P.pos.y <= before + 0.14) P.pos.y += chute;
       if (P.pos.y < L.y + 0.1) { P.pos.y = L.y + 0.1; P.vel.y = 0; P.grounded = true; P.coyote = 0.12; P.standing = L.solid; }
       if (Math.abs(L.y - before) > 0.001 && simTime > (L.sndT || 0)) { L.sndT = simTime + 0.6; sfx.tone(220, 0, .2, 'sine', .02); }
       if (!moving && L.target === L.high && simTime > (L.msgT || 0)) { L.msgT = simTime + 6; msg(L.toit ? '🛗 Sur le toit ! Prends un parachute ou un deltaplane (E)' : '🛗 Étage : sors vers la gauche', 2200); }

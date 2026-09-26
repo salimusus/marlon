@@ -2299,6 +2299,7 @@ window.__G = {
   construireGraphe: typeof construireGraphe === 'function' ? construireGraphe : null,
   surLaChaussee: typeof surLaChaussee === 'function' ? surLaChaussee : null,
   gabaritCollision: typeof gabaritCollision === 'function' ? gabaritCollision : null,
+  avanceVehicule: typeof avanceVehicule === 'function' ? avanceVehicule : null,
   gabaritDeService: typeof gabaritDeService === 'function' ? gabaritDeService : null,
   stationnementAlterne: typeof stationnementAlterne === 'function' ? stationnementAlterne : null,
   placeHorsBitume: typeof placeHorsBitume === 'function' ? placeHorsBitume : null,

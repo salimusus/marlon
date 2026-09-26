@@ -5918,10 +5918,11 @@ function degageLesRoutes() {
     // LA VÉGÉTATION SE REPLANTE (arbres et palmiers). Elle est jugée plus sévèrement que le reste
     // du mobilier — 30 cm de garde, pas 60 cm de chevauchement toléré — et, si un trottoir voisin
     // est libre, elle DÉMÉNAGE avec son feuillage au lieu de disparaître.
-    if (o.vegetal) {
-      if (!vegetalMordLaVoie(o)) continue;
-      if (replanteHorsChaussee(o)) { replantes++; continue; }
-    } else if (!mordChaussee(o)) continue;
+    // Le repli est celui d'AVANT, au mot : si le replantage échoue, on ne ramasse l'arbre que
+    // s'il mord vraiment de plus de 60 cm. Un arbre à 20 cm de la rive qu'on n'a pas su
+    // déplacer reste planté : on n'a pas le droit de perdre de la végétation en réparant.
+    if (o.vegetal && vegetalMordLaVoie(o) && replanteHorsChaussee(o)) { replantes++; continue; }
+    if (!mordChaussee(o)) continue;
     // Le mobilier cassable (poubelle, cone, panneau) vit dans un GROUPE : enlever son seul
     // maillage laissait le couvercle et le socle flotter au milieu de la rue. On retire le
     // groupe entier quand il y en a un.
@@ -6020,8 +6021,8 @@ function degageDecorSurRoutes() {
     if (breakables.some(b => b.solid === o)) continue;       // le mobilier cassable a son propre traitement
     // UN ARBRE N'EST PAS UN PIED DE GRANDE ROUE : lui retirer sa collision le laisse planté au
     // milieu de la rue, bien visible, et l'enfant le traverse. On le REPLANTE sur le trottoir.
-    if (o.vegetal) { if (!vegetalMordLaVoie(o)) continue; if (replanteHorsChaussee(o)) { n++; continue; } }
-    else if (!surChaussee(o.x, o.z)) continue;
+    if (o.vegetal && vegetalMordLaVoie(o) && replanteHorsChaussee(o)) { n++; continue; }
+    if (!surChaussee(o.x, o.z)) continue;
     solids.splice(i, 1); n++;
   }
   if (n) { sgridSale(); navSale(); }

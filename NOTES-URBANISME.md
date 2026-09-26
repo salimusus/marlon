@@ -422,3 +422,181 @@ déplacer le parking et les intérieurs des trois boutiques (comptoirs, vitrines
 de course, points d'interaction), tous posés à la main coordonnée par coordonnée. **C'est un
 chantier à part, et il mangerait la marge que le round 76 demande de préserver.** Le pilotage gère
 la place aujourd'hui ; on ne touche pas.
+
+---
+
+# ROUND 83 — POSTE PLANTATIONS & STATIONNEMENT
+
+Deux défauts d'urbanisme relevés par le joueur. Même règle de travail qu'aux rounds précédents :
+**tout chiffre ci-dessous est relevé**, en page (`harness/sonde.js`) ou par un banc Node monté sur
+`harness/run.js` avec une graine figée avant la construction du monde.
+
+## 1. Des arbres et des palmiers plantés sur la chaussée
+
+### Le recensement AVANT (5 graines)
+
+Le contrôle relève les troncs **dans la SCÈNE** et non dans `solids` : un arbre qu'on a déjà jeté
+compte comme un défaut, pas comme une réussite.
+
+| graine | palmiers | arbres | troncs mordant une chaussée | houppiers SANS tronc |
+|--------|----------|--------|------------------------------|----------------------|
+| 6174 | 44 | 199 | 1 | 0 |
+| **987654321** | **42** | 199 | 1 | **2** (x = 105,57 et 105,58) |
+| 1 | 42 | 198 | 1 | 0 |
+| 42 | 41 | 198 | 1 | 0 |
+| 20260926 | 41 | 199 | 1 | 0 |
+
+### Les deux causes, chiffrées
+
+1. **La rangée de palmiers de la plage tire son abscisse DANS la chaussée.** `buildBeach()` plante
+   six palmiers à `rnd(105, 110)`, `z = -50 + i × 38`. La **promenade du littoral**
+   (`road(104, …, 5, …)`) tient **x = 101,5 à 106,5** — c'est la chaussée **la plus étroite de la
+   ville, 5 m**, et `elargirLesVoies()` n'a jamais pu la monter d'un palier. Le tronc fait 0,6 m :
+   - `x < 106,2` → chevauchement > 60 cm → `degageLesRoutes()` **emporte le tronc** (24 % des tirages)
+   - `106,2 ≤ x < 106,8` → chevauchement ≤ 60 cm → le palmier **reste dans la voie** (12 %)
+   Espérance : **2,2 palmiers fautifs sur 6**. La graine 987654321 en donne exactement 2.
+2. **Le filet de sécurité faisait pire que le mal.** `degageLesRoutes()` retire le solide **ET son
+   maillage** : pour un palmier il n'emporte que le TRONC (0,7 m de large, donc hors de la
+   protection « haut ET large »), et les **six palmes restent en l'air à 5,10 m**, au-dessus d'une
+   rue vide. `degageDecorSurRoutes()`, lui, ne retire que le SOLIDE : le tronc reste debout au
+   milieu de la rue, bien visible, et l'enfant le traverse.
+   Le tronc fautif commun aux 5 graines est l'**arbre de (156 ; 259)**, 24 cm dans une chaussée de
+   8 m — c'est-à-dire **dans la voie de droite** (axe à largeur/4 = 2 m, demi-gabarit 1,20 m : il ne
+   reste que 0,80 m).
+
+### La réparation
+
+Trois fonctions neuves, `bitumeSous` / `placeHorsBitume` / `replanteHorsChaussee` :
+
+- **À LA PLANTATION.** `tree()` (branche ville) et `palm()` refusent la chaussée **et les passages
+  piétons**, avec 50 cm de garde, en s'écartant perpendiculairement à la rue fautive, du côté le
+  plus court d'abord, par pas de 60 cm. Un emplacement qui tombe **dans un bâtiment** est refusé
+  lui aussi (première version sans ce garde-fou : 2 arbres poussés dans un mur, `audit.js` passait
+  de 14 à 15 poteaux dans un bâtiment). Les six palmiers de la plage passent par la même porte :
+  le tirage reste `rnd(105, 110)`, le pas de 38 m de la rangée ne bouge pas, le tronc atterrit à
+  **x = 107,4**.
+- **AU DÉGAGEMENT.** La végétation porte la marque `vegetal` et son houppier (`feuillage`) : elle
+  **DÉMÉNAGE** au lieu de disparaître, exactement comme les feux et les lampadaires depuis le
+  round 76. Elle est jugée plus sévèrement que le reste du mobilier — **30 cm de garde** au lieu
+  de 60 cm de chevauchement toléré — parce qu'un tronc à 24 cm dans la voie arrête déjà une
+  voiture. **17 plantations sont replantées** à chaque chargement (`city.replantes`).
+
+### Le recensement APRÈS (mêmes 5 graines)
+
+| graine | palmiers | arbres | troncs sur la chaussée | houppiers sans tronc |
+|--------|----------|--------|------------------------|----------------------|
+| 6174 | **44** | **210** | **0** | **0** |
+| 987654321 | **44** | **210** | **0** | **0** |
+| 1 | **44** | **209** | **0** | **0** |
+| 42 | **44** | **209** | **0** | **0** |
+| 20260926 | **44** | **210** | **0** | **0** |
+
+**La ville ne s'est pas vidée, elle a verdi** : 41-44 palmiers → 44, et 198-199 arbres → 209-210.
+Les 11 arbres et les 2 palmiers qu'on jetait à chaque chargement sont replantés.
+**Aucune géométrie n'est élargie** : on recule la plantation, on ne touche pas au bitume.
+
+## 2. Une rue bordée de deux voitures garées face à face est infranchissable
+
+### Le vrai gabarit n'est pas `baseW`
+
+`carBlocked()` traite un véhicule comme une **chaîne de disques** de rayon `DISQ.r` et gonfle
+l'obstacle d'autant. La largeur de passage réellement demandée, mesurée :
+
+| véhicule de service | tôle (`baseW`) | passage réel |
+|---------------------|----------------|--------------|
+| bulldozer | 2,80 | **3,15** |
+| camion (truck) | 2,60 | 3,01 |
+| camion de pompiers | 2,60 | 2,96 |
+| grue | 2,50 | 2,96 |
+| benne | 2,50 | 2,91 |
+| voiture (référence) | 2,40 | 2,85 |
+| dépanneuse | 2,40 | 2,77 |
+| ambulance | 2,30 | 2,68 |
+
+C'est cette largeur-là qu'il faut mesurer, sinon on « prouve » un passage qui ne passe pas.
+
+### Le recensement : UN SEUL cas dans toute la ville, sur les 5 graines
+
+**La sortie du commissariat**, `road(-46, 9, 6, 12)` portée à 8 m par `elargirLesVoies()` :
+
+| | |
+|---|---|
+| bitume | **8,00 m** (x -50,0 à -42,0 ; z 3 à 15) |
+| voiture de patrouille ouest (-49 ; 9) | x -50,20 à -47,80 |
+| voiture de patrouille est (-44 ; 9) | x -45,20 à -42,80 |
+| **LARGEUR LIBRE entre les deux** | **2,60 m** |
+| passage exigé (bulldozer + 20 cm de garde de chaque côté) | **3,55 m** |
+| **déficit** | **0,95 m** |
+
+Les deux voitures sont posées à une abscisse FIXE (`buildPolice`, `sx + 5` et `sx + 10`) : le
+défaut ne dépend d'aucun tirage, il est identique sur les 5 graines.
+
+**PREUVE AVANT, 900 pas de simulation (1/60 s)**, départ en (-46 ; 1), cap au nord, conducteur qui
+tente en plus un écart latéral de 15 cm quand il est bloqué :
+
+| véhicule | avance en 900 pas | images bloquées |
+|----------|-------------------|-----------------|
+| bulldozer | **2,17 m** | 874 / 900 |
+| camion | **0,67 m** | 892 / 900 |
+| camion de pompiers | **0,92 m** | 889 / 900 |
+| dépanneuse | **1,75 m** | 879 / 900 |
+| ambulance | **2,50 m** | 870 / 900 |
+
+Balayage géométrique du couloir, abscisse par abscisse sur toute la longueur de la rue :
+**aucune abscisse ne laisse passer même l'ambulance.**
+
+### L'arbitrage : pourquoi PAS élargir
+
+- **Élargir la rue ne change RIEN.** Les deux voitures sont à une abscisse fixe : un mètre de
+  bitume de plus s'ajoute **autour** d'elles et l'entre-deux reste à 2,60 m. Il faudrait
+  2 × 2,40 + 3,55 = **8,35 m entre leurs deux flancs extérieurs**, donc une rue de 8,6 m, pour un
+  gain **nul** puisque les voitures ne bougent pas. Et l'avertissement des **10 cm** s'applique
+  ici : la rive ouest viendrait butter sur le trottoir de x -51,8 à -50,0 et sur le mur ouest du
+  commissariat (x -50,2 à -49,8). **Refusé.**
+- **Réserver la rue aux petits véhicules** dans le calcul d'itinéraire : c'est l'accès du Parking
+  du commissariat et la seule sortie vers la route ouest. Y interdire les 2,80 m coupe le réseau
+  pour les secours. **Refusé.**
+- **Reculer les places dans une alvéole sur le trottoir** : le trottoir ouest fait **1,80 m**, une
+  voiture **2,40 m**. Il faudrait déplacer le trottoir ET la rive — la marge de 10 cm. **Refusé.**
+- **Stationnement alterné (un seul côté)** : on déplace **UN véhicule**. Coût géométrique **zéro**.
+  **Retenu.**
+
+### La réparation
+
+`stationnementAlterne()`, passe neuve appelée juste après `declareLesParkings()` (donc quand les
+rues et tous les véhicules de service sont en place, avant le graphe des voies). Elle recense les
+paires de véhicules garés **en vis-à-vis à moins de 8 m** l'un de l'autre le long d'une rue (8 m :
+en deçà, on ne slalome pas un camion de 8,60 m entre deux caisses) dont l'entre-deux tombe sous
+`gabaritDeService() + 0,40` = **3,55 m**, et **déplace l'un des deux le moins loin possible**. Le
+nouvel emplacement doit être libre (`vehBloque`), rester sur **la place de stationnement déclarée**
+— sinon c'est du stationnement sauvage, règle du poste Circulation — et laisser passer le gabarit
+pour **les deux** véhicules.
+
+### Les mesures APRÈS (5 graines, identiques)
+
+| mesure | avant | après |
+|--------|-------|-------|
+| bouchons recensés dans la ville | **1** | 1 recensé, **0 non résolu** |
+| véhicules déplacés | — | **1** (voiture de patrouille, 6,18 m, même place déclarée) |
+| (-44 ; 9) devient | — | **(-47 ; 14,40)**, du même côté que sa jumelle |
+| **largeur libre** | **2,60 m** | **3,80 m** |
+| géométrie déplacée | — | **0 m²** — la marge de 10 cm est intacte |
+| bulldozer, 900 pas | 2,17 m, bloqué | **TRAVERSE, 55,33 m** (236 images bloquées) |
+| camion, 900 pas | 0,67 m, bloqué | **TRAVERSE, 53,83 m** |
+| camion de pompiers | 0,92 m, bloqué | **TRAVERSE, 54,17 m** |
+| dépanneuse | 1,75 m, bloqué | **TRAVERSE, 55,00 m** |
+| ambulance | 2,50 m, bloqué | **TRAVERSE, 55,67 m** |
+| bande d'abscisses possibles (balayage du couloir) | **aucune** | **2,75 à 3,00 m** selon le véhicule |
+
+## 3. Ce qui n'a PAS bougé (vérifié, pas supposé)
+
+`harness/audit.js` rend **mot pour mot** le même relevé qu'avant ces travaux : 14 poteaux dans un
+bâtiment (tous à La Zone, tous antérieurs), 1 seul chevauchement significatif, aucune région
+piétonne nouvelle. Les six chaussées sous 7,60 m du §7 du round 75 restent comme décrites : on n'a
+élargi aucune rue.
+
+Bancs : `traffic.js` **14/14**, `vehicle-contact.js` **6/6**, `city-detail.js` **10/10**,
+`strategy.js` 7/0, `empire.js` 15/0, `save-strategy.js` 4/0, `cosmetic-performance.js` vert.
+Lint **5 ✅**. Tests ajoutés à la fin de `harness/play.js` : **n° 512** (aucun arbre ni palmier sur
+la chaussée, deux graines) et **n° 513** (le plus large véhicule de service traverse la rue étroite,
+avant / après dans la même page).

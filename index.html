@@ -12855,11 +12855,11 @@ function sharkTick(dt) {   // le requin blanc patrouille, charge le nageur le pl
   if (sh.state === 'chase' && simTime > (sh.warnT || 0) && Math.hypot(P.pos.x - sh.x, P.pos.z - sh.z) < 22) { sh.warnT = simTime + 6; msg('🦈 UN REQUIN ! Sors de l\'eau !', 2000); sonNote(sh.x, 0.5, sh.z, 80, .6, 'sine', .1, 40, { portee: 30, coupure: 60 }); if (navigator.vibrate) { try { navigator.vibrate(120); } catch (e) {} } }
   if (meIn && Math.hypot(P.pos.x - sh.x, P.pos.z - sh.z) < 3 && simTime > sh.biteT && P.hp > 0) {
     sh.biteT = simTime + 2.2; const dxp = (P.pos.x - sh.x) / 3, dzp = (P.pos.z - sh.z) / 3;
-    hurt(22, 'le requin', dxp, dzp, 2.4); burst(P.pos.x, P.pos.y + 0.5, P.pos.z, 0xff2020, 14); sfx.noise(.35, 300, .12);
+    hurt(22, 'le requin', dxp, dzp, 2.4); burst(P.pos.x, P.pos.y + 0.5, P.pos.z, 0xff2020, 14); sonSouffle(sh.x, 0.5, sh.z, .35, 300, .12, { portee: 26 });
     if (mission.cur && mission.cur.id === 'requin') mission.data.bites = (mission.data.bites || 0) + 1;
   }
   // les balles peuvent le repousser
-  for (let i = shots.length - 1; i >= 0; i--) { const s = shots[i]; if (!s.mine) continue; if (Math.abs(s.p.x - sh.x) < 2 && Math.abs(s.p.z - sh.z) < 3.2 && s.p.y < 2.5) { EPHEMERES.remove(s.m); shots.splice(i, 1); sh.hp -= s.dmg || 20; burst(sh.x, 1.2, sh.z, 0xff2020, 6); sfx.hit(); if (sh.hp <= 0) { sh.hp = 100; sh.fled = simTime + 45; sh.tgt = null; msg('🦈 Le requin s\'enfuit au large !', 2200); sfx.win(); if (mission.cur && mission.cur.id === 'requin') mission.data.repelled = true; } } }
+  for (let i = shots.length - 1; i >= 0; i--) { const s = shots[i]; if (!s.mine) continue; if (Math.abs(s.p.x - sh.x) < 2 && Math.abs(s.p.z - sh.z) < 3.2 && s.p.y < 2.5) { EPHEMERES.remove(s.m); shots.splice(i, 1); sh.hp -= s.dmg || 20; burst(sh.x, 1.2, sh.z, 0xff2020, 6); sonSfx('hit', sh.x, 1.2, sh.z, { portee: 28 }); if (sh.hp <= 0) { sh.hp = 100; sh.fled = simTime + 45; sh.tgt = null; msg('🦈 Le requin s\'enfuit au large !', 2200); sonSfx('win', sh.x, 1.2, sh.z, { portee: 34 }); if (mission.cur && mission.cur.id === 'requin') mission.data.repelled = true; } } }
 }
 function safesTick(dt) {
   const sf = city.safeNear; if (!sf || sf.open) return;
@@ -21989,9 +21989,9 @@ function chienTick(dt) {
           g3.cd = simTime + 1.6; g3.mordu = simTime + 2.2;
           chien.hp = Math.max(0, chien.hp - (4 + Math.round(perfDe(g3) / 14)));   // il prend des coups en retour
           if (chien.hp <= 0) { chien.hp = 0; chien.attaque = null; chien.blesse = simTime + 25;
-            msg(`🐶 ${chienNom()} est blessé, il décroche et se met à l'abri !`, 3400); sfx.die(); }
+            msg(`🐶 ${chienNom()} est blessé, il décroche et se met à l'abri !`, 3400); sonSfx('die', g3.x, (g3.y || 0) + 0.6, g3.z, { portee: 30 }); }
           else if (g3.hp <= 0) { g3.ko = simTime + 14; g3.hp = 0; corpsAuSol(g3.av, g3.x, g3.z, g3.y); chien.attaque = null;
-            perfGagne(chien, 3); msg(`🐶 ${chienNom()} a mis ${g3.nom} au tapis !`, 3200); sfx.win(); }
+            perfGagne(chien, 3); msg(`🐶 ${chienNom()} a mis ${g3.nom} au tapis !`, 3200); sonSfx('win', g3.x, (g3.y || 0) + 0.6, g3.z, { portee: 30 }); }
         }
         return;
       }
@@ -22093,7 +22093,7 @@ function chienTick(dt) {
           p.g.rotation.x = 0.35 + Math.sin(simTime * 9) * 0.12;   // la tête plonge dans la gamelle
           if (p.head) p.head.rotation.x = 0.3 + Math.abs(Math.sin(simTime * 12)) * 0.25;   // il mastique
           p.tail.rotation.y = Math.sin(simTime * 10) * 0.5;
-          if (!chien.repas) { chien.repas = simTime + 8; chienDit('miam ! il mange ses croquettes 🍖', 2200); sfx.tone(300, 0, .1, 'sine', .04, 200); }
+          if (!chien.repas) { chien.repas = simTime + 8; chienDit('miam ! il mange ses croquettes 🍖', 2200); sonNote(p.x, (p.y || 0) + 0.4, p.z, 300, .1, 'sine', .04, 200, { portee: 20 }); }
           if (simTime > chien.repas) { chien.repas = 0; chien.ordre = 'suit'; p.g.rotation.x = 0; chienDit('il a fini son repas, ventre plein ! 🐶', 2200); aboie(2); }
         } else {
           // il dort SUR LE DOS, les quatre pattes en l'air : c'est un chien heureux
@@ -23638,7 +23638,7 @@ function jouetsTick(dt) {
     }
     if (u >= 1) {
       boomerangRanger();
-      if (sacA('boomerang')) { jouetEnMain('boomerang'); msg('🪃 Rattrapé !', 1800); try { sfx.coin(); } catch (e) {} }
+      if (sacA('boomerang')) { jouetEnMain('boomerang'); msg('🪃 Rattrapé !', 1800); try { sonSfx('coin', P.pos.x, P.pos.y + 1.2, P.pos.z, { portee: 24 }); } catch (e) {} }
     }
   }
 }

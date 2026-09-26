@@ -23430,3 +23430,179 @@ test('apres un KO en ville, on se reveille les pieds sur le carrelage de l\'hopi
     && o.banc > 1.8 && !o.benchNear && !/🪑/.test(o.pastille));
   return { ok, detail: `defaut 105 : \`pointDeReveil()\` rendait medDesk + (1,6 ; 2,4) = (22 ; 207,9), or \`city.benches\` a un banc en (22 ; 208) — boite de 2,30 × 0,85 m, assise 0,66 m, donc de z = 207,575 a 208,425. \`groundUnder()\` trouvait ce banc, et apres CHAQUE KO en ville l'enfant se reveillait DEBOUT SUR LES LATTES, 30 cm au-dessus du carrelage (0,36 m), avec « 🪑 △ : s'asseoir » sur le banc ou il etait deja debout · le point est passe a medDesk + (1,6 ; 0,4), devant le comptoir : sur ${k.length} KO, le sol trouve est ${k.map(o => o.sol).join(' / ')} m (le carrelage de l'accueil est a ${r.carrelage} m), les pieds sont a y = ${k.map(o => o.y).join(' / ')} (30 cm plus bas qu'avant), le banc le plus proche est a ${k.map(o => o.banc).join(' / ')} m (au-dela des 1,8 m de \`benchNear\`), et la pastille dit « ${[...new Set(k.map(o => o.pastille))].join(' | ')} » · bancs de l'hopital : ${JSON.stringify(r.bancsHopital)}` };
 });
+
+test('plus aucune source sonore du monde n\'echappe au registre : le pont rejoue la meme melodie, mais PLACEE', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, yaw: 0 });
+    G.settings.sound = true;
+    const c = G.sfx.unlock(), ch = G.sfx.chaine();
+    G.engine.stop(); try { G.music.stop(); } catch (e) {} try { G.siren.stop(); } catch (e) {} try { G.meteoSet('clair', 999); } catch (e) {}
+    G.SONV.ambT = G.simTime + 1e6; try { G.ambiance.stop(); } catch (e) {}
+    G.bots.forEach(b => { b.wait = 1e6; b.dance = 0; });
+    // ---- 1) LE RECENSEMENT, sur le texte du jeu lui-meme ----
+    // Le registre SON ne peut etre complet que si AUCUNE fonction de simulation du monde
+    // n'appelle plus un generateur de la boite a sons en direct : ces appels ecrivent en dur
+    // dans le bus « effets », en mono, au meme volume qu'on soit dessus ou a cinquante metres.
+    const src = await (await fetch('/')).text();
+    const corps = nom => { const i = src.indexOf('\nfunction ' + nom + '('); if (i < 0) return null; const j = src.indexOf('\n}\n', i); return j < 0 ? null : src.slice(i, j); };
+    const GEN = /sfx\.(jump|coin|check|die|bounce|hit|crack|kick|laser|splash|chat|win|boost|pok|clack|whoosh|cheer|chomp|register|bird|tone|noise)\s*\(/g;
+    const SURVEILLEES = ['facteurTick', 'employesTick', 'depanneusesTick', 'incendiesTick', 'revenusTick',
+      'stoveTick', 'safesTick', 'droneTick', 'armeeTick', 'casinoTick', 'activiteTick', 'soinTick', 'debrisTick',
+      'grenadesTick', 'shotsTick', 'hoopTick', 'liftTick', 'sharkTick', 'enginCreuseTick', 'jouetsTick',
+      'chienTick', 'cambrioTick', 'meteoTick'];
+    const restes = {}; let introuvables = 0, horsRegistre = 0;
+    for (const nom of SURVEILLEES) {
+      const b = corps(nom);
+      if (b == null) { introuvables++; restes[nom] = 'introuvable'; continue; }
+      const n = (b.match(GEN) || []).length;
+      if (n) { restes[nom] = n; horsRegistre += n; }
+    }
+    // la DEUXIEME source d'oiseau du jeu, dans frame() : celle du Parc (sonOiseau est la premiere)
+    const oiseauParcDirect = /city\.zone\.name === 'Parc'[^\n]*sfx\.bird\(\)/.test(src);
+    // ---- 2) LE PONT EXISTE, ET SA TABLE COUVRE LES MELODIES DE LA BOITE A SONS ----
+    const melodies = Object.keys(G.SFX_MONDE || {});
+    const dureesCompletes = melodies.every(m => (__G.SFX_MONDE, true));
+    // ---- 3) LE VOLUME : le pont ne change rien a distance nulle, et place a 30 m ----
+    // Le fond de scene de la ville monte par moments a 0,18 : on ne peut pas se fier a UNE
+    // crete. On joue chaque son huit fois et on garde la crete MINIMALE des huit fenetres —
+    // une pollution passagere ne peut pas salir les huit.
+    const sp = c.createScriptProcessor(2048, 1, 1);
+    let crete = 0;
+    sp.onaudioprocess = e => { const d = e.inputBuffer.getChannelData(0); for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; } };
+    const muet = c.createGain(); muet.gain.value = 0;
+    // ON ECOUTE A L'ENTREE DU BUS « EFFETS », PAS AU BOUT DE LA CHAINE. Comparer un volume
+    // apres le compresseur et le limiteur ne veut rien dire : leur reduction depend de ce qui a
+    // joue juste avant, donc de l'ordre des tests (mesure : le meme \`sfx.pok()\` releve 0,2171
+    // lance seul et 0,4023 en suite, soit du simple au double). Le bus, lui, est un simple gain :
+    // ce qu'on y lit est exactement ce que le son pese.
+    ch.bus.effets.connect(sp); sp.connect(muet); muet.connect(c.destination);
+    const busG = {}; for (const nb of ['ambiance', 'voix']) { try { busG[nb] = ch.bus[nb].gain.value; ch.bus[nb].gain.value = 0; } catch (e) {} }
+    // La crete d'une seule fenetre ne veut rien dire : le fond de scene de la ville monte par
+    // moments a 0,18, et la crete d'un meme son varie du simple au tiers selon ou tombe la
+    // frontiere des blocs audio (mesure : pok releve entre 0,2171 et 0,3577 sur huit fenetres).
+    // On joue donc chaque son onze fois et on garde la MEDIANE : ni la pollution passagere ni
+    // la gigue des blocs ne peuvent la deplacer.
+    const pic = async faire => { const v = []; for (let k = 0; k < 11; k++) { crete = 0; faire(); await dodo(260); v.push(+crete.toFixed(4)); } v.sort((x, y) => x - y); return v[5]; };
+    await dodo(400);
+    const fond = await pic(() => {});
+    const X = G.P.pos.x, Y = G.P.pos.y + 1.4, Z = G.P.pos.z;
+    // ON NE COMPARE QUE DES SONS ASSEZ LONGS. Un ScriptProcessor rend la main SUR LE FIL
+    // PRINCIPAL : quand le banc met une seconde a dessiner une image, ses tampons debordent et
+    // les echantillons sont PERDUS. Un son de 70 ms (`pok`) passe alors a travers les mailles —
+    // mesure : mediane 0,0013 pour un son qui pese 0,0645, soit rien du tout, et un rapport
+    // avant/apres de 49 qui ne veut rien dire. `check` (0,55 s), `win` (1,15 s) et `cheer`
+    // (1,25 s) couvrent plusieurs tampons : eux, on les attrape toujours.
+    const checkDirect = await pic(() => G.sfx.check());
+    const check0 = await pic(() => G.sonSfx('check', X, Y, Z, { portee: 30 }));
+    const check30 = await pic(() => G.sonSfx('check', X + 30, Y, Z, { portee: 30 }));
+    const winDirect = await pic(() => G.sfx.win());
+    const win0 = await pic(() => G.sonSfx('win', X, Y, Z, { portee: 30 }));
+    const win30 = await pic(() => G.sonSfx('win', X + 30, Y, Z, { portee: 30 }));
+    const cheerDirect = await pic(() => G.sfx.cheer());
+    const cheerOreille = await pic(() => G.sonSfx('cheer', 0, 0, 0, { oreille: true }));
+    for (const nb of Object.keys(busG)) { try { ch.bus[nb].gain.value = busG[nb]; } catch (e) {} }
+    try { ch.bus.effets.disconnect(sp); sp.disconnect(); muet.disconnect(); sp.onaudioprocess = null; } catch (e) {}
+    // ---- 4) UN SON A L'OREILLE NE PREND PAS UNE PLACE DU BUDGET ----
+    G.SON.vivants.length = 0;
+    for (let i = 0; i < 24; i++) G.sonEn(X + 2, Y, Z, () => {}, { duree: 60, portee: 30 });
+    const places = G.SON.vivants.length;
+    for (let i = 0; i < 4; i++) G.sonEn(0, 0, 0, () => {}, { duree: 60, oreille: true });
+    const avecOreilles = G.SON.vivants.length, oreilles = G.SON.vivants.filter(v => v.oreille).length;
+    G.SON.vivants.length = 0;
+    // ---- 5) une source du monde est bien PLACEE : la boite aux lettres du facteur ----
+    // L'attenuation que le registre a REELLEMENT appliquee, elle, ne depend d'aucune fenetre de
+    // mesure : c'est le chiffre a opposer au « meme volume partout » d'avant.
+    G.SON.raz(); G.sonSfx('pok', X + 18, 1.35, Z, { portee: 26 });
+    const placee = G.SON.dernier;
+    G.sonSfx('pok', X, 1.35, Z, { portee: 26 }); const att0 = G.SON.dernier.att;
+    G.sonSfx('pok', X + 30, 1.35, Z, { portee: 26 }); const att30 = G.SON.dernier.att;
+    const cree90 = G.sonSfx('pok', X + 90, 1.35, Z, { portee: 26 });   // au-dela de la coupure, plus rien n'est cree
+    const refuses = G.SON.refuses;
+    G.bots.forEach(b => { b.wait = 0; }); G.SONV.ambT = 0;
+    return { restes, introuvables, horsRegistre, oiseauParcDirect, melodies: melodies.length, dureesCompletes,
+      fond, checkDirect, check0, check30, winDirect, win0, win30, cheerDirect, cheerOreille,
+      places, avecOreilles, oreilles, max: G.SON.max, placee, surveillees: SURVEILLEES.length,
+      att0, att30, cree90, refuses };
+  });
+  // a distance nulle le pont ne doit rien changer : on tolere l'ecart de la loi de panoramique
+  // a puissance constante (un son place au centre sort a 0,707 par enceinte, puissance totale
+  // identique) — donc entre 0,65 et 1,05 fois le son direct.
+  const rapport = (a, b) => b > 0 ? +(a / b).toFixed(3) : 0;
+  const ok = r.horsRegistre === 0 && r.introuvables === 0 && !r.oiseauParcDirect && r.melodies >= 13
+    && r.checkDirect > 0.02 && r.winDirect > 0.02 && r.cheerDirect > 0.02
+    && rapport(r.check0, r.checkDirect) > 0.6 && rapport(r.check0, r.checkDirect) < 1.15
+    && rapport(r.win0, r.winDirect) > 0.6 && rapport(r.win0, r.winDirect) < 1.15
+    && rapport(r.cheerOreille, r.cheerDirect) > 0.9 && rapport(r.cheerOreille, r.cheerDirect) < 1.1
+    && r.check30 < r.check0 * 0.45 && r.win30 < r.win0 * 0.45
+    && r.att0 > 0.98 && r.att30 > 0.05 && r.att30 < 0.15 && !r.cree90 && r.refuses >= 1
+    && r.places === r.max && r.avecOreilles === r.max + 4 && r.oreilles === 4
+    && r.placee && Math.abs(r.placee.d - 18) < 1.2 && r.placee.att > 0.1 && r.placee.att < 0.25;
+  return { ok, detail: `LES SOURCES SONORES INVISIBLES DU REGISTRE. \`sfx.pok()\`, \`sfx.check()\`, \`sfx.tone()\`... ecrivent EN DUR dans le bus « effets » : mono, au MEME volume qu'on soit dessus ou a cinquante metres, et invisibles du registre SON — ni budget, ni purge, ni panoramique · la boite aux lettres du facteur claquait donc dans l'oreille de l'enfant alors que le facteur faisait sa tournee a l'autre bout du quartier, le grattement de la poele s'entendait d'un bout a l'autre de la ville, et le rotor du drone se fabriquait un volume A LA MAIN (\`0,055 - distance x 0,0007\`) faute de pouvoir le demander au registre · recensement sur le texte du jeu, ${r.surveillees} fonctions de simulation du monde surveillees : ${r.horsRegistre} appel direct restant (${JSON.stringify(r.restes)}), oiseau du Parc encore direct = ${r.oiseauParcDirect} · le pont SFX_MONDE rejoue ${r.melodies} melodies note pour note, mais vers un noeud de destination · MEME VOLUME a distance nulle (mediane de onze fenetres a l'entree du bus « effets », fond de scene ${r.fond}) : check ${r.checkDirect} direct -> ${r.check0} par le registre (×${rapport(r.check0, r.checkDirect).toFixed(3)}), win ${r.winDirect} -> ${r.win0} (×${rapport(r.win0, r.winDirect).toFixed(3)}) — l'ecart est la loi de panoramique a PUISSANCE CONSTANTE, qui vaut 0,707 par enceinte pour un son place au centre : puissance totale identique, et c'est deja ce que font sonMarteau et sonSoudure joues au meme endroit par la meme fonction · et a 30 m, enfin, ca s'eloigne : check ${r.check30}, win ${r.win30} · l'attenuation appliquee par le registre, elle, ne depend d'aucune fenetre de mesure : ${r.att0} a 0 m, ${r.att30} a 30 m, et a 90 m plus rien n'est cree (${r.cree90 ? 'rate' : 'refuse'}, ${r.refuses} refus) — la ou tout sortait a plein volume avant · un son SANS LIEU (\`oreille: true\`) garde EXACTEMENT la chaine d'avant, au gain pres qui vaut 1 : cheer ${r.cheerDirect} -> ${r.cheerOreille} (×${rapport(r.cheerOreille, r.cheerDirect).toFixed(3)}) · et il ne prend pas une place du budget : ${r.places} places sur ${r.max} apres 24 sons places, ${r.avecOreilles} inscrits apres 4 sons a l'oreille dont ${r.oreilles} a l'oreille · la boite aux lettres a 18 m est vue a ${r.placee.d} m, attenuation ${r.placee.att}` };
+});
+
+test('ambiance.stop() COUPE la rumeur au lieu de la faire fondre (il en restait 11,6 % au bout de 900 ms)', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true;
+    const c = G.sfx.unlock();
+    G.SONV.ambT = G.simTime + 1e6;                  // la ville ne redemande pas sa rumeur pendant la mesure
+    G.ambiance.set('centre', 0.0095, 1300);
+    await dodo(2600);                               // le fondu de montee (0,9 s) a le temps de finir
+    const depart = G.ambiance.etat().gain;
+    // L'ATTENTE DOIT ETRE ACTIVE. `await dodo(12)` ne rend pas la main toutes les 12 ms quand le
+    // banc rend une image par seconde : releve apres releve, l'horloge audio sautait de 0 s a
+    // 109 s et aucun echantillon ne tombait pres des 100 ms qu'on veut voir. On bloque donc le
+    // fil principal et on interroge l'horloge AUDIO, qui tourne sur son propre fil : trois
+    // points, moins d'une seconde d'attente en tout.
+    const t0 = c.currentTime; G.ambiance.stop();
+    const serie = [];
+    const jusqua = t => { const fin = t0 + t; let n = 0; while (c.currentTime < fin && n < 8e8) n++; serie.push([+(c.currentTime - t0).toFixed(3), G.ambiance.etat().gain]); };
+    jusqua(0.1); jusqua(0.3); jusqua(0.9); jusqua(1.4);
+    // ET UNE FOIS COUPEE, ELLE RESTE COUPEE : un `set()` en attente ne doit pas la faire remonter
+    const finale = G.ambiance.etat();
+    G.SONV.ambT = 0;
+    const a = cible => { let best = serie[0]; for (const s of serie) if (Math.abs(s[0] - cible) < Math.abs(best[0] - cible)) best = s; return best; };
+    return { depart, a100: serie[0], a300: serie[1], a900: serie[2], aFin: serie[3], plusProche: [a(0.1), a(0.3), a(0.9)],
+      volCible: finale.volCible, echantillons: serie.length };
+  });
+  const pct = v => r.depart > 0 ? +(v / r.depart * 100).toFixed(2) : 0;
+  const dB = v => r.depart > 0 && v > 0 ? Math.round(20 * Math.log10(v / r.depart)) : -99;
+  // On juge en ABSOLU, pas en pourcentage : le robinet a un plancher a 0,0001 (on ne descend
+  // jamais a zero exact, un exponentialRamp ne le permet pas), et ce plancher vaut deja 1,05 %
+  // d'une rumeur a 0,0095. Atteindre le plancher, c'est etre coupe.
+  const ok = r.depart > 0.002 && r.a100[0] >= 0.09 && r.a100[0] <= 0.2 && r.a100[1] <= 0.0004 && r.a300[1] <= 0.00015 && r.a900[1] <= 0.00015 && r.volCible <= 0.0002;
+  return { ok, detail: `\`ambiance.stop()\` etait un unique \`setTargetAtTime(0.0001, now, 0.4)\` : une constante de 0,4 s, donc e^-2,25 du niveau encore la au bout de 900 ms · mesure AVANT, rumeur du centre montee a plein (${r.depart}) puis arret : 77,9 % a 100 ms, 47,4 % a 300 ms, 11,6 % a 900 ms, 3,2 % a 1,46 s · ce que l'enfant entendait : a CHAQUE changement d'ambiance (entrer dans une maison, sortir du magasin, le mode zombie, une cinematique) l'ANCIENNE rumeur se superposait a la nouvelle pendant plus d'une seconde — deux bruits blancs filtres differemment qui se melangent · MESURE APRES (constante 0,02 s, courbes en attente annulees, robinet POSE a zero a 120 ms) : ${r.a100[1]} a ${r.a100[0]} s (${pct(r.a100[1])} %, ${dB(r.a100[1])} dB), ${r.a300[1]} a ${r.a300[0]} s (${pct(r.a300[1])} %, ${dB(r.a300[1])} dB), ${r.a900[1]} a ${r.a900[0]} s, ${r.aFin[1]} a ${r.aFin[0]} s — 0,0001 est le PLANCHER du robinet (un exponentialRamp ne descend jamais a zero exact), donc « coupe » · ce n'est PAS un couperet sec (couper net un bruit blanc a pleine echelle claque, exactement comme un gain neuf qui vaut 1) : 20 ms de descente, inaudibles · ${r.echantillons} releves` };
+});
+
+test('la purge des sources sonores tourne depuis la boucle de jeu, plus seulement depuis sonEn', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    G.settings.sound = true;
+    const c = G.sfx.unlock();
+    G.SON.vivants.length = 0; G.SON.raz();
+    const X = G.P.pos.x, Y = G.P.pos.y + 1.4, Z = G.P.pos.z;
+    // une rafale qui remplit le budget, avec des sons tres courts…
+    for (let i = 0; i < 40; i++) G.sonEn(X + (i % 8) - 4, Y, Z + (i % 5), d => G.sfx.toneVers(d, 400, 0, 0.05, 'sine', 0.01), { duree: 0.1, portee: 30 });
+    const remplis = G.SON.vivants.length;
+    // …puis le calme : PLUS UN SEUL son neuf, donc plus un seul appel a sonEn.
+    // Sans purge dans la boucle, les sources mortes restaient inscrites pour toujours : gains
+    // et panoramiques branches sur le bus, et les seize places du budget tenues par des morts.
+    const sOff = G.settings.sound; G.settings.sound = false;
+    await dodo(2500);                              // la boucle de jeu tourne, elle, et doit purger
+    const apresCalme = { vivants: G.SON.vivants.length, morts: G.SON.vivants.filter(v => v.fin <= c.currentTime).length };
+    G.settings.sound = sOff;
+    // le cout : un balayage sur un registre PLEIN de seize sources
+    G.SON.vivants.length = 0;
+    for (let i = 0; i < G.SON.max; i++) G.sonEn(X, Y, Z, () => {}, { duree: 1e6, portee: 30 });
+    const pleines = G.SON.vivants.length;
+    const t1 = performance.now(); for (let i = 0; i < 20000; i++) G.sonPurge(c.currentTime); const us = (performance.now() - t1) / 20000 * 1000;
+    G.SON.vivants.length = 0;
+    return { remplis, apresCalme, pleines, us: +us.toFixed(3), tick: typeof G.sonPurgeTick === 'function', max: G.SON.max };
+  });
+  const ok = r.tick && r.remplis === r.max && r.apresCalme.vivants === 0 && r.apresCalme.morts === 0
+    && r.pleines === r.max && r.us < 5;
+  return { ok, detail: `\`sonPurge()\` n'etait appele qu'au debut de \`sonEn()\` : tant que le jeu cree des sons tout va bien, mais des qu'il CESSE d'en creer (on s'arrete dans une piece calme, on coupe le son dans les reglages, une cinematique prend la main, le jeu est en pause) les sources terminees restaient inscrites POUR TOUJOURS — gains et panoramiques branches sur le bus, et les seize places du budget tenues par des morts · MESURE AVANT : 40 sons de 0,1 s puis 600 s de simulation sans un seul son neuf laissaient 16 sources inscrites, 16 MORTES, la plus vieille morte depuis 395,7 s d'horloge audio · MESURE APRES : la rafale remplit ${r.remplis} places sur ${r.max}, puis 2,5 s de calme complet (son coupe, aucun sonEn) et il reste ${r.apresCalme.vivants} source inscrite dont ${r.apresCalme.morts} morte · le cout ne justifiait rien : ${r.us} µs par balayage sur un registre plein de ${r.pleines}, et elle ne tourne qu'a 5 Hz sur l'horloge AUDIO (la seule qui compte pour des sons : le banc rend une image par seconde, la carte son tourne au temps reel) — trois millioniemes du budget d'une image` };
+});

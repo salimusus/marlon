@@ -26332,8 +26332,9 @@ let HORLOGE_BILAN = { recul: 0, objets: 0, dates: 0 };   // ce que le dernier pa
 // pendant une image, les dates posees pendant cette image valent NaN elles aussi, et une date
 // NaN n'est PLUS JAMAIS atteinte : toute comparaison avec NaN est fausse. Il n'y a la aucun
 // temps restant a preserver — on remet donc ces dates a zero, ce qui les libere. Deux
-// exceptions, et deux seulement, parce que zero les fait SE DECLENCHER au lieu de liberer :
-// le changement de meteo et la reunion de gang (qui MET LE JEU EN PAUSE). Elles sont reposees.
+// exceptions, parce que zero les fait SE DECLENCHER au lieu de liberer : le changement de
+// meteo, la reunion de gang (qui MET LE JEU EN PAUSE) et `METIERS.prochainFeu`, qui a zero MET
+// LE FEU a un immeuble a l'image suivante. Elles sont reposees.
 //
 // LE RECENSEMENT VIT DANS LE BANC (dernier test de `harness/play.js`). Il relit le texte du
 // jeu — le bloc de script entier plus les trois fichiers voisins — cherche toute pose de date
@@ -26441,6 +26442,13 @@ function horlogeArriere(recul) {
     // Les deux seules dates que zero DECLENCHE au lieu de liberer. Le reste n'a pas besoin
     // d'exception : atteindre l'echeance ne fait qu'AUTORISER quelque chose.
     try { if (meteo && !(meteo.next > 0)) meteo.next = simTime + 40; } catch (e) {}
+    // TROISIEME EXCEPTION, trouvee en relisant les dates une par une (round 83, poste PREUVE) :
+    // `METIERS.prochainFeu` est lue par `simTime > METIERS.prochainFeu`, et a zero elle
+    // DECLENCHE un incendie (`declencheIncendie`) a l'image suivante. Une horloge cassee ne
+    // doit pas mettre le feu a un immeuble. Les deux voisines, `prochainNid` (un nid-de-poule)
+    // et `prochainDetritus` (un papier par terre), sont laissees a zero : elles ne posent qu'un
+    // objet de decor, et ce sont justement les petits boulots de l'enfant.
+    try { if (METIERS && !(METIERS.prochainFeu > 0)) METIERS.prochainFeu = simTime + 100; } catch (e) {}
     try { if (guerre && !(guerre.prochaineReunion > 0)) guerre.prochaineReunion = simTime + 240; } catch (e) {}
     try { for (const G of gangs) if (!(G.reunionT > 0)) G.reunionT = simTime + 300; } catch (e) {}
   }

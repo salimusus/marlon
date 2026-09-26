@@ -421,6 +421,27 @@ window.__SHOT = {
         if (typeof P !== 'undefined') P.perf = __SHOT.perf0;
       } catch (e40b) {}
     }
+    // ============ LE DELIT FRAIS DU JOUEUR (defaut n° 84, round 83) ============
+    // P.crime et P.crimeTir sont des DATES ABSOLUES (simTime + 20 s, simTime + 1 s) posees
+    // par le moindre delit : un coup de poing, un tir en pleine rue, une vitrine, un feu
+    // rouge grille. joueurAProvoque() les lit, et c'est LUI qui ouvre la garde du defaut
+    // n° 84 : « un habitant n'attaque le joueur que si le joueur l'a provoque ». go()
+    // remettait a plat police.wanted (clearWanted), l'arme degainee, le gang et le « fight »
+    // de chaque habitant — mais JAMAIS ces deux dates-la.
+    // CE QUE CA DONNAIT EN SUITE COMPLETE (mesure, sonde, reproduction exacte du test 470) :
+    // un test frappe quelqu'un vers t = 9 000 s, donc P.crime = 9 020 ; le test 465 remet
+    // ensuite l'horloge en arriere (G.simTime = 3 000) ; le test 470 entre a t = 3 030 avec
+    // un delit « frais » qui n'expirera que 6 000 secondes plus tard. joueurAProvoque() rend
+    // donc VRAI pendant toute la mesure, lancerActivite envoie legitimement un habitant sur
+    // le joueur, et le test lisait « 961 images ou un habitant est lance sur lui, ❤️ au plus
+    // bas 19 » — reproduit ici a l'identique : 960 images, ❤️ 37, un SEUL ecrivain de
+    // « fight », « chase < lancerActivite < vieTick ». Aucun defaut de jeu : la garde a la
+    // source marchait, on lui donnait un joueur declare provocateur.
+    // Le delit est parfaitement rattrapable en jouant (il expire tout seul en 20 s) : sa
+    // place est donc ici, dans le menage des tests, et non dans index.html.
+    try {
+      if (typeof P !== 'undefined') { P.crime = 0; P.crimeTir = 0; P.crimeVeh = 0; }
+    } catch (e40c) {}
     // ============ LE JOUEUR EST POSE AVANT LA RECONSTRUCTION, PAS APRES ============
     // MESURE (poste FIABILITE, round 78). C'est l'heritage entre tests que le poste CONDUITE
     // avait mesure sans pouvoir le nommer : le test 299 (la traque) empoisonnait le test 332

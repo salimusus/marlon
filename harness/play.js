@@ -1979,8 +1979,13 @@ test('le cinéma projette en 640×360 avec finition et publicités', async p => 
     const genres = [...new Set(__G.FILMS.map(f => f.genre))];
     let img = 0, err = null;
     try {
+      // L'HORLOGE EST RENDUE (round 83) : elle etait posee a 2 000 s et laissee la. Elle court
+      // d'un test a l'autre, et la remettre en arriere renvoie DANS L'AVENIR tous les
+      // horodatages absolus des tests precedents (voir le test des feux, plus bas).
+      const tCine = __G.simTime;
       for (let i = 0; i < __G.FILMS.length; i++) { ci.i = i;
         for (let k = 0; k < 25; k++) { ci.t = k * 0.6; ci.next = -1; __G.simTime = 2000 + k; __G.cinemaTick(0); img++; } }
+      __G.simTime = Math.max(tCine, __G.simTime);
     } catch (e) { err = e.message; }
     // bandes noires en haut et en bas, image non vide au milieu
     const haut = ci.g.getImageData(0, 2, ci.cv.width, 4).data;
@@ -5865,8 +5870,34 @@ test('dormir sauvegarde TOUT, la deco achetee arrive toujours, et ta voiture res
 
 test('un garde du corps envoye en mission part vraiment', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G, res = {};
+    // ============ IL N'Y AVAIT AUCUNE GRAINE, ET LA MESURE ETAIT UN TIRAGE (round 83) ============
+    // `missionGang(..., 'boutique')` choisit la boutique avec `pickOne(city.vitrines)` et pose
+    // le rendez-vous a `lieu + rnd(-2,5 ; 2,5)` : la DISTANCE que les deux hommes ont a
+    // parcourir etait donc tiree au sort a chaque lancement. Et la mission « boutique » ne
+    // dure que 28 s (GANG_MISSIONS.boutique.duree) alors qu'on mesurait la position au bout
+    // de 60 s : pendant 32 s les hommes, redevenus libres, se promenaient ou bon leur
+    // semblait. MESURE DU MEME TEST, MEME CODE : 62 m et 66 m lance seul, 7 m et 12 m en
+    // suite complete — et 7 m tombe sous le seuil de 8 m. Rien n'etait casse : la boutique
+    // n'etait pas la meme, et « revenir » apres une mission accomplie est le bon
+    // comportement, pas un defaut.
+    // On mesure donc LE PLUS LOIN QU'ILS SOIENT ALLES (c'est ce que « il part pour de bon »
+    // veut dire, et c'est deja ce que fait la mesure de l'entrainement juste en dessous), et
+    // l'on fige le tirage : l'horloge d'abord, EN AVANT SEULEMENT et sur la meme phase (un
+    // multiple de 2 520 s = ppcm de la journee de 360 s et du cycle des feux de 28 s, sinon
+    // on rembobine le temps pour tous les tests suivants), la graine ENSUITE, apres la
+    // reconstruction du monde — qui consomme un nombre de tirages dependant de l'etat trouve.
+    const CIBLE = 3000, L_PHASE = 2520;
+    G.simTime = Math.ceil((G.simTime - CIBLE) / L_PHASE) * L_PHASE + CIBLE;
+    const vraiHasard = Math.random;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    let graine = 20240607;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    // ET LE JOUEUR PART EN PLEINE FORME. Mesure en lot : le test precedent le laissait a
+    // 37 PV, il tombait a zero pendant les 60 s de mesure et le jeu le TELEPORTAIT a
+    // l'hopital — a 197 m. Toutes les distances « du joueur » relevees ici mesuraient alors
+    // le voyage du joueur, pas celui de ses hommes.
+    G.P.hp = 100; G.jail.on = false;
     const l = G.bots.slice(0, 3);
     for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.journal = null; b.gangMission = null;
       b.pos.set(G.P.pos.x + 2, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
@@ -5877,12 +5908,16 @@ test('un garde du corps envoye en mission part vraiment', async p => {
       gardeGardee: !!l[2].gardeCorps, rdv: l[0].rdv ? l[0].rdv.nom : null,
       journal: (l[0].journal || []).some(o => o.etat === 'cours' && /boutique/.test(o.t)) };
     const dep = l.map(b => [b.pos.x, b.pos.z]); let resteMin = 1e9;
-    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); if (i > 60 * 45) resteMin = Math.min(resteMin, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
-    // la boutique visee peut etre a deux pas du joueur : on mesure le chemin PARCOURU par chaque garde envoye, et un garde
-    // deja ARRIVE devant sa boutique compte comme parti
-    const loin = k => { const b = l[k], t = b.rdv && b.rdv.x != null ? Math.hypot(b.pos.x - b.rdv.x, b.pos.z - b.rdv.z) : 1e9; return t < 5 ? 99 : Math.max(Math.hypot(b.pos.x - G.P.pos.x, b.pos.z - G.P.pos.z), Math.hypot(b.pos.x - dep[k][0], b.pos.z - dep[k][1])); };
-    res.trajet = { parti0: +loin(0).toFixed(0),
-      parti1: +loin(1).toFixed(0),
+    // LE PLUS LOIN QU'ILS SOIENT ALLES, releve a chaque image : la mission ne dure que 28 s,
+    // et un homme qui l'a accomplie a le droit de rentrer avant la 60e seconde.
+    const loinMax = [0, 0, 0];
+    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60);
+      for (let k = 0; k < 3; k++) loinMax[k] = Math.max(loinMax[k],
+        Math.hypot(l[k].pos.x - G.P.pos.x, l[k].pos.z - G.P.pos.z), Math.hypot(l[k].pos.x - dep[k][0], l[k].pos.z - dep[k][1]));
+      if (i > 60 * 45) resteMin = Math.min(resteMin, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
+    res.trajet = { parti0: +loinMax[0].toFixed(0),
+      parti1: +loinMax[1].toFixed(0),
+      colle2: +loinMax[2].toFixed(0),   // le garde NON envoye ne s'eloigne jamais, meme au plus loin
       reste2: +Math.min(resteMin, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)).toFixed(0) };   // au plus pres sur les 15 dernieres secondes : il contourne parfois un obstacle
     // l'entrainement aussi envoie vraiment le garde
     G.entrainerMembre(l[2], 'tir');
@@ -5891,12 +5926,13 @@ test('un garde du corps envoye en mission part vraiment', async p => {
     let entrainMax = 0;
     for (let i = 0; i < 60 * 120; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); entrainMax = Math.max(entrainMax, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
     res.entrainLoin = +entrainMax.toFixed(0);   // le plus loin qu'il soit alle : une fois entraine, il revient garder le joueur
+    Math.random = vraiHasard;
     return res;
   });
   const ok = r.gardes === 3 && r.envoi.missions === 1 && r.envoi.gardeLachee && r.envoi.gardeGardee && r.envoi.journal
     && r.trajet.parti0 > 8 && r.trajet.parti1 > 8 && r.trajet.reste2 < 4
     && r.entrain.gardeLachee && r.entrain.rdv === 'tir' && r.entrainLoin > 8;
-  return { ok, detail: `un homme en garde recevait a CHAQUE IMAGE une consigne « colle au joueur » qui ecrasait le rendez-vous de sa mission : sa fiche affichait « braquer une boutique » et il restait plante a cote de toi · maintenant il pose la garde et part pour de bon (${r.trajet.parti0} m et ${r.trajet.parti1} m du joueur), pendant que le garde NON envoye reste a ${r.trajet.reste2} m · pareil pour l'entrainement (${r.entrainLoin} m), l'hopital et la promenade du chien` };
+  return { ok, detail: `un homme en garde recevait a CHAQUE IMAGE une consigne « colle au joueur » qui ecrasait le rendez-vous de sa mission : sa fiche affichait « braquer une boutique » et il restait plante a cote de toi · maintenant il pose la garde et part pour de bon (au plus loin ${r.trajet.parti0} m et ${r.trajet.parti1} m du joueur, tirage et horloge figes), pendant que le garde NON envoye finit a ${r.trajet.reste2} m (au plus loin ${r.trajet.colle2} m : ce releve est donne pour information, il compte aussi les deplacements du JOUEUR) · pareil pour l'entrainement (${r.entrainLoin} m), l'hopital et la promenade du chien` };
 });
 
 
@@ -8446,8 +8482,17 @@ test('la signalisation est complete : feux avec etat et ligne d\'arret, panneaux
     }
     G.simTime = t0; G.lightsTick();
     // la lampe allumée est bien la bonne (matériau vif, les deux autres éteintes)
+    // L'HORLOGE EST RENDUE TOUT DE SUITE (round 83). Ce releve a besoin de la phase des feux
+    // a t = 0 ; il la prenait... et repartait en laissant G.simTime A ZERO. Or l'horloge de
+    // simulation court d'un test a l'autre : tous les horodatages ABSOLUS poses par les 235
+    // tests precedents (le delit frais du joueur, les temporisations des habitants, des
+    // vehicules, de la police) se retrouvaient d'un coup DANS L'AVENIR pour toute la suite.
+    // C'est ainsi qu'un coup de poing tres ancien declarait encore le joueur provocateur et
+    // faisait tomber le test 470 (defaut 84). Deux lignes plus haut, le meme test rendait
+    // deja l'horloge apres son balayage : elle est rendue ici aussi.
     const f = c.trafficLights[0]; G.simTime = 0; G.lightsTick();
     const lampes = f.lamps.map(l => '#' + l.material.color.getHexString());
+    G.simTime = t0; G.lightsTick();
     // 3. les panneaux : sur un trottoir, jamais sur la chaussée, jamais devant une porte
     const surTrottoir = (x, z) => c.trottoirs.some(t => Math.abs(x - t.x) <= t.w / 2 + 0.5 && Math.abs(z - t.z) <= t.d / 2 + 0.5);
     const portes = G.solids.filter(o => o.porte);
@@ -10134,10 +10179,29 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
     const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
     // Un coup de poing dure un dixieme de seconde : on mesure donc une NOTE TENUE d'une
     // demi-seconde, jouee trois fois, et on garde la crete de toute la fenetre d'ecoute.
+    // ============ LA NOTE EST DOUCE, ET C'EST TOUT L'INTERET (round 83) ============
+    // Elle valait 0,5. Or la chaine de sortie n'est pas transparente : bus -> volume general
+    // -> COMPRESSEUR (seuil -18 dB, genou 12 dB, rapport 4:1, attaque 4 ms) -> rattrapage
+    // x1,7 -> LIMITEUR brique a -2 dB. A 1,5 m l'attenuation de sonEn vaut 0,762 : la note
+    // entrait donc a 0,381, soit -8,4 dB, DIX DECIBELS AU-DESSUS du seuil du compresseur.
+    // Ce qu'on mesurait au bout de la chaine n'etait plus l'attenuation de sonEn mais l'etat
+    // du compresseur : l'analyseur est un ScriptProcessor (il tourne sur le fil principal),
+    // et selon qu'il attrapait ou non les 4 ms d'attaque il lisait 0,563 (la crete, machine
+    // au repos) ou 0,267 (le regime etabli, -15,6 dB puis x1,7 = 0,283, machine chargee).
+    // Le rapport proche/moyen passait ainsi de 2,89 a 1,37 et tombait sous le seuil de 1,5 :
+    // le test 267 etait vert lance seul et rouge en suite complete, sans le moindre defaut
+    // dans sonEn. MESURE : a 20 m (0,1948) et a 45 m (0,0727) les deux lectures etaient
+    // IDENTIQUES AU DIX-MILLIEME d'un lancement a l'autre — seule bougeait la valeur proche,
+    // la seule a etre comprimee. Signature sans ambiguite.
+    // A 0,08, la note proche entre a 0,061 (-24,3 dB) : sous le genou du compresseur, donc
+    // dans la partie LINEAIRE de la chaine aux trois distances. Aucun seuil n'est desserre —
+    // le rapport mesure passe au contraire de 1,37 a environ 3,9, la valeur theorique
+    // (0,762 / 0,194), et ne depend plus de la charge de la machine.
+    const VOL = 0.08;
     const pic = async (dist) => {
       crete = 0;
       for (let k = 0; k < 3; k++) {
-        G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', 0.5), { duree: 0.6, portee: 40 });
+        G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', VOL), { duree: 0.6, portee: 40 });
         for (let i = 0; i < 16; i++) await dodo(30);
         await dodo(220);
       }
@@ -10162,7 +10226,8 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
   const ok = r.etat === 'running' && r.pres > r.moyen * 1.5 && r.moyen > r.loin && r.pres > r.silence + 0.02
     && !r.horsPortee && r.stereo && Math.abs(r.attDroite - r.attGauche) < 0.001
     && r.bus.indexOf('voix') >= 0 && r.portee === 40 && r.coupure === 60;
-  return { ok, detail: `tous les sons partaient en MONO dans le bus « effets », au meme volume qu'on soit dessus ou a cinquante metres · sonEn() les place maintenant : gain + panoramique calcules depuis la position du joueur et cam.yaw · mesure a l'analyseur, au bout de la chaine, sur une meme note tenue — a 1,5 m : ${r.pres} · a 20 m : ${r.moyen} · a 45 m : ${r.loin} · (fond de scene ${r.silence}) · au-dela de ${r.coupure} m plus rien n'est cree (${r.horsPortee ? 'raté' : 'refusé'}) · a gauche et a droite le meme son garde la meme force (${r.attDroite} / ${r.attGauche}), seul le cote change · cinq familles de bus desormais : ${r.bus.join(', ')}` };
+  const rapport = r.moyen > 0 ? +(r.pres / r.moyen).toFixed(2) : 0;
+  return { ok, detail: `tous les sons partaient en MONO dans le bus « effets », au meme volume qu'on soit dessus ou a cinquante metres · sonEn() les place maintenant : gain + panoramique calcules depuis la position du joueur et cam.yaw · mesure a l'analyseur, au bout de la chaine, sur une meme note tenue — a 1,5 m : ${r.pres} · a 20 m : ${r.moyen} · a 45 m : ${r.loin} (rapport proche/moyen ${rapport}, theorie 3,94 — la note est assez douce pour rester sous le genou du compresseur, sinon on mesure le compresseur et non sonEn) · (fond de scene ${r.silence}) · au-dela de ${r.coupure} m plus rien n'est cree (${r.horsPortee ? 'raté' : 'refusé'}) · a gauche et a droite le meme son garde la meme force (${r.attDroite} / ${r.attGauche}), seul le cote change · cinq familles de bus desormais : ${r.bus.join(', ')}` };
 });
 
 test('marcher fait du bruit : les pas suivent la cadence de la foulee, plus vite et plus fort en courant, et le timbre change avec le sol', async p => {
@@ -21365,6 +21430,22 @@ test('un habitant ordinaire ne lève jamais la main sur un enfant qui n\'a rien 
     // verrait rien du tout. On se place donc APRÈS cette accalmie, là où le défaut vivait.
     G.vie.debut = G.simTime - 1000; G.vie.t = 0;
     P.hp = 100;
+    // UN ENFANT SANS HISTOIRE, ET ON LE DIT AU JEU (round 83). Les deux moitiés du test ne
+    // partaient pas du même état : le tirage forcé, plus bas, remet à zéro les quatre
+    // marqueurs de provocation, et la mesure de 240 s, elle, héritait de ceux du test
+    // précédent. Or `P.crime` et `P.crimeTir` sont des DATES ABSOLUES (simTime + 20 s) que
+    // `__SHOT.go()` ne remettait pas à plat, et le test 465 REMBOBINE l'horloge à 3 000 s :
+    // un coup de poing porté vers t = 9 000 s par un test bien plus haut laissait donc un
+    // délit « frais » valable jusqu'à t = 9 020, soit 6 000 secondes après l'entrée ici.
+    // joueurAProvoque() rendait VRAI pendant toute la mesure et `lancerActivite` envoyait
+    // légitimement les habitants sur le joueur : « 961 images où un habitant est lancé sur
+    // lui, ❤️ au plus bas 19 » — reproduit à l'identique à la sonde (960 images, ❤️ 37, un
+    // seul écrivain de fight : « chase < lancerActivite < vieTick »), et 0 image dès que ces
+    // quatre lignes sont là. La garde à la source n'a jamais failli ; c'est l'ÉTAT DU JOUEUR
+    // qui mentait. (Le ménage est aussi fait dans `__SHOT.go` pour tous les autres tests.)
+    G.police.wanted = 0; P.crime = 0; P.crimeTir = 0; P.drawn = false;
+    const entree = { crime: +(P.crime || 0), crimeTir: +(P.crimeTir || 0), simTime: +G.simTime.toFixed(0),
+      provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
     // 1) LA SCÈNE DU CONTRÔLEUR : manette posée, 240 s de simulation, relevé À CHAQUE PAS.
     let minHp = 100, chasse = 0, portee = 0, wantedMax = 0, coups = [], dernier = '';
     for (let i = 0; i < 14400; i++) {
@@ -21407,14 +21488,15 @@ test('un habitant ordinaire ne lève jamais la main sur un enfant qui n\'a rien 
     };
     const propre = tirage(false);
     const cherche = tirage(true);
-    return { pose, propre, cherche };
+    return { pose, propre, cherche, entree };
   });
   // 0 coup reçu d'un habitant non provoqué ; la ville se bagarre quand même entre bots ;
   // et un enfant qui VIENT de frapper reste, lui, une cible légitime.
   const ok = r.pose.chasse === 0 && r.pose.portee === 0 && r.pose.minHp === 100
     && r.propre.surJoueur === 0 && r.propre.surBot > 0
-    && r.cherche.surJoueur > 0;
-  return { ok, detail: `avant : profil vierge, manette posée, « 🤕 −9 ❤️ · Karim_flash » puis « 😵 KO par Karim_flash ! −7 🪙 » — et sur 10 tirages « bagarre » forcés à moins de 45 m, 10 partaient sur le JOUEUR, 0 sur un autre bot · maintenant 240 s de simulation (14 400 pas, relevés à chaque pas, après l'accalmie des 180 premières secondes) : ${r.pose.chasse} image où un habitant est lancé sur lui, ${r.pose.portee} image où il est à portée de coup, ❤️ au plus bas ${r.pose.minHp}, ★ au plus haut ${r.pose.wantedMax}${r.pose.coups.length ? ' (' + r.pose.coups.join(' | ') + ')' : ' (aucun coup encaissé)'} · tirage forcé sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent à lui et ${r.propre.surBot} à un autre habitant (la ville vit toujours) · même tirage sur ${r.cherche.essais} habitants APRÈS un coup porté par l'enfant : ${r.cherche.surJoueur} s'en prennent à lui — la provocation marche encore` };
+    && r.cherche.surJoueur > 0
+    && !r.entree.provoque;   // la mesure de 240 s part bien d'un enfant sans histoire
+  return { ok, detail: `avant : profil vierge, manette posée, « 🤕 −9 ❤️ · Karim_flash » puis « 😵 KO par Karim_flash ! −7 🪙 » — et sur 10 tirages « bagarre » forcés à moins de 45 m, 10 partaient sur le JOUEUR, 0 sur un autre bot · maintenant, horloge d'entrée ${r.entree.simTime} s, délit frais ${r.entree.crime} / tir ${r.entree.crimeTir}, provocateur=${r.entree.provoque} · 240 s de simulation (14 400 pas, relevés à chaque pas, après l'accalmie des 180 premières secondes) : ${r.pose.chasse} image où un habitant est lancé sur lui, ${r.pose.portee} image où il est à portée de coup, ❤️ au plus bas ${r.pose.minHp}, ★ au plus haut ${r.pose.wantedMax}${r.pose.coups.length ? ' (' + r.pose.coups.join(' | ') + ')' : ' (aucun coup encaissé)'} · tirage forcé sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent à lui et ${r.propre.surBot} à un autre habitant (la ville vit toujours) · même tirage sur ${r.cherche.essais} habitants APRÈS un coup porté par l'enfant : ${r.cherche.surJoueur} s'en prennent à lui — la provocation marche encore` };
 });
 
 test('une infraction n\'est imputée à l\'enfant que s\'il en est l\'auteur : un bot qui en tue un autre ne le fait pas rechercher', async p => {
@@ -24113,4 +24195,62 @@ test('les 30 entrees de la ville laissent passer l\'enfant, mobilier compris', a
   });
   const ok = r.length === 2 && r.every(o => o.portes >= 30 && o.bouchees.length === 0);
   return { ok, detail: `le demi-gabarit du joueur est P.hw = 0,40 m (0,80 m de large) ; on exige 1,00 m devant une baie — 10 cm de jeu de chaque cote, parce que la collision du joueur est une boite alignee sur les axes et qu'en deca il accroche le montant a chaque image · ${r.map(o => `graine ${o.graine} : ${o.portes} entrees declarees, ${o.bouchees.length} sous 1,00 m (dont ${o.parMeuble} a cause d'un meuble)${o.bouchees.length ? ' → ' + JSON.stringify(o.bouchees.slice(0, 4)) : ''} ; la plus serree laisse ${o.pire.libre} m`).join(' · ')}` };
+});
+// ================= LE GARDE-FOU DU DEFAUT 84 (poste REPARATEUR, round 83) =================
+// Le test « un habitant ordinaire ne leve jamais la main sur un enfant qui n'a rien fait »
+// etait vert lance seul et rouge en suite complete : 961 images ou un habitant courait sur
+// l'enfant, coeur descendu a 19. Ni la garde a la source ni un chemin cache en aval n'etaient
+// en cause — c'etait l'ETAT DU JOUEUR qui mentait. `P.crime` (et `P.crimeTir`) sont des DATES
+// ABSOLUES, posees a `simTime + 20 s` par le moindre delit ; `joueurAProvoque()` les lit, et
+// c'est lui qui ouvre la garde. Or l'horloge de simulation court d'un test a l'autre et
+// plusieurs tests la REMBOBINENT : un coup de poing porte tres haut dans la suite redevenait
+// alors un delit « frais » pour des milliers de secondes.
+// Ce test-ci monte le piege a la main et verifie les deux bouts a la fois : l'entree d'un test
+// rend l'enfant sans histoire, ET la provocation marche encore quand elle est reelle. Il ne
+// simule aucun agresseur : il n'utilise que le tirage d'activite de la vie de la ville.
+test('un delit perime ne rend pas l\'enfant provocateur, et une vraie provocation marche toujours', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    // L'HORLOGE NE RECULE JAMAIS POUR LES TESTS SUIVANTS : tout se passe dans le futur de
+    // l'horloge trouvee a l'entree, et elle est rendue au-dela du piege a la toute fin.
+    const t0 = G.simTime;
+    G.simTime = t0 + 9000; P.crime = G.simTime + 20; P.crimeTir = G.simTime + 20;   // un delit quelconque, tres haut dans la suite
+    G.simTime = t0 + 3000;                                                          // le rembobinage d'un test plus bas
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const apresGo = { crime: +(P.crime || 0), crimeTir: +(P.crimeTir || 0),
+      avance: +((t0 + 9020) - G.simTime).toFixed(0),   // de combien le delit etait « dans l'avenir »
+      provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    P.hp = 100; G.vie.debut = G.simTime - 1000; G.vie.t = 0;
+    const bag = (G.ACTIVITES || []).find(a => a.k === 'bagarre') || { k: 'bagarre', e: '\u{1F624}', n: 'bagarre', poids: 1 };
+    const vrai = Math.random;
+    // TIRAGE FORCE de l'activite « bagarre », avec le hasard bloque sur la valeur qui, avant
+    // la garde du defaut 84, envoyait tout le monde sur le joueur (0,1 < 0,6).
+    const tir = () => {
+      const proches = G.bots.filter(b => !b.ko && b.av && b.av.group.visible
+        && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40).slice(0, 10);
+      let surJoueur = 0, surBot = 0;
+      Math.random = () => 0.1;
+      for (const b of proches) {
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null; b.rdv = null; b.wait = 0;
+        G.lancerActivite(b, bag);
+        if (b.fight && b.fight !== 'flee') surJoueur++;
+        if (b.bagarre) surBot++;
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null;
+      }
+      Math.random = vrai;
+      return { essais: proches.length, surJoueur, surBot };
+    };
+    const propre = tir();
+    P.crime = G.simTime + 20;                      // cette fois le delit est VRAIMENT frais
+    const provoque = { ...tir(), provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
+    P.crime = 0; P.crimeTir = 0;
+    G.simTime = Math.max(G.simTime, t0 + 9021);    // on rend l'horloge devant le piege
+    return { apresGo, propre, provoque, horloge: +G.simTime.toFixed(0) };
+  });
+  const ok = r.apresGo.crime === 0 && r.apresGo.crimeTir === 0 && !r.apresGo.provoque
+    && r.apresGo.avance > 5000
+    && r.propre.essais >= 5 && r.propre.surJoueur === 0 && r.propre.surBot > 0
+    && r.provoque.provoque && r.provoque.surJoueur === r.provoque.essais;
+  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · horloge rendue a ${r.horloge} s, jamais en arriere` };
 });

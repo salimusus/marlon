@@ -17094,17 +17094,27 @@ function coupCouteau(av, duree) {
 //     seuil (21 m/s ⇔ 21² / 60 = 7,35 m) : une chute de 8 m qui ne tuait pas ne tue toujours
 //     pas, l'étage de la villa (5,3 m), un muret, un escalier, un toit de garage restent
 //     gratuits comme avant.
-//   — CHUTE_H_MORT = 13 m : à cette hauteur un joueur en pleine forme MEURT. Mesure qui la
-//     justifie : dans la ville, les toits accessibles sont entre 12 et 22 m, et l'ascenseur
-//     des immeubles de La Zone s'arrête à 13,2 m sur un toit qui annonce lui-même « prends un
-//     parachute ou un deltaplane ». Sauter de ce toit sans voile DOIT donc tuer — c'est la
-//     leçon que l'enfant doit comprendre. Les plus bas toits (12 m) laissent 8 PV : un
-//     avertissement, pas un pardon.
-// Entre les deux, les dégâts montent en ligne droite. Aux hauteurs basses les chiffres sont
-// à une poignée de PV de ceux d'avant (8 m : 9 PV contre 8 ; 10 m : 45 PV contre 36).
+//   — CHUTE_H_MORT = 18 m : à cette hauteur un joueur en pleine forme MEURT. ARBITRAGE DU
+//     CHEF (round 83), contre les 13 m proposés d'abord, et voici le calcul qui tranche. La
+//     vieille formule — round((v − 21) × 8) — n'était juste que de 7,5 à 15 m : au-delà, la
+//     vitesse était bornée et elle mentait. Sur CETTE bande, la ligne droite 7,5 → 18 m rend
+//     presque exactement les mêmes PV :
+//         hauteur   8 m   10 m   12 m   15 m
+//         avant       7     28     47     72   PV
+//         18 m        5     24     43     71   PV   ← jamais plus de 5 PV d'écart
+//         13 m        9     45     82    MORT      ← la balance change, et 15 m tue
+//     Avec 18 m on répare le MENSONGE (au-delà de 15 m, la hauteur et les dégâts étaient gelés)
+//     sans rien rejouer de ce que l'enfant connaissait déjà. Avec 13 m on réparait le mensonge
+//     ET on doublait la punition entre 10 et 15 m, ce que personne n'avait demandé.
+//     Et la leçon passe quand même : le toit de La Zone (13,2 m), celui qui annonce lui-même
+//     « prends un parachute ou un deltaplane », coûte 54 PV — plus de la moitié de la vie, et
+//     la deuxième fois tue. Tous les toits au-dessus de 18 m, eux, tuent du premier coup.
+//     Une dernière mesure a pesé : le parcours d'accrobranche culmine à 6,80 m et le plongeoir
+//     à 6,20 m — les deux endroits où l'enfant tombe pour de vrai, souvent, restent gratuits.
+// Entre les deux, les dégâts montent en ligne droite.
 const CHUTE_SEUIL = 21;        // m/s — gardé : porte d'entrée des appels qui ne connaissent QUE la vitesse
 const CHUTE_H_SEUIL = 7.5;     // m — en dessous de cette hauteur de chute, aucun dégât
-const CHUTE_H_MORT = 13;       // m — à cette hauteur, 100 PV de dégâts : un joueur intact y meurt
+const CHUTE_H_MORT = 18;       // m — à cette hauteur, 100 PV de dégâts : un joueur intact y meurt
 // La hauteur de chute à retenir : celle qu'on a MESURÉE si on l'a, sinon celle qu'implique la
 // vitesse (chute libre : h = v² / 2g). Le second cas ne sert plus qu'aux appels directs.
 function chuteHauteur(vy, haut) {

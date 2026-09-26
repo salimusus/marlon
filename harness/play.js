@@ -23566,3 +23566,127 @@ test('dans la cabane de l\'arbre, la camera recule assez pour qu\'on voie devant
     && r.temoins[0].dJoueur > 8.5 && r.temoins[1].dJoueur > 4.5 && r.temoins[2].dJoueur > 5;
   return { ok, detail: `avant : 1,62 / 1,61 / 1,27 / 1,61 m de perche dans la cabane (pour 9 m demandes) — l'enfant ne voyait que son dos · en cause le TOIT, range dans camToits, qui ecrasait la visee a 0,04 rad (cam.plafond = 0,31 m), et les QUATRE TRONCS de la tour (0,84 m de cote, 10,20 m de haut, aux coins du plancher de 4 x 4 m) que le cone de camera touchait a 2,00 m · la cabane a son propre volume de camera avec ses deux altitudes : ${c.map(s => `${s.nom} ${s.dJoueur} m (piece « ${s.piece} », plafond ${s.plafond}, ${s.devant} m de degage devant)`).join(' · ')} · aucun mur entre la camera et le joueur, jamais dans un solide · et rien n'a bouge au sol : la cabane n'est PAS dans city.interieurs (${r.pasInterieur}), le volume ne repond qu'en hauteur (dedans a 6,9 m = ${r.dansCabane}, a 0,2 m = ${!r.sousArbre ? 'OUI (DEFAUT)' : 'non'}), le sol sous l'arbre sonne « ${r.solSousArbre} » et non « carrelage » · temoins inchanges : ${r.temoins.map(s => `${s.nom} ${s.dJoueur} m`).join(', ')} · ${r.nbPieces} piece(s) perchee(s) declaree(s)` };
 });
+// ================= AUCUN ARBRE, AUCUN PALMIER SUR LA CHAUSSÉE (round 83) =================
+// Le défaut, mot pour mot : « on peut trouver des palmiers plantés au milieu d'une voie de 5 m ».
+// La rangée de palmiers de la plage tire son abscisse par `rnd(105, 110)` alors que la promenade
+// du littoral tient x = 101,5 à 106,5 — la chaussée la plus ÉTROITE de la ville, 5 m. Un tirage
+// sur quatre plantait un tronc en pleine voie ; et le filet de sécurité faisait pire que rien,
+// `degageLesRoutes()` emportant le TRONC et laissant les SIX PALMES en l'air à 5,10 m.
+// RELEVÉ AVANT (graine 987654321) : 2 houppiers sans tronc, en x = 105,57 et x = 105,58.
+// Ce test relève les troncs DANS LA SCÈNE et non dans `solids` : un arbre qu'on aurait jeté
+// compte comme un défaut, pas comme une réussite. Deux graines, monde rebati pour chacune.
+test('aucun arbre ni palmier ne pousse sur la chaussée, sur deux graines de monde', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, vrai = Math.random, sorties = [];
+    try {
+      for (const graine of [987654321, 6174]) {
+        let g0 = graine >>> 0;
+        Math.random = () => ((g0 = (Math.imul(g0, 1664525) + 1013904223) >>> 0) / 4294967296);
+        __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+        const troncs = [], palmes = [];
+        G.worldGroup.traverse(o => {
+          if (!o.isMesh || !o.geometry) return;
+          const q = o.geometry.parameters, t = o.geometry.type;
+          const w = o.getWorldPosition(new G.THREE.Vector3());
+          if (t === 'CylinderGeometry' && q && q.height >= 4.5 && q.height <= 6 && q.radiusBottom >= 0.25 && q.radiusBottom <= 0.45)
+            troncs.push({ quoi: 'palmier', x: +w.x.toFixed(2), z: +w.z.toFixed(2), r: q.radiusBottom });
+          else if (t === 'CylinderGeometry' && q && q.height === 1 && q.radiusBottom === 0.5)
+            troncs.push({ quoi: 'arbre', x: +w.x.toFixed(2), z: +w.z.toFixed(2), r: 0.24 });
+          // une palme de palmier : le disque unitaire mis à l'échelle (0,5 ; 0,08 ; 3) et haut perché
+          if (Math.abs(o.scale.y - 0.08) < 1e-6 && Math.abs(o.scale.x - 0.5) < 1e-6 && w.y > 4)
+            palmes.push({ x: +w.x.toFixed(2), z: +w.z.toFixed(2) });
+        });
+        // 1) aucun tronc ne mord une chaussée
+        const surRue = [];
+        for (const t of troncs) for (const rt of (G.city.routes || [])) {
+          const v = Math.min(rt.w / 2 + t.r - Math.abs(t.x - rt.x), rt.d / 2 + t.r - Math.abs(t.z - rt.z));
+          if (v > 0) { surRue.push({ ...t, dans: +v.toFixed(2), rue: `${rt.x}/${rt.z} ${Math.min(rt.w, rt.d)}m` }); break; }
+        }
+        // 2) aucune grappe de palmes sans tronc dessous (un palmier ramassé en laisse six en l'air)
+        const grappes = [];
+        for (const f of palmes) {
+          let gr = grappes.find(q2 => Math.abs(q2.x - f.x) < 2.6 && Math.abs(q2.z - f.z) < 2.6);
+          if (!gr) { gr = { x: f.x, z: f.z, n: 0, sx: 0, sz: 0 }; grappes.push(gr); }
+          gr.n++; gr.sx += f.x; gr.sz += f.z;
+        }
+        const orphelins = grappes.map(gr => ({ x: +(gr.sx / gr.n).toFixed(2), z: +(gr.sz / gr.n).toFixed(2) }))
+          .filter(c => !troncs.some(t => t.quoi === 'palmier' && Math.abs(t.x - c.x) < 2 && Math.abs(t.z - c.z) < 2));
+        sorties.push({ graine, palmiers: troncs.filter(t => t.quoi === 'palmier').length,
+          arbres: troncs.filter(t => t.quoi === 'arbre').length, routes: (G.city.routes || []).length,
+          surRue, orphelins, replantes: (G.city.replantes || 0) });
+      }
+    } finally { Math.random = vrai; }
+    return sorties;
+  });
+  const ok = r.length === 2 && r.every(o => o.surRue.length === 0 && o.orphelins.length === 0 && o.palmiers >= 40 && o.arbres >= 190);
+  return { ok, detail: `« des palmiers plantés au milieu d'une voie de 5 m » : la rangée de la plage tirait son abscisse par rnd(105, 110) et la promenade du littoral tient x = 101,5 à 106,5 ; avec la graine 987654321 deux troncs tombaient dessus, \`degageLesRoutes\` les emportait et laissait 6 palmes en l'air à 5,10 m (x = 105,57 et 105,58) · \`placeHorsBitume\` refuse maintenant la chaussée ET les passages piétons à la plantation, et la végétation qu'une rue élargie rattrape est REPLANTÉE (feuillage compris) au lieu d'être jetée · ${r.map(o => `graine ${o.graine} : ${o.palmiers} palmiers, ${o.arbres} arbres, ${o.routes} chaussées → ${o.surRue.length} tronc sur la chaussée${o.surRue.length ? ' ' + JSON.stringify(o.surRue.slice(0, 4)) : ''}, ${o.orphelins.length} houppier sans tronc${o.orphelins.length ? ' ' + JSON.stringify(o.orphelins.slice(0, 4)) : ''} (${o.replantes} replantés au dégagement)`).join(' · ')}` };
+});
+
+// ====== UNE RUE FERMÉE PAR DEUX VOITURES GARÉES FACE À FACE (round 83, graine 987654321) ======
+// La sortie du commissariat — `road(-46, 9, 6, 12)`, portée à 8 m — portait les deux voitures de
+// patrouille en (-49 ; 9) et (-44 ; 9). Entre-deux mesuré : 2,60 m. Le gabarit qui compte n'est
+// pas `baseW` mais la largeur que `carBlocked` donne au véhicule (chaîne de disques) : bulldozer
+// 3,15 m, camion 3,01 m, pompier 2,96 m. AUCUN des cinq véhicules de service ne passait.
+// Le test rejoue les DEUX états dans la même page : les voitures remises à leur ancienne place
+// (AVANT) puis là où `stationnementAlterne()` les a rangées (APRÈS), 900 pas de simulation
+// chacun, même conducteur — il pousse au nord et tente un écart de 15 cm quand il est bloqué.
+test('le plus large véhicule de service traverse la rue étroite bordée de voitures garées', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, vrai = Math.random;
+    try {
+      let g0 = 987654321 >>> 0;
+      Math.random = () => ((g0 = (Math.imul(g0, 1664525) + 1013904223) >>> 0) / 4294967296);
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+      const rue = (G.city.routes || []).find(q => Math.abs(q.x + 46) < 0.6 && Math.abs(q.z - 9) < 0.6);
+      const pat = (G.police.cars || []).filter(q => q.z > 2 && q.z < 22 && q.x < -40).sort((a, b) => a.x - b.x);
+      const pose = (v, x, z) => { v.x = x; v.z = z; v.h = 0; v.speed = 0;
+        v.y = G.groundCar(x, z, v.solid, 0); v.g.position.set(x, v.y, z); v.g.rotation.y = 0; G.vehicleSolid(v); };
+      const gros = ['bulldozer', 'truck', 'pompier', 'depanneuse', 'ambulance']
+        .map(k => (G.city.cars || []).find(v => v.kind === k)).filter(Boolean);
+      const largeurLibre = () => {
+        const a = pat.find(q => q.x < rue.x), b = pat.find(q => q.x >= rue.x);
+        if (!a || !b || Math.abs(a.z - b.z) > 4.4) return null;      // plus en vis-à-vis
+        return +((b.x - 1.2) - (a.x + 1.2)).toFixed(2);
+      };
+      const traverse = v => {
+        const dt = 1 / 60, demi = (v.baseW || 2.4) / 2;
+        // CHAQUE VÉHICULE REPART DE SA PLACE ET Y RETOURNE. Sans cela, les cinq essais
+        // s'empilent à l'entrée de la rue et les quatre derniers mesurent l'embouteillage
+        // qu'a laissé le premier, pas le goulot qu'on veut peser.
+        const g0v = [v.x, v.z, v.h, v.y];
+        pose(v, -46, 1); const z0 = v.z; let bloq = 0;
+        for (let i = 0; i < 900; i++) {
+          const px = v.x, pz = v.z;
+          G.avanceVehicule(v, dt, 5, {});
+          if (Math.hypot(v.x - px, v.z - pz) < 1e-4) { bloq++;
+            for (const dx of [0.15, -0.15, 0.3, -0.3]) {
+              const nx = v.x + dx;
+              if (Math.abs(nx - rue.x) + demi > rue.w / 2) continue;   // il reste sur le bitume
+              if (G.vehBloque(v, nx, v.z, 0, { bar: true, veh: true })) continue;
+              v.x = nx; v.g.position.x = nx; G.vehicleSolid(v); break;
+            } }
+        }
+        const out = { kind: v.kind, tole: v.baseW, gabarit: +G.gabaritCollision(v).toFixed(2),
+          avance: +(v.z - z0).toFixed(2), bloq, traverse: v.z > 16 };
+        v.h = g0v[2]; pose(v, g0v[0], g0v[1]); v.y = g0v[3]; v.g.position.y = v.y; v.g.rotation.y = v.h; G.vehicleSolid(v);
+        return out;
+      };
+      const etat = () => ({ libre: largeurLibre(), veh: gros.map(traverse),
+        places: pat.map(q => [+q.x.toFixed(2), +q.z.toFixed(2)]) });
+      const apresPos = pat.map(q => [q.x, q.z]);
+      pose(pat[0], -49, 9); pose(pat[1], -44, 9);
+      const avant = etat();
+      for (let i = 0; i < pat.length; i++) pose(pat[i], apresPos[i][0], apresPos[i][1]);
+      const apres = etat();
+      return { larg: rue.w, x1: +(rue.x - rue.w / 2).toFixed(1), x2: +(rue.x + rue.w / 2).toFixed(1),
+        alternance: G.city.alternance || null, avant, apres };
+    } finally { Math.random = vrai; }
+  });
+  const a = r.avant, b = r.apres;
+  const ok = a.libre === 2.6 && a.veh.every(v => !v.traverse) && a.veh[0].avance < 4
+    && b.libre === null && b.veh.length === 5 && b.veh.every(v => v.traverse && v.avance > 16)
+    && r.alternance && r.alternance.deplaces.length === 1 && r.alternance.restants.length === 0;
+  const fmt = e => e.veh.map(v => `${v.kind} (tôle ${v.tole} m, passage réel ${v.gabarit} m) ${v.traverse ? 'TRAVERSE' : 'bloqué'} à ${v.avance} m (${v.bloq}/900 images bloquées)`).join(', ');
+  const d = (r.alternance && r.alternance.deplaces[0]) || {};
+  return { ok, detail: `sortie du commissariat, ${r.larg} m de bitume (x ${r.x1} à ${r.x2}) · AVANT, les deux voitures de patrouille en (-49 ; 9) et (-44 ; 9) ne laissaient que ${a.libre} m entre elles : ${fmt(a)} · ÉLARGIR N'Y CHANGEAIT RIEN (abscisses fixes, le bitume s'ajoute AUTOUR d'elles) : \`stationnementAlterne()\` range l'une des deux DU MÊME CÔTÉ que l'autre, ${d.recul} m plus loin, de (${(d.de || []).join(' ; ')}) à (${(d.vers || []).join(' ; ')}), sur sa place déclarée — aucune géométrie n'est touchée · APRÈS : plus aucun vis-à-vis (largeur libre ${d.apres} m pour un passage exigé de ${r.alternance ? r.alternance.passe : '?'} m), ${fmt(b)} · ${r.alternance ? r.alternance.bouchons.length : '?'} bouchon recensé dans toute la ville, ${r.alternance ? r.alternance.restants.length : '?'} non résolu` };
+});

@@ -44,6 +44,17 @@ globalThis.__G = {
   pathPos, startCountdown, get raceKarts() { return raceKarts; }, WEAPONS, keys, safesTick, fire, DECOR,
   schQuestion, schTirage, school, swingTick, sitSwing, CULT,
   construireGraphe, traficDestination, traficPose, traficRoule, gapDevant, codeRoute, croisementLibre, carrefourLibre, flotteMaj, vehBloque, vehiculeMord, vehBloqueDur, vehicleSolid, avanceVehicule, surLaChaussee, itineraireVoies, traceSuit, feuPhase, separerVehicules, pointRouteLibre, makeCar, makeVehicle, degageLesRoutes,
+  // JEU= sert a COMPARER DEUX VERSIONS du jeu : une version anterieure n'a pas ces fonctions,
+  // et un export sec les rendait introuvables — le chargement mourait sur
+  // « gabaritCollision is not defined » et layout.js / zones.js / garage.js ne tournaient plus
+  // du tout sur l'ancien index.html. On les exporte comme tous les ajouts recents : gardees.
+  // (PAS D'ACCENT GRAVE DANS CE BLOC : c'est un litteral de gabarit, il le couperait en deux.)
+  gabaritCollision: typeof gabaritCollision === 'function' ? gabaritCollision : null,
+  gabaritDeService: typeof gabaritDeService === 'function' ? gabaritDeService : null,
+  stationnementAlterne: typeof stationnementAlterne === 'function' ? stationnementAlterne : null,
+  placeHorsBitume: typeof placeHorsBitume === 'function' ? placeHorsBitume : null,
+  bitumeSous: typeof bitumeSous === 'function' ? bitumeSous : null,
+  chaineDisques: typeof chaineDisques === 'function' ? chaineDisques : null,
   setTrafficTime(v) { simTime = v; flotteT = -1; }, cheminAretes, projVoie, pietonDevant,
 };
 `;

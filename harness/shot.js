@@ -2613,6 +2613,12 @@ window.__G = {
   get shots() { return typeof shots !== 'undefined' ? shots : null; },
   spawnShot: typeof spawnShot === 'function' ? spawnShot : null,
   joueurAProvoque: typeof joueurAProvoque === 'function' ? joueurAProvoque : null,
+  horlogeArriere: typeof horlogeArriere === 'function' ? horlogeArriere : null,        // poste REPARATEUR : le decalage des dates quand l'horloge recule
+  horlogeSaine: typeof horlogeSaine === 'function' ? horlogeSaine : null,              // poste REPARATEUR : la reparation d'une horloge cassee
+  horlogeBilan: function () { try { return HORLOGE_BILAN; } catch (e) { return null; } },   // ce que le dernier passage a touche
+  DATES_JEU: typeof DATES_JEU !== 'undefined' ? DATES_JEU : null,                      // le registre des noms de champs qui portent une date
+  tempsMonde: typeof tempsMonde === 'function' ? tempsMonde : null,                    // l'heure du monde partage (simTime + ecart avec l'hote)
+  netHorloge: function () { try { return netHorloge; } catch (e) { return null; } },
   // ---- poste AMBULANCE (round 71 : la sequence de secours complete) : ajoute tes exports SOUS cette ligne ----
   majBrancard: typeof majBrancard === 'function' ? majBrancard : null,
   plieBrancard: typeof plieBrancard === 'function' ? plieBrancard : null,

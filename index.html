@@ -9133,7 +9133,7 @@ function feuPhase(T, groupe) {   // 0 = rouge, 1 = orange, 2 = vert (l'index de 
   return t < FEU_VERT ? 2 : t < FEU_VERT + FEU_ORANGE ? 1 : 0;
 }
 function lightsTick() {
-  const T = simTime % FEU_CYCLE;
+  const T = tempsMonde() % FEU_CYCLE;   // l'heure du MONDE PARTAGE : tous les joueurs voient le meme feu (voir netHorloge)
   const phA = feuPhase(T, 'A'), phB = feuPhase(T, 'B');
   for (const tl of city.trafficLights) {
     const ph = tl.group === 'A' ? phA : phB;
@@ -12347,7 +12347,7 @@ function lumieresVille(on) {
 }
 function dayTick() {
   if (!city.on) return;
-  const t = (simTime % day.len) / day.len;
+  const t = (tempsMonde() % day.len) / day.len;   // l'heure du MONDE PARTAGE : en multijoueur la phase du jour suit l'hote (voir netHorloge)
   const amb = AMBIANCES[settings.ambiance];
   // l'heure AFFICHÉE et l'heure de la LUMIÈRE : identiques en cycle automatique, figées sur
   // le moment choisi sinon (l'horloge, elle, continue de tourner pour le reste du jeu)
@@ -19875,6 +19875,14 @@ const joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
 const pad = { x: 0, y: 0, a: false, gaz: 0, frein: 0, l2: false, baisse: false, lu: null };
 const look = { id: null, lx: 0, ly: 0 };
 let running = false, paused = false, dead = false, won = false, timerOn = false, elapsed = 0, deaths = 0, coinCount = 0, simTime = 0;
+// L'ECART AVEC L'HORLOGE DE L'HOTE (multijoueur). `simTime` est l'horloge de la SIMULATION :
+// elle n'avance que de dt, jamais autrement, et c'est ce qui garantit qu'aucune des 244 dates
+// du jeu ne peut se retrouver coincee dans l'avenir. L'heure de l'hote, elle, ne sert qu'a
+// partager la PHASE DU MONDE (le cycle du jour, celui des feux) : on la garde donc a part.
+let netHorloge = 0;
+// L'heure du monde partage : identique a simTime en solo (netHorloge vaut 0), decalee de
+// l'ecart avec l'hote en multijoueur. C'est la seule heure que le jour et les feux doivent lire.
+function tempsMonde() { return simTime + netHorloge; }
 let cp = null;
 const savedAv = store.json('superobby.avatar', {});
 const myCfg = { name: store.get('superobby.name') || 'Joueur' + Math.floor(rnd(10, 99)),
@@ -21230,7 +21238,7 @@ function onNetData(conn, d) {
     else if (d.t === 'punch') { if (d.id === 'host') punched(d.by, d.dx, d.dz, d.dmg, d.kb); else { const c = net.conns.find(x => x.peer === d.id); if (c && c.open) c.send(d); } }
   } else {
     if (d.t === 'welcome') {
-      net.world = d.world; if (d.st > -Infinity && d.st < Infinity) simTime = d.st;   // meme garde-fou : l'heure de l'hote doit etre un nombre
+      net.world = d.world; if (d.st > -Infinity && d.st < Infinity) netHorloge = d.st - simTime;   // on ADOPTE l'ecart, on ne recule pas l'horloge de simulation (voir netHorloge)
       (d.players || []).forEach(p => addRemote(p.id, p.name, p.look || {}, p.stage));
       netStatus(`Connecté à la partie ${net.code} · ${net.remotes.size + 1} joueurs · appuie sur Jouer`); updateNetPill(); showBotsOrNot();
       if (running && worldIdx !== d.world) chooseWorld(d.world);
@@ -21241,7 +21249,14 @@ function onNetData(conn, d) {
     else if (d.t === 'chat') { const r = net.remotes.get(d.id); chat(d.name, d.text, r ? r.color : '#fff'); if (r) bubble(r.av, d.text); }
     else if (d.t === 'look') { const r = net.remotes.get(d.id); if (r) { r.look = d.look; applyLook(r.av, d.name, d.look); r.name = d.name; } }
     else if (d.t === 'world') { net.world = d.world; if (running) chooseWorld(d.world); }
-    else if (d.t === 'time') { if (d.st > -Infinity && d.st < Infinity) { const diff = d.st - simTime; if (Math.abs(diff) > 0.5) simTime = d.st; else simTime += diff * 0.2; } }   // une heure vide venue du reseau cassait l'horloge de TOUTE la partie
+    // L'HEURE DE L'HOTE NE TOUCHE PLUS A L'HORLOGE DE SIMULATION (round 83). Elle l'ECRASAIT,
+    // et un hote en retard de plus d'une demi-seconde la faisait RECULER : les 244 dates du jeu
+    // (le delit frais du joueur, son etourdissement, son sommeil, la balancoire qui le tient, le
+    // KO d'un blesse) se retrouvaient d'un coup dans l'avenir. C'est la seule facon, en jeu reel,
+    // d'atteindre le defaut 84 : l'enfant declare provocateur sans avoir rien fait.
+    // On range donc l'ecart dans netHorloge, que seuls le jour et les feux lisent : la phase du
+    // monde reste partagee a la seconde pres, et l'horloge de simulation n'avance que de dt.
+    else if (d.t === 'time') { if (d.st > -Infinity && d.st < Infinity) { const cible = d.st - simTime, diff = cible - netHorloge; netHorloge += Math.abs(diff) > 0.5 ? diff : diff * 0.2; } }   // une heure vide venue du reseau cassait l'horloge de TOUTE la partie
     else if (d.t === 'win') chat(null, d.k === 'heli' ? `🚁 ${d.name} a fini la course d'anneaux en ${fmt(d.time)}` : `🏆 ${d.name} a terminé en ${fmt(d.time)} !`);
     else if (d.t === 'balls') { if (city.on) syncBalls(d.b); }
     else if (d.t === 'fire') fire({ p: d.p, v: d.v, id: d.id, dmg: d.dmg, name: d.name });
@@ -26124,29 +26139,136 @@ function desincarcere(dt) {
   if (city.on) { P.pos.x = clamp(P.pos.x, MONDE.x1 + 2, MONDE.x2 - 2); P.pos.z = clamp(P.pos.z, MONDE.z1 + 2, MONDE.z2 - 2); }
 }
 
-// L'horloge de simulation peut reculer d'un coup (synchro avec l'hôte en multijoueur).
-// Toutes les minuteries « simTime + délai » se retrouvent alors dans un futur lointain et
-// les mécanismes concernés se figent : on les remet à zéro.
-function horlogeArriere() {
-  for (const L of (city.lifts || [])) { L.cd = 0; L.since = 0; L.msgT = 0; L.sndT = 0; }
-  for (const pc of police.cars) { pc.shotT = 0; pc.routeT = 0; pc.debT = 0; pc.avoidT = 0; pc.revT = 0; pc.vueT = 0; }
-  for (const a of police.agents) { a.shotT = 0; a.routeT = 0; a.sayT = 0; a.coupT = 0; a.evT = 0; a.vueT = 0; }
-  police.arrestT = 0; police.vuT = -99;
-  cam.mesT = 0; cam.dedansT = 0;
-  for (const b of bots) { b.rdvRouteT = 0; b.rdvT = 0; b.hitCd = 0; if (b.bagarre) b.bagarre.cd = 0; }
-  for (const c of [...city.cars, ...city.aiCars]) { c.hitT = 0; c.bumpT = 0; c.scrapeT = 0;
-    // LES MINUTERIES DE CONDUITE AUSSI. Le verrou anti-va-et-vient de la boîte (`shiftT`), le
-    // coup de boost, la fumée de gomme et le bond du buggy sont posés « maintenant + tant de
-    // secondes » : après un retour en arrière de l'horloge ils restaient loin dans le futur et
-    // la boîte de vitesses ne passait plus un seul rapport — exactement ce qu'on reprochait à
-    // l'horloge cassée.
-    c.fumeeT = 0; c.crisT = 0; c.revT = 0; c.hopT = 0;
-    if (c.etat) { c.etat.shiftT = 0; c.etat.boostT = 0; } }
-  drive.shiftT = 0; drive.boostT = 0; drive.nitroCd = 0; drive.nitroT = 0;
-  P.fireCd = 0; P.reloadT = 0; P.punchT = 0; P.holsterT = 0; P.videT = 0; P.flashT = 0; P.flashImg = 0; P.flashArme = null;   // poste SON : videT = anti-repetition du clic a vide ; flash* = l'eclair du canon
-  meteo.next = simTime + 40; meteo.tonnerre = 0;
-  if (city.cinema) { city.cinema.next = 0; city.cinema.essaiVideo = 0; }
-  for (const s2 of city.safes || []) s2.tickT = 0;
+let HORLOGE_BILAN = { recul: 0, objets: 0, dates: 0 };   // ce que le dernier passage de horlogeArriere a touche (sonde et banc)
+// ============ LE TEMPS NE PEUT PLUS PIEGER PERSONNE (round 83) ============
+// L'horloge de simulation peut reculer d'un coup : une synchro avec l'hote en multijoueur, ou
+// un banc d'essai qui repose l'horloge sur une origine fixe. Toutes les dates « simTime +
+// delai » se retrouvent alors dans un futur lointain, et TOUT ce qui les lit se fige.
+//
+// CE QUI A ETE MESURE, ET POURQUOI L'ANCIENNE VERSION NE POUVAIT PAS SUFFIRE. L'ancienne
+// remettait a zero une liste ECRITE A LA MAIN : les cas qu'on voyait. Le recenseur
+// `harness/horloge.js` a compte ce qu'il y avait vraiment dans le fichier : 244 champs de
+// date relus contre simTime, dont 38 seulement etaient couverts — 206 manquants. Parmi eux,
+// `P.crime` et `P.crimeTir` (l'enfant declare provocateur : c'est le defaut 84, et les
+// habitants le battaient tout a fait legitimement), `P.stunT` (il ne peut plus bouger, et
+// rien a l'ecran ne le lui dit), `P.aTerreT` (il reste a terre), `P.sleep` (il dort),
+// `P.swingT` (prisonnier de la balancoire : le defaut 87), `b.ko` (un blesse a terre a vie).
+// Traiter les cas qu'on voit ne traite pas la CLASSE — et la classe revient a chaque round.
+//
+// LA REGLE, ET IL N'EN FAUT QU'UNE. Une date n'a pas de valeur en soi : ce qui compte est
+// l'ECART entre elle et l'horloge. Quand l'horloge recule de Δ, on decale donc CHAQUE date du
+// meme Δ : le temps qui restait a courir est preserve exactement, a la seconde. Une echeance
+// a cinq secondes reste a cinq secondes, un etat en cours garde ce qui lui restait a durer, et
+// un chronometre « depuis » garde son age. Rien ne se declenche en avance, rien ne se bloque.
+// C'est pour cela qu'il n'y a plus de liste a classer « remis a zero » / « repose » : le
+// decalage fait les deux a la fois, et il est juste pour les trois familles de dates
+// (« pas avant », « en cours jusqu'a », « depuis »).
+//
+// L'AUTRE PANNE, L'HORLOGE « PAS UN NOMBRE », demande l'autre remede. Si simTime a valu NaN
+// pendant une image, les dates posees pendant cette image valent NaN elles aussi, et une date
+// NaN n'est PLUS JAMAIS atteinte : toute comparaison avec NaN est fausse. Il n'y a la aucun
+// temps restant a preserver — on remet donc ces dates a zero, ce qui les libere. Deux
+// exceptions, et deux seulement, parce que zero les fait SE DECLENCHER au lieu de liberer :
+// le changement de meteo et la reunion de gang (qui MET LE JEU EN PAUSE). Elles sont reposees.
+//
+// Le recensement est verifie par `harness/horloge.js` et par un test du banc : toute nouvelle
+// date ajoutee au jeu et absente de ce registre fait echouer les deux. C'est ce qui empeche
+// la classe de revenir.
+const DATES_JEU = new Set([
+    'aTerreT', 'abattu', 'aboiFin', 'aboiT', 'alarmT', 'alarmeBot', 'alerte', 'allieFin', 'ambT',
+    'ambuT', 'anim', 'annonce', 'apprT', 'armeT', 'arrestT', 'attaqueT', 'attenteFin', 'avertT',
+    'avoidT', 'babilT', 'bagarre', 'balaiT', 'ballT', 'bipT', 'birdT', 'biteT', 'blesse', 'bond',
+    'bondT', 'boomT', 'boostT', 'botT', 'bubbleT', 'bumpT', 'casinoT', 'casseT', 'cd', 'chasse',
+    'clignFin', 'clignT', 'clocheT', 'cogneT', 'constatT', 'coteT', 'coupT', 'criT', 'crime',
+    'crimeTir', 'crisT', 'crisT2', 'dTourFin', 'dTourStop', 'danse', 'debT', 'debarqueDit', 'debut',
+    'decayT', 'dechargeT', 'decolle', 'dedansT', 'defense', 'degageFin', 'degageRepos', 'demiTour',
+    'demoT', 'departNonT', 'derniere', 'destT', 'diraT', 'doute', 'drive', 'eatCd', 'eauT', 'ecl',
+    'endT', 'enfermeT', 'essaiVideo', 'etinT', 'evT', 'feuVehT', 'fidT', 'fightT', 'fin', 'finT',
+    'fineT', 'fireCd', 'flashT', 'fled', 'follow', 'fouilleT', 'foulee', 'freeUntil', 'frotteT',
+    'fuelMsgT', 'fuiteFin', 'fum', 'fumeeT', 'fxT', 'garde', 'gardeArme', 'gardeCd', 'gardeCorps',
+    'gardeDit', 'gardeT', 'gardeVilla', 'grace', 'greetT', 'grilleJusqua', 'hauT', 'hidden', 'hitCd',
+    'hitT', 'holsterT', 'hopT', 'hudT', 'hurtT', 'jetSonT', 'jetT', 'jourT', 'klaxT', 'ko', 'lastHitT',
+    'lastSend', 'lastTime', 'libT', 'magotT', 'mesT', 'meterPaid', 'mordu', 'morsT', 'mort',
+    'mouetteT', 'mousseT', 'msgT', 'next', 'nextAsk', 'nitroCd', 'nitroSnd', 'nitroT', 'nitroT0',
+    'noirciT', 'offreT', 'oiseauT', 'on', 'pDown', 'parleT', 'patT', 'patte', 'pause', 'pcT',
+    'pending', 'petT', 'pilleT', 'piloteT', 'plafT', 'plainteSayT', 'platT', 'pluieT', 'pneuT',
+    'pousse', 'prio', 'prison', 'prochain', 'prochainDetritus', 'prochainFeu', 'prochainNid',
+    'prochaineReunion', 'progDT', 'progT', 'promeneT', 'punchT', 'rancune', 'rdvRouteT', 'rdvT',
+    'reactT', 'rebondT', 'reelT', 'reloadT', 'remiseT', 'renfortT', 'repT', 'repairMsgT', 'repairT',
+    'repas', 'repos', 'reposT', 'reprise', 'repriseT', 'resetT', 'retourneT', 'reunion', 'reunionT',
+    'revT', 'riposte', 'roleT', 'rotorT', 'routeT', 'runT', 'saut', 'sayT', 'scanT', 'scrapeT',
+    'serveT', 'shiftT', 'shotT', 'since', 'sirT', 'sleep', 'smokeT', 'sndT', 'soigneT', 'sonT',
+    'soundT', 'splashT', 'spotT', 'sprayT', 'srvRecul', 'startT', 'stunT', 'swapT', 'swingT', 't',
+    't0', 'tMax', 'tick', 'tickT', 'tirT', 'toleT', 'tonnerre', 'trFin', 'urgT', 'vDown', 'vagueT',
+    'veloT', 'ventT', 'vibT', 'videT', 'villaCd', 'voieSirT', 'voileSnd', 'vuT', 'vueT', 'warnT',
+    'zoomT'
+]);
+// `x`, `y` et `arrivee` sont volontairement absents : `x`/`y` sont des coordonnees (la hauteur
+// d'un rendez-vous de bot s'ecrit `y: 0.3`) et `m.arrivee` est une DUREE (`simTime - m.t0`),
+// pas une date. Les decaler serait un vrai degat.
+// LES RACINES DE L'ETAT DE JEU. Chacune dans son propre try : plusieurs sont declarees plus
+// bas dans le fichier, et lire un `const` avant son initialisation LEVE une exception (la
+// zone morte temporelle) — `typeof` ne protege pas de ca.
+function horlogeRacines() {
+  const r = [], a = f => { try { const v = f(); if (v) r.push(v); } catch (e) {} };
+  a(() => P); a(() => city); a(() => police); a(() => drive); a(() => cam); a(() => meteo);
+  a(() => bots); a(() => gang); a(() => gangs); a(() => guerre); a(() => chien); a(() => drone);
+  a(() => robot); a(() => gym); a(() => METIERS); a(() => SONV); a(() => net); a(() => dialog);
+  a(() => jail); a(() => race); a(() => hrace); a(() => defi); a(() => mission); a(() => bank);
+  a(() => cambrio); a(() => armee); a(() => vie); a(() => coup); a(() => RALENTI); a(() => school);
+  a(() => casino); a(() => manetteSalon); a(() => SGRID); a(() => raceKarts); a(() => progress);
+  return r;
+}
+// LE BALAYAGE. On descend dans l'etat de jeu (objets simples, tableaux, Map, Set) et on
+// n'appelle `faire` que sur les nombres dont le NOM est au registre. On ne descend JAMAIS dans
+// un objet de Three.js : c'est la que vivent les `rotation.y = simTime` d'animation, qui ne
+// sont pas des dates, et les milliers de maillages de la ville.
+function horlogeBalaye(faire) {
+  const vus = new Set(), pile = horlogeRacines();
+  let objets = 0, touches = 0;
+  while (pile.length && objets < 40000) {
+    const o = pile.pop();
+    if (!o || typeof o !== 'object' || vus.has(o)) continue;
+    if (o.isObject3D || o.isMaterial || o.isBufferGeometry || o.isTexture || o.isVector3
+      || o.isVector2 || o.isEuler || o.isQuaternion || o.isColor || o.isMatrix4 || o.isBox3) continue;
+    vus.add(o); objets++;
+    if (o instanceof Map) { for (const v of o.values()) pile.push(v); continue; }
+    if (o instanceof Set) { for (const v of o) pile.push(v); continue; }
+    let cles; try { cles = Object.keys(o); } catch (e) { continue; }
+    for (const k of cles) {
+      let v; try { v = o[k]; } catch (e) { continue; }
+      if (typeof v === 'number') { if (DATES_JEU.has(k) && faire(o, k, v)) touches++; }
+      else if (v && typeof v === 'object') pile.push(v);
+    }
+  }
+  return { objets, touches };
+}
+// `recul` : de combien l'horloge vient de reculer (0 ou absent = on repare une horloge cassee).
+function horlogeArriere(recul) {
+  const d = (recul > 0 && recul < Infinity) ? recul : 0;
+  let bilan;
+  if (d) {
+    // LE DECALAGE. On laisse les sentinelles « pour toujours » (simTime + 1e9) ou elles sont :
+    // decalees ou non elles restent hors de portee, et les epargner protege aussi les nombres
+    // qui ne seraient pas des dates. Une date a zero n'a jamais ete posee : on n'y touche pas.
+    bilan = horlogeBalaye((o, k, v) => {
+      if (!v || !(Math.abs(v) < 1e7)) return false;
+      o[k] = v - d; return true;
+    });
+  } else {
+    // L'HORLOGE CASSEE : une date NaN (ou infinie) ne sera plus jamais atteinte ni quittee.
+    bilan = horlogeBalaye((o, k, v) => {
+      if (v > -Infinity && v < Infinity) return false;
+      o[k] = 0; return true;
+    });
+    // Les deux seules dates que zero DECLENCHE au lieu de liberer. Le reste n'a pas besoin
+    // d'exception : atteindre l'echeance ne fait qu'AUTORISER quelque chose.
+    try { if (meteo && !(meteo.next > 0)) meteo.next = simTime + 40; } catch (e) {}
+    try { if (guerre && !(guerre.prochaineReunion > 0)) guerre.prochaineReunion = simTime + 240; } catch (e) {}
+    try { for (const G of gangs) if (!(G.reunionT > 0)) G.reunionT = simTime + 300; } catch (e) {}
+  }
+  HORLOGE_BILAN = { recul: +(d || 0), objets: bilan.objets, dates: bilan.touches };
+  return HORLOGE_BILAN;
 }
 let simPrec = 0;
 // L'HORLOGE PEUT DEVENIR « PAS UN NOMBRE ». Il suffit d'un seul calcul rate quelque part
@@ -26162,13 +26284,15 @@ let horlogeVue = 0;
 function horlogeSaine() {
   if (simTime > -Infinity && simTime < Infinity) { horlogeVue = simTime; return simTime; }
   simTime = horlogeVue; simPrec = simTime;
-  try { horlogeArriere(); } catch (e) {}
+  try { horlogeArriere(0); } catch (e) {}   // 0 = on repare une horloge cassee, il n'y a pas de temps restant a preserver
   return simTime;
 }
 function step(dt, active) {
   horlogeSaine();
   simTime += (dt > -Infinity && dt < Infinity) ? dt : 0;   // une image de duree indefinie ne doit pas contaminer l'horloge
-  if (simTime < simPrec - 1) horlogeArriere();
+  // ON PASSE LE MONTANT DU RECUL : c'est lui qui permet de decaler chaque date d'autant et de
+  // preserver le temps qui restait a courir, au lieu de tout remettre a zero au hasard.
+  if (simTime < simPrec - 1) horlogeArriere(simPrec - simTime);
   simPrec = simTime; horlogeVue = simTime;
   for (const o of movers) {
     const s = Math.sin(simTime * o.speed + o.phase);

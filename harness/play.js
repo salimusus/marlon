@@ -11584,7 +11584,38 @@ test('le graphe des voies couvre la ville : deux voies par rue, dessertes rattac
 
 test('la circulation respecte le code de la route : trois minutes sans rien chevaucher, arret au feu rouge et au stop', async p => {
   const r = await p.evaluate(() => {
-    const G = __G; __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12 });
+    const G = __G;
+    // ================= CE TEST TIRAIT AU SORT SA CIRCULATION (round 82) =================
+    // 0 image de chevauchement au round 79, 0 au round 80, 692 au round 81, avec le MEME code de
+    // conduite : ce n'est pas une regression de la conduite, c'est une loterie. Deux tirages la
+    // nourrissaient, et aucun des deux n'etait fige :
+    //   1. `Math.random`. La ville se batit au hasard (mobilier, palmiers, habitants) et
+    //      `traficPose` refuse une voie des que `carBlocked` y trouve quelque chose : le NOMBRE
+    //      de tirages consommes pendant la construction change d'un lancement a l'autre, et avec
+    //      lui la suite de `traficRnd` — donc la place de depart des huit vehicules suivis.
+    //   2. LA PHASE DES FEUX. `__SHOT.go({ hour: 12 })` avance l'horloge d'un nombre ENTIER de
+    //      journees (360 s) : l'heure affichee est bien midi, mais la phase du cycle des feux
+    //      (28 s) depend du nombre de journees ecoulees, donc du nombre de tests joues avant.
+    //      C'est ce qui fait que le feu retenu etait en (-30 ; -4) au round 79 et en (-22 ; 4) au
+    //      round 80, et que les motifs d'arret changent du tout au tout d'un lancement a l'autre
+    //      (sirene relevee a 185, 374, 503, 1598 et 2875 selon les series, « cede » a 0, 74 ou
+    //      453) alors que rien n'avait change dans le code.
+    // On fige les deux. Pour l'horloge, on avance au prochain multiple de 2 520 s — le plus petit
+    // commun multiple de la journee (360 s) et du cycle des feux (28 s) — decale de la cible de
+    // midi que `__SHOT.go` calcule lui-meme. Trois proprietes, toutes les trois voulues :
+    // l'horloge ne RECULE jamais (les minuteries laissees par les tests precedents restent
+    // atteignables), l'heure reste midi, et la phase des feux est toujours la meme. Et comme le
+    // saut vaut un nombre entier de SEPT journees, il ne decale la phase d'aucun test suivant.
+    // MESURE APRES, quatre graines, trois minutes chacune (20260926, 987654321, 20240607, 24680) :
+    // 0 / 0 / 0 / 0 image de chevauchement, et AUCUN des huit vehicules suivis n'utilise le
+    // controle exact (`exactVeh` = 0) — le defaut connu de la rue de 7 m, qui ne frappe que les
+    // vehicules a controle exact, ne peut donc pas etre la source des 692 images.
+    const CIBLE_MIDI = ((12 - 7 + 12) % 12) / 12 * G.day.len;   // ce que __SHOT.go vise pour hour: 12
+    const L_PHASE = 2520;   // ppcm(360 s de journee, 28 s de cycle de feu)
+    G.simTime = Math.ceil((G.simTime - CIBLE_MIDI) / L_PHASE) * L_PHASE + CIBLE_MIDI;
+    const vraiRnd = Math.random; let graine = 20260926;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    __SHOT.go({ world: 4, x: 300, y: 1, z: 300, hour: 12 });
     G.P.pos.set(300, 0.3, 300); G.clearWanted();   // le joueur loin de tout : il ne gêne personne
     const ai = G.city.aiCars.filter(c => c.spd);
     // on repart d'une circulation PROPRE : un test précédent a pu empiler deux voitures au
@@ -11699,13 +11730,14 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
       if (e && !stop) stop = { ...e, x: Math.round(q.x), z: Math.round(q.z) };
     }
     G.city.aiCars.forEach(c => { c.ia = null; c.libre = null; });
-    return { ...res, feu, stop };
+    Math.random = vraiRnd;   // la graine est rendue : les tests suivants retrouvent le vrai hasard
+    return { ...res, feu, stop, exact: ai.filter(c => c.exactVeh).length, suivis: ai.length };
   });
   const ok = r.solide === 0 && r.collisions === 0 && r.vmax <= 10.5
     && !!r.feu && r.feu.arrete > 30 && r.feu.avant != null && r.feu.avant > 0 && r.feu.avant < 6
     && !!r.stop && r.stop.arrete > 20 && r.stop.vApres > 2
     && (r.raisons.feu || 0) > 0 && (r.raisons.stop || 0) > 0;
-  return { ok, detail: `trois minutes de circulation (${r.images} images, ${Object.keys(r.raisons).length} sortes d'arrêts) : ${r.solide} image où un véhicule chevauche un solide, ${r.collisions} collision voiture-voiture, vitesse maximale ${r.vmax} m/s${r.coupables && r.coupables.length ? ' · QUI CHEVAUCHE QUOI : ' + r.coupables.join(' ; ') : ''} · motifs d'arrêt : ${JSON.stringify(r.raisons)} · feu rouge en (${r.feu ? r.feu.x + ',' + r.feu.z : '?'}) : la voiture reste immobile ${r.feu ? r.feu.arrete : 0} images et s'arrête à ${r.feu ? r.feu.avant : '?'} m AVANT la ligne · stop en (${r.stop ? r.stop.x + ',' + r.stop.z : '?'}) : arrêt complet ${r.stop ? r.stop.arrete : 0} images puis redémarrage à ${r.stop ? r.stop.vApres : 0} m/s` };
+  return { ok, detail: `trois minutes de circulation (${r.images} images, ${Object.keys(r.raisons).length} sortes d'arrêts, graine et phase des feux figées) : ${r.solide} image où un véhicule chevauche un solide, ${r.collisions} collision voiture-voiture, vitesse maximale ${r.vmax} m/s sur ${r.suivis} véhicules suivis dont ${r.exact} à contrôle exact${r.coupables && r.coupables.length ? ' · QUI CHEVAUCHE QUOI : ' + r.coupables.join(' ; ') : ''} · motifs d'arrêt : ${JSON.stringify(r.raisons)} · feu rouge en (${r.feu ? r.feu.x + ',' + r.feu.z : '?'}) : la voiture reste immobile ${r.feu ? r.feu.arrete : 0} images et s'arrête à ${r.feu ? r.feu.avant : '?'} m AVANT la ligne · stop en (${r.stop ? r.stop.x + ',' + r.stop.z : '?'}) : arrêt complet ${r.stop ? r.stop.arrete : 0} images puis redémarrage à ${r.stop ? r.stop.vApres : 0} m/s` };
 });
 
 test('la police abandonne les recherches quand le joueur est cache, et repart des qu\'il se montre', async p => {

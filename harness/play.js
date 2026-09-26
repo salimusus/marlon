@@ -10134,10 +10134,29 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
     const X = G.P.pos.x, Y = G.P.pos.y, Z = G.P.pos.z;
     // Un coup de poing dure un dixieme de seconde : on mesure donc une NOTE TENUE d'une
     // demi-seconde, jouee trois fois, et on garde la crete de toute la fenetre d'ecoute.
+    // ============ LA NOTE EST DOUCE, ET C'EST TOUT L'INTERET (round 83) ============
+    // Elle valait 0,5. Or la chaine de sortie n'est pas transparente : bus -> volume general
+    // -> COMPRESSEUR (seuil -18 dB, genou 12 dB, rapport 4:1, attaque 4 ms) -> rattrapage
+    // x1,7 -> LIMITEUR brique a -2 dB. A 1,5 m l'attenuation de sonEn vaut 0,762 : la note
+    // entrait donc a 0,381, soit -8,4 dB, DIX DECIBELS AU-DESSUS du seuil du compresseur.
+    // Ce qu'on mesurait au bout de la chaine n'etait plus l'attenuation de sonEn mais l'etat
+    // du compresseur : l'analyseur est un ScriptProcessor (il tourne sur le fil principal),
+    // et selon qu'il attrapait ou non les 4 ms d'attaque il lisait 0,563 (la crete, machine
+    // au repos) ou 0,267 (le regime etabli, -15,6 dB puis x1,7 = 0,283, machine chargee).
+    // Le rapport proche/moyen passait ainsi de 2,89 a 1,37 et tombait sous le seuil de 1,5 :
+    // le test 267 etait vert lance seul et rouge en suite complete, sans le moindre defaut
+    // dans sonEn. MESURE : a 20 m (0,1948) et a 45 m (0,0727) les deux lectures etaient
+    // IDENTIQUES AU DIX-MILLIEME d'un lancement a l'autre — seule bougeait la valeur proche,
+    // la seule a etre comprimee. Signature sans ambiguite.
+    // A 0,08, la note proche entre a 0,061 (-24,3 dB) : sous le genou du compresseur, donc
+    // dans la partie LINEAIRE de la chaine aux trois distances. Aucun seuil n'est desserre —
+    // le rapport mesure passe au contraire de 1,37 a environ 3,9, la valeur theorique
+    // (0,762 / 0,194), et ne depend plus de la charge de la machine.
+    const VOL = 0.08;
     const pic = async (dist) => {
       crete = 0;
       for (let k = 0; k < 3; k++) {
-        G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', 0.5), { duree: 0.6, portee: 40 });
+        G.sonEn(X + dist, Y + 1.2, Z, d => G.sfx.toneVers(d, 330, 0, 0.5, 'sine', VOL), { duree: 0.6, portee: 40 });
         for (let i = 0; i < 16; i++) await dodo(30);
         await dodo(220);
       }
@@ -10162,7 +10181,8 @@ test('les sons du monde sont PLACES dans l\'espace : un son lointain sort plus f
   const ok = r.etat === 'running' && r.pres > r.moyen * 1.5 && r.moyen > r.loin && r.pres > r.silence + 0.02
     && !r.horsPortee && r.stereo && Math.abs(r.attDroite - r.attGauche) < 0.001
     && r.bus.indexOf('voix') >= 0 && r.portee === 40 && r.coupure === 60;
-  return { ok, detail: `tous les sons partaient en MONO dans le bus « effets », au meme volume qu'on soit dessus ou a cinquante metres · sonEn() les place maintenant : gain + panoramique calcules depuis la position du joueur et cam.yaw · mesure a l'analyseur, au bout de la chaine, sur une meme note tenue — a 1,5 m : ${r.pres} · a 20 m : ${r.moyen} · a 45 m : ${r.loin} · (fond de scene ${r.silence}) · au-dela de ${r.coupure} m plus rien n'est cree (${r.horsPortee ? 'raté' : 'refusé'}) · a gauche et a droite le meme son garde la meme force (${r.attDroite} / ${r.attGauche}), seul le cote change · cinq familles de bus desormais : ${r.bus.join(', ')}` };
+  const rapport = r.moyen > 0 ? +(r.pres / r.moyen).toFixed(2) : 0;
+  return { ok, detail: `tous les sons partaient en MONO dans le bus « effets », au meme volume qu'on soit dessus ou a cinquante metres · sonEn() les place maintenant : gain + panoramique calcules depuis la position du joueur et cam.yaw · mesure a l'analyseur, au bout de la chaine, sur une meme note tenue — a 1,5 m : ${r.pres} · a 20 m : ${r.moyen} · a 45 m : ${r.loin} (rapport proche/moyen ${rapport}, theorie 3,94 — la note est assez douce pour rester sous le genou du compresseur, sinon on mesure le compresseur et non sonEn) · (fond de scene ${r.silence}) · au-dela de ${r.coupure} m plus rien n'est cree (${r.horsPortee ? 'raté' : 'refusé'}) · a gauche et a droite le meme son garde la meme force (${r.attDroite} / ${r.attGauche}), seul le cote change · cinq familles de bus desormais : ${r.bus.join(', ')}` };
 });
 
 test('marcher fait du bruit : les pas suivent la cadence de la foulee, plus vite et plus fort en courant, et le timbre change avec le sol', async p => {

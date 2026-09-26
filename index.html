@@ -19904,7 +19904,28 @@ const ambiance = (() => {
       g.gain.setTargetAtTime(volCible, c.currentTime, 0.9);
       filt.frequency.setTargetAtTime(coupeCible, c.currentTime, 0.9);
     },
-    stop() { const c = sfx.ctx(); if (g && c) { volCible = 0.0001; g.gain.setTargetAtTime(0.0001, c.currentTime, 0.4); } },
+    // ============ « STOP » DOIT COUPER, PAS FONDRE ============
+    // C'etait un `setTargetAtTime(0.0001, now, 0.4)` : une constante de temps de 0,4 s, donc au
+    // bout de 900 ms il restait encore e^-2,25 = 10,5 % du niveau qu'avait la rumeur (mesure :
+    // 0,00997 -> 0,00105 a 900 ms). Consequence pour l'enfant : a CHAQUE changement d'ambiance
+    // — on entre dans une maison, on sort du magasin, le mode zombie, une cinematique — la
+    // rumeur de l'ancien lieu se superposait a la nouvelle pendant plus d'une seconde, deux
+    // bruits blancs filtres differemment qui se melangent. Et le « silence » du banc n'en etait
+    // pas un : le test 200 relevait 0,03 APRES stop, au-dessus de son seuil de 0,02.
+    // Constante 0,02 s : il reste 0,67 % a 100 ms, 3 dix-millioniemes a 300 ms, rien a 900 ms —
+    // inaudible, et ce n'est pas un couperet sec (un couperet sur du bruit blanc a pleine
+    // echelle CLAQUE : c'est le meme defaut que le gain neuf qui vaut 1). A 120 ms on POSE le
+    // robinet a zero, pour que la valeur soit exacte et pas seulement petite.
+    // `cancelScheduledValues` d'abord : sans lui, un `set()` programme juste avant (fondu de
+    // 0,9 s vers le niveau du quartier) reprenait la main et faisait remonter la rumeur.
+    stop() {
+      const c = sfx.ctx(); if (!g || !c) return;
+      volCible = 0.0001;
+      const now = c.currentTime;
+      try { g.gain.cancelScheduledValues(now); filt.frequency.cancelScheduledValues(now); } catch (e) {}
+      g.gain.setTargetAtTime(0.0001, now, 0.02);
+      g.gain.setValueAtTime(0.0001, now + 0.12);
+    },
     // LA RUMEUR S'EFFACE DES QU'UN SON DE JEU ARRIVE. Un pas, un coup, un « aie », une
     // portiere, la craie du tableau : le lit de fond recule d'un cran pendant un tiers de
     // seconde puis revient tout seul. C'est le geste d'un vrai mixage — on garde la presence

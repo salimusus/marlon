@@ -1796,6 +1796,10 @@ window.__G = {
   SIRENES: typeof SIRENES !== 'undefined' ? SIRENES : null,
   urgenceDe: typeof urgenceDe === 'function' ? urgenceDe : null,
   sonCoupe: typeof sonCoupe === 'function' ? sonCoupe : null,   // poste SON : couper un son place encore vivant (le test de la pluie refait le silence avant chaque fenetre)
+  sonPurge: typeof sonPurge === 'function' ? sonPurge : null,   // poste SON : le balayage des sources mortes du registre (on en mesure la fuite et le cout)
+  sonPurgeTick: typeof sonPurgeTick === 'function' ? sonPurgeTick : null,   // poste SON : le meme balayage, cadence a 5 Hz depuis la boucle de jeu
+  sonSfx: typeof sonSfx === 'function' ? sonSfx : null,         // poste SON : le pont « boite a sons » -> registre (meme melodie, mais placee)
+  SFX_MONDE: typeof SFX_MONDE !== 'undefined' ? SFX_MONDE : null,
   sonMarteau: typeof sonMarteau === 'function' ? sonMarteau : null,
   sonSoudure: typeof sonSoudure === 'function' ? sonSoudure : null,
   sonBalai: typeof sonBalai === 'function' ? sonBalai : null,

@@ -11671,7 +11671,7 @@ function traficPlace() {
 // le test d'axes separateurs n'est PAS strict, comptent un contact exact comme un chevauchement.
 // Mesure (test 332) : 11 images d'affilee de depanneuse « dans » une voiture arretee devant elle
 // — seuil 10 — pour un chevauchement reel de 1,4 cm, sans qu'aucun des deux ne bouge.
-// (declaree ici et non pres de `contactVehicules` : un seul <script>, et `vehiculeMord` tourne
+// (declaree ici et non pres de `contactVehicules` : un seul bloc de script, et `vehiculeMord` tourne
 //  des la construction du monde — une constante declaree plus bas serait en zone morte)
 const JEU_TOLES_CONDUITE = 0.06; // m : l'air que le garde-fou de conduite laisse devant une autre tole
 function vehiculeMord(c, x, z, h) {
@@ -26305,9 +26305,11 @@ let HORLOGE_BILAN = { recul: 0, objets: 0, dates: 0 };   // ce que le dernier pa
 // Traiter les cas qu'on voit ne traite pas la CLASSE — et la classe revient a chaque round.
 //
 // CINQ NOMS DE PLUS, TROUVES PAR LE RECENSEUR RELANCE (round 83, poste PREUVE). Le recenseur
-// de la premiere passe ne lisait que le dernier `<script>` de la page — or un COMMENTAIRE du
-// jeu contient le texte « un seul <script> », et `lastIndexOf` s'y arretait : 10 335 lignes
-// sur 40 037 n'avaient jamais ete relues. Relance sur le bloc entier (et sur les trois
+// de la premiere passe ne lisait que le DERNIER bloc de script de la page — or un COMMENTAIRE
+// du jeu contenait la balise ouvrante en toutes lettres, et `lastIndexOf` s'y arretait :
+// 10 335 lignes sur 40 037 n'avaient jamais ete relues. AUCUN COMMENTAIRE DE CE FICHIER NE
+// DOIT PLUS ECRIRE CETTE BALISE : le test « aucun commentaire n'avale du code » la cherchait
+// de la meme facon et ne relisait, lui, que 15 062 lignes sur 40 060. Relance sur le bloc entier (et sur les trois
 // fichiers voisins, qui ne contiennent aucune date : 0 sur 752 lignes), il trouve cinq dates
 // de plus, toutes mesurees a +6 000 s de l'horloge apres un recul de 6 000 s :
 //   `gym.end`     (+6 020 s) la seance de sport ne se termine JAMAIS (`gym.end - simTime`) ;
@@ -26334,7 +26336,7 @@ let HORLOGE_BILAN = { recul: 0, objets: 0, dates: 0 };   // ce que le dernier pa
 // le changement de meteo et la reunion de gang (qui MET LE JEU EN PAUSE). Elles sont reposees.
 //
 // LE RECENSEMENT VIT DANS LE BANC (dernier test de `harness/play.js`). Il relit le texte du
-// jeu — le bloc `<script>` entier plus les trois fichiers voisins — cherche toute pose de date
+// jeu — le bloc de script entier plus les trois fichiers voisins — cherche toute pose de date
 // tiree de l'horloge, ne garde que les champs RELUS contre l'horloge, et les recoupe avec ce
 // registre. Le jour ou un poste ecrit `X = simTime + 5` sans inscrire `X` ici, le test passe
 // au ROUGE et NOMME la variable. C'est ce qui empeche la classe de revenir.

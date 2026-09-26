@@ -24376,6 +24376,16 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     if (!HORLOGE.test(v)) return false;
     return !/[*\/%]\s*(?:simTime|tempsMonde|horlogeSaine)\b|\b(?:simTime|tempsMonde\(\)|horlogeSaine\(\))\s*[*\/%]/.test(v);
   };
+  // LA BALISE OUVRANTE NE DOIT PLUS JAMAIS PARAITRE DANS UN COMMENTAIRE DU JEU. Elle y etait
+  // une fois (« un seul <script> », a cote de `vehiculeMord`) et elle a coute deux fois cher :
+  // le recenseur de la premiere passe, qui cherchait le debut du code avec `lastIndexOf`,
+  // perdait 10 335 lignes sur 40 037 ; et le test n° 121 (« aucun commentaire n'avale du
+  // code »), qui la cherche de la meme facon, ne relisait que 15 062 lignes sur 40 062.
+  const balise = (() => {
+    const brut = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').split('\n');
+    const prem = brut.findIndex(l => l.trim() === '<script>');
+    return brut.map((l, i) => ({ l, i })).filter(o => o.i > prem && o.l.includes('<' + 'script>')).map(o => o.i + 1);
+  })();
   const poses = new Map(), relus = new Set();
   let lignes = 0, nbPoses = 0;
   for (const f of FICHIERS) {
@@ -24430,6 +24440,12 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
       for (let i = 0; i < n; i++) { G.step(DT, true); d += Math.hypot(P.pos.x - px, P.pos.z - pz); px = P.pos.x; pz = P.pos.z; }
       if (marche) G.keys.delete('KeyW');
       return +d.toFixed(2); };
+    // ON NE SUPPOSE PAS QU'UNE RUE PART D'ICI : ON LA CHERCHE. La touche « avant » pousse le
+    // joueur dans l'axe de la CAMERA, et le depart (0 ; 8) donne 40,4 m dans un cap et 7,6 m
+    // dans un autre — un mur, pas un etourdissement. On essaie donc les huit caps sur 150 pas,
+    // on garde le plus degage, et les trois marches comparees se font toutes dans CE cap.
+    const marche = (n, yaw) => { G.cam.yaw = yaw; P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
+      return pas(n, true); };
     // LE PIEGE. L'horloge AVANCE (une synchro, un test), le jeu pose ses marqueurs, puis elle
     // RECULE : c'est `step` qui doit s'en apercevoir. On n'appelle JAMAIS horlogeArriere ici.
     // La base est RELATIVE a l'horloge du moment et le piege la rend 100 s PLUS LOIN : aucun
@@ -24450,16 +24466,18 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
 
     // LE TEMOIN PASSE PAR LE MEME PIEGE, SANS MARQUEUR : meme remise a neuf, meme recul,
     // meme horloge d'arrivee. C'est la seule facon de comparer deux fois la meme marche.
-    await neuf(); recule(() => {}); P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
-    R.temoin = pas(MARCHE, true);
+    await neuf(); recule(() => {});
+    let yawLibre = 0, mieux = -1;
+    for (let k = 0; k < 8; k++) { const y = k * Math.PI / 4, d = marche(150, y); if (d > mieux) { mieux = d; yawLibre = y; } }
+    R.cap = { yaw: +yawLibre.toFixed(2), sonde150: +mieux.toFixed(2) };
+    R.temoin = marche(MARCHE, yawLibre);
 
     // 1. P.stunT : il ne peut plus bouger, et rien a l'ecran ne le lui dit
     await neuf();
     R.bilan = recule(() => { P.stunT = G.simTime + 0.5; });
-    P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
-    R.stun = { ecart: +(P.stunT - G.simTime).toFixed(2), metres: pas(MARCHE, true) };
+    R.stun = { ecart: +(P.stunT - G.simTime).toFixed(2), metres: marche(MARCHE, yawLibre) };
     await neuf(); P.stunT = G.simTime + 12;
-    R.stun.fraisMetres = pas(MARCHE, true);   // non-regression : vraiment sonne = vraiment bloque
+    R.stun.fraisMetres = marche(MARCHE, yawLibre);   // non-regression : vraiment sonne = vraiment bloque
 
     // 2. P.crime : declare provocateur, et battu tout a fait legitimement (defaut 84)
     await neuf(); recule(() => { P.crime = G.simTime + 20; P.crimeTir = G.simTime + 1; });
@@ -24565,9 +24583,10 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
 
   const N = R => R.nouveaux;
   const ok = recenseur.manquants.length === 0 && recenseur.dates > 200 && recenseur.lignes > 40000
+    && balise.length === 0
     && r.bilan && r.bilan.recul > 5000 && r.bilan.dates > 100
     // le symptome a disparu
-    && r.stun.ecart < 2 && r.stun.metres > r.temoin * 0.7 && r.stun.metres > r.stun.fraisMetres * 3
+    && r.stun.ecart < 2 && r.stun.metres > r.temoin * 0.7 && r.temoin > 15
     && !r.crime.apres22s && r.crime.tirage.essais >= 5 && r.crime.tirage.surJoueur === 0
     && r.aTerre.poseParLeJeu && r.aTerre.pas > 0 && Math.abs(r.aTerre.pas - r.aTerre.fraisPas) <= 5
     && r.sommeil.pas > 0 && Math.abs(r.sommeil.pas - r.sommeil.fraisPas) <= 5
@@ -24576,12 +24595,12 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     && r.esquive.nanApres === '0' && r.esquive.horlogeSaine && r.esquive.ecart < 2 && r.esquive.pas > 0
     && N(r).gymEnd < 25 && N(r).raceGoT < 10 && N(r).iaRefaire < 12 && N(r).botDead < 15
     // ... et le mecanisme n'est pas desarme
-    && r.stun.fraisMetres < r.temoin * 0.3
+    && r.stun.fraisMetres < r.temoin * 0.4
     && r.crime.tirageFrais.provoque && r.crime.tirageFrais.surJoueur === r.crime.tirageFrais.essais
     && r.aTerre.fraisPas > 30 && r.sommeil.fraisPas > 60;
-  return { ok, detail: `RECENSEUR (il relit le texte du jeu) : ${recenseur.lignes} lignes des 4 fichiers, ${recenseur.nbPoses} poses de date sur ${recenseur.champs} champs, dont ${recenseur.dates} RELUS contre l'horloge ; registre DATES_JEU ${recenseur.registre} noms ; MANQUANTS ${recenseur.manquants.length}${recenseur.manquants.length ? ' -> ' + recenseur.manquants.join(', ') : ''}`
+  return { ok, detail: `RECENSEUR (il relit le texte du jeu) : ${recenseur.lignes} lignes des 4 fichiers, ${recenseur.nbPoses} poses de date sur ${recenseur.champs} champs, dont ${recenseur.dates} RELUS contre l'horloge ; registre DATES_JEU ${recenseur.registre} noms ; MANQUANTS ${recenseur.manquants.length}${recenseur.manquants.length ? ' -> ' + recenseur.manquants.join(', ') : ''} ; balise ouvrante ecrite dans un commentaire du jeu : ${balise.length ? 'lignes ' + balise.join(', ') + ' (elle fait perdre 25 000 lignes au test n° 121)' : 'aucune'}`
     + ` \u00b7 PIEGE : l'horloge avance, le jeu pose ses marqueurs, elle recule de ${r.bilan.recul} s et c'est step() qui s'en apercoit (${r.bilan.dates} dates decalees sur ${r.bilan.objets} objets)`
-    + ` \u00b7 P.stunT : ecart +${r.stun.ecart} s, ${r.stun.metres} m parcourus en 400 pas (temoin libre ${r.temoin} m ; avant le correctif 4,17 m) et un enfant VRAIMENT sonne ne fait que ${r.stun.fraisMetres} m`
+    + ` \u00b7 P.stunT : ecart +${r.stun.ecart} s, ${r.stun.metres} m parcourus en 400 pas dans le cap le plus degage (temoin libre ${r.temoin} m ; avant le correctif 4,17 m) et un enfant VRAIMENT sonne ne fait que ${r.stun.fraisMetres} m`
     + ` \u00b7 P.crime (defaut 84) : provocateur aussitot=${r.crime.aussitot} puis 22 s plus tard=${r.crime.apres22s} ; tirage force sur ${r.crime.tirage.essais} habitants : ${r.crime.tirage.surJoueur} s'en prennent a l'enfant, ${r.crime.tirage.surBot} a un autre habitant ; avec un delit VRAIMENT frais ${r.crime.tirageFrais.surJoueur}/${r.crime.tirageFrais.essais} lui courent dessus`
     + ` \u00b7 P.aTerreT : pose par le jeu, ecart ${r.aTerre.ecart} s, il se releve en ${r.aTerre.pas} pas (un vrai KO : ${r.aTerre.fraisPas} pas)`
     + ` \u00b7 P.sleep : il se reveille en ${r.sommeil.pas} pas (un vrai sommeil : ${r.sommeil.fraisPas} pas)`

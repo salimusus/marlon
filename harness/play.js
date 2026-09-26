@@ -23987,3 +23987,130 @@ test('l\'ascenseur ne se derobe plus sous son passager, et le trajet reste court
     && e.filter(s => s.nom === 'villa').every(s => s.secondes <= 3.5);
   return { ok, detail: `la cabine partait a 28,3 m/s (0,47 m des la premiere image sur une course de 12,85 m) : son plancher se derobait sous le passager, qui se retrouvait jusqu'a 5,108 m au-dessus dans la cage (1,069 m a la villa) · la vitesse est plafonnee a ${r.vmax} m/s et la cabine EMMENE son passager comme une plate-forme mobile · ${e.map(s => `${s.nom} ${s.sens} (${s.course} m) : ${s.secondes} s, pointe ${s.pointe} m/s, ecart max au plancher ${s.ecart} m, ${s.hp} PV`).join(' · ')} · avant : 2,48 s et 2,03 s, donc +1,89 s sur la plus longue course et +0,32 s a la villa · ${r.nb} ascenseurs, ${r.paliers} arrets chacun (pas d'etage intermediaire) · le plafond SEUL ne suffisait pas : a 4 m/s sans le portage l'ecart reste de 23,3 cm, et il faudrait 2 m/s (7,27 s) pour tenir 5 cm` };
 });
+
+// ====== LE MEME BALAYAGE, MAIS POUR TOUT LE MOBILIER (round 83, item 3) ======
+// L'item 1 n'a marque que la vegetation. Tout le reste du mobilier — bancs, poubelles,
+// panneaux, lampadaires, feux, abribus, bornes, totems — n'etait connu de personne. Il entre
+// maintenant au registre `city.meubles` a la pose, avec son groupe, ses solides et ses fiches,
+// et `rangeLeMobilier()` lui pose les trois questions du poste : mord-il la chaussee ? ferme-t-il
+// un trottoir ? bouche-t-il une porte ? RELEVE AVANT (la passe le compte elle-meme, graine 6174) :
+// 312 meubles en faute sur 892 — 154 fermaient un trottoir sous 0,90 m, 89 etaient sur le bitume,
+// 41 plantes dans un autre solide, 21 dans un batiment, 7 hors carte. Le pire : un ABRIBUS a
+// 2,08 m DANS la rue de (-145 ; 264), et un BANC qui fermait completement (0,00 m) le trottoir
+// de (-3,9 ; 9,9). Rien n'est supprime : 306 sont DEPLACES, recul median 0,60 m.
+test('aucun mobilier urbain ne mord la chaussee, et le trottoir reste marchable', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, vrai = Math.random, sorties = [];
+    const HW = G.P.hw, PASSE_PIED = 2 * HW;            // 0,80 m : le gabarit strict du joueur
+    try {
+      for (const graine of [6174, 987654321]) {
+        let g0 = graine >>> 0;
+        Math.random = () => ((g0 = (Math.imul(g0, 1664525) + 1013904223) >>> 0) / 4294967296);
+        __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+        const c = G.city, S = G.solids, dans = new Set(S);
+        // --- 1. aucun meuble ne manque : le rangement DEPLACE, il ne supprime pas
+        let perdus = 0;
+        for (const m of (c.meubles || [])) for (const so of m.solides) if (!dans.has(so)) perdus++;
+        // --- 2. aucun meuble sur la chaussee (30 cm de garde, comme la vegetation)
+        const surRue = [];
+        for (const m of (c.meubles || [])) for (const so of m.solides) {
+          if (!(so.y + so.h / 2 > 0.45 && so.y - so.h / 2 < 1.6)) continue;   // seuils de carBlocked
+          for (const rt of (c.routes || [])) {
+            const v = Math.min(rt.w / 2 + so.w / 2 - Math.abs(so.x - rt.x), rt.d / 2 + so.d / 2 - Math.abs(so.z - rt.z));
+            if (v > 0) { surRue.push({ fam: m.fam, x: +so.x.toFixed(2), z: +so.z.toFixed(2), dans: +v.toFixed(2) }); break; }
+          }
+        }
+        // --- 3. les trottoirs que ferme un MEUBLE (les murs et clôtures sont un autre sujet)
+        const ferme = [];
+        for (const m of (c.meubles || [])) for (const so of m.solides) {
+          if (!(so.y + so.h / 2 > 0.6 && so.y - so.h / 2 < 1.9)) continue;    // STEP_UP et P.h
+          for (const t of (c.trottoirs || [])) {
+            if (Math.abs(so.x - t.x) > (so.w + t.w) / 2 || Math.abs(so.z - t.z) > (so.d + t.d) / 2) continue;
+            const c0 = t.alongZ ? t.x : t.z, W = (t.alongZ ? t.w : t.d) / 2;
+            const a = (t.alongZ ? so.x : so.z) - (t.alongZ ? so.w : so.d) / 2;
+            const b = (t.alongZ ? so.x : so.z) + (t.alongZ ? so.w : so.d) / 2;
+            const libre = Math.max(a - (c0 - W), (c0 + W) - b);
+            if (libre < PASSE_PIED) ferme.push({ fam: m.fam, x: +so.x.toFixed(2), z: +so.z.toFixed(2), libre: +libre.toFixed(2) });
+          }
+        }
+        const fam = {};
+        for (const m of (c.meubles || [])) fam[m.fam] = (fam[m.fam] || 0) + 1;
+        const bk = k => G.breakables.filter(b => b.kind === k).length;
+        sorties.push({ graine, meubles: (c.meubles || []).length, perdus, surRue, ferme, fam,
+          range: c.range ? { fautes: c.range.fautes, parQuoi: c.range.parQuoi, deplaces: c.range.deplaces.length, restants: c.range.restants.length } : null,
+          compte: { banc: (c.benches || []).length, panneau: (c.panneaux || []).length, feu: (c.trafficLights || []).length,
+                    lampadaire: bk('lamp'), poubelle: bk('poubelle'), cone: bk('cone') } });
+      }
+    } finally { Math.random = vrai; }
+    return sorties;
+  });
+  const att = { banc: 196, panneau: 210, feu: 38, lampadaire: 158, poubelle: 86, cone: 8 };
+  const ok = r.length === 2 && r.every(o => o.perdus === 0 && o.surRue.length === 0 && o.ferme.length === 0
+    && o.meubles > 850 && o.range && o.range.fautes > 200 && o.range.restants === 0
+    && Object.keys(att).every(k => o.compte[k] === att[k]));
+  return { ok, detail: `tout le decor solide passe par la meme porte que les arbres · ${r.map(o => `graine ${o.graine} : ${o.meubles} meubles au registre (${Object.entries(o.fam).map(([k, v]) => k + ' ' + v).join(', ')}) — la passe a trouve ${o.range.fautes} fautes (${JSON.stringify(o.range.parQuoi)}), et les a TOUTES rangees (${o.range.deplaces} deplacements, ${o.range.restants} restant) → ${o.surRue.length} meuble sur la chaussee, ${o.ferme.length} trottoir ferme sous ${(2 * 0.4).toFixed(2)} m, ${o.perdus} solide perdu · comptes par famille inchanges : ${JSON.stringify(o.compte)}`).join(' · ')}` };
+});
+
+// ====== ET L'ENFANT PEUT TOUJOURS ENTRER : les 30 entrees declarees restent franchissables ======
+// Un banc devant une boutique ou un lampadaire dans l'axe d'une porte, et l'enfant est dehors
+// pour de bon. Le demi-gabarit du joueur est `P.hw` = 0,40 m, donc 0,80 m de large ; on exige
+// 1,00 m devant une baie — 10 cm de jeu de chaque cote — parce qu'une porte est un ENTONNOIR :
+// la collision du joueur est une boite alignee sur les axes et, a moins de 10 cm de jeu, il
+// accroche le montant a chaque image au lieu de passer. Le passage est mesure DEHORS (du cote
+// oppose au batiment qui porte la baie) a 0,60 / 1,20 / 1,80 et 2,40 m de la porte.
+test('les 30 entrees de la ville laissent passer l\'enfant, mobilier compris', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, vrai = Math.random, sorties = [];
+    const HW = G.P.hw, PASSE = 2 * HW + 0.2;
+    try {
+      for (const graine of [6174, 987654321]) {
+        let g0 = graine >>> 0;
+        Math.random = () => ((g0 = (Math.imul(g0, 1664525) + 1013904223) >>> 0) / 4294967296);
+        __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+        const c = G.city, S = G.solids;
+        const bats = [...(c.batiments || []), ...(c.interieurs || [])];
+        const gene = o => !o.veh && !o.ai && !o.pol && !o.sol && !o.trottoir && !o.porte
+          && o.y + o.h / 2 > 0.6 && o.y - o.h / 2 < 1.9 && !(o.w > 6 && o.d > 6);
+        const meuble = new Set();
+        for (const m of (c.meubles || [])) for (const so of m.solides) meuble.add(so);
+        const portes = [];
+        for (const pte of S) {
+          if (!pte.porte) continue;
+          const alongX = pte.w >= pte.d, L = Math.max(pte.w, pte.d) / 2;
+          // DEHORS : le cote oppose au batiment le plus proche qui porte la baie
+          let bb = null, bd = 1e9;
+          for (const b of bats) { const dd = Math.hypot(pte.x - b.x, pte.z - b.z);
+            if (dd < bd && Math.abs(pte.x - b.x) < b.w / 2 + 3 && Math.abs(pte.z - b.z) < b.d / 2 + 3) { bd = dd; bb = b; } }
+          const sg = !bb ? 1 : (alongX ? (pte.z >= bb.z ? 1 : -1) : (pte.x >= bb.x ? 1 : -1));
+          let pire = { libre: 2 * L, par: null };
+          for (const dd of [0.6, 1.2, 1.8, 2.4]) {
+            const cx = alongX ? pte.x : pte.x + sg * dd, cz = alongX ? pte.z + sg * dd : pte.z;
+            const c0 = alongX ? cx : cz, occ = [];
+            for (const o of S) {
+              if (!gene(o)) continue;
+              const ol = alongX ? o.z : o.x, dl = (alongX ? o.d : o.w) / 2;
+              if (Math.abs(ol - (alongX ? cz : cx)) > dl) continue;
+              const ot = alongX ? o.x : o.z, dt = (alongX ? o.w : o.d) / 2;
+              if (Math.abs(ot - c0) > L + dt) continue;
+              occ.push([Math.max(c0 - L, ot - dt), Math.min(c0 + L, ot + dt), o]);
+            }
+            if (!occ.length) continue;
+            occ.sort((a, b) => a[0] - b[0]);
+            let libre = 0, bord = c0 - L, coup = null, der = null;
+            for (const [a, b2, o] of occ) { const gp = a - bord; if (gp > libre) { libre = gp; coup = der; } if (b2 > bord) { bord = b2; der = o; } }
+            if (c0 + L - bord > libre) { libre = c0 + L - bord; coup = der; }
+            if (libre < pire.libre) pire = { libre: +libre.toFixed(2), par: coup || der };
+          }
+          portes.push({ x: +pte.x.toFixed(1), z: +pte.z.toFixed(1), libre: +pire.libre.toFixed(2),
+            parUnMeuble: pire.par ? meuble.has(pire.par) : false });
+        }
+        portes.sort((a, b) => a.libre - b.libre);
+        sorties.push({ graine, portes: portes.length, bouchees: portes.filter(q => q.libre < PASSE),
+          parMeuble: portes.filter(q => q.libre < PASSE && q.parUnMeuble).length, pire: portes[0] });
+      }
+    } finally { Math.random = vrai; }
+    return sorties;
+  });
+  const ok = r.length === 2 && r.every(o => o.portes >= 30 && o.bouchees.length === 0);
+  return { ok, detail: `le demi-gabarit du joueur est P.hw = 0,40 m (0,80 m de large) ; on exige 1,00 m devant une baie — 10 cm de jeu de chaque cote, parce que la collision du joueur est une boite alignee sur les axes et qu'en deca il accroche le montant a chaque image · ${r.map(o => `graine ${o.graine} : ${o.portes} entrees declarees, ${o.bouchees.length} sous 1,00 m (dont ${o.parMeuble} a cause d'un meuble)${o.bouchees.length ? ' → ' + JSON.stringify(o.bouchees.slice(0, 4)) : ''} ; la plus serree laisse ${o.pire.libre} m`).join(' · ')}` };
+});

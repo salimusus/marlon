@@ -2570,6 +2570,7 @@ function tree(x, top, z, leaf = C.leaf, pine = false) {
     // feuillages) : un arbre planté contre l'école passait à travers le mur et masquait 0,94 m² du
     // tableau de la classe de maths. Même allure ronde, mais dans l'emprise d'origine (1,2 m de rayon).
     trunk.vegetal = 'arbre'; trunk.feuillage = [];   // le houppier suit le tronc s'il faut le replanter
+    declareMeuble('arbre', null, x, z, [trunk]);   // il entre au registre du mobilier : le rangement le voit aussi sur un trottoir
     for (const [dx,dy,dz,w,h] of [[0,3.3,0,2.4,2.8],[-.5,3.0,.2,1.4,1.7],[.5,3.6,.3,1.4,1.8]]) {
       const m = new THREE.Mesh(empire.treeGeo, lam(leaves.getHex())); m.scale.set(w,h,w*.85); m.position.set(x+dx,top+dy,z+dz); m.castShadow=true; worldGroup.add(m);
       trunk.feuillage.push(m);
@@ -2855,6 +2856,7 @@ function lamp(x, z) {   // lampadaire cassable
   const solid = { mesh: post, x, y: 2.2, z, w: 0.36, h: 4.4, d: 0.36, lampe: true }; solids.push(solid); sgridSale();
   const br = { kind: 'lamp', g, bulb, solid, x, z, r: 0.5, broken: false };
   solid.brk = br; breakables.push(br);
+  declareMeuble('lampadaire', g, x, z, [solid]);
 }
 function flowerBed(x, z, w, d) { box(x, 0.25, z, w, 0.5, d, 0x8b4a2b, { studs: false, noRoute: true }); for (let i = 0; i < Math.floor(w * d / 1.2); i++) box(x + rnd(-w / 2 + 0.3, w / 2 - 0.3), 0.7, z + rnd(-d / 2 + 0.3, d / 2 - 0.3), 0.3, 0.3, 0.3, pickOne([0xff5c5c, 0xffd23f, 0xff7ad9, 0xffffff, 0xb57cff]), { deco: true, studs: false }); }
 function buildGarage(x, z) {   // Garage custom : trois travées, cabine de peinture, comptoir de préparation
@@ -2988,6 +2990,147 @@ function declareLesParkings() {
   P(-20.4, 51, 12, 8, 'Rack à vélos du parc');
   P(RACE_C.x, RACE_C.z + RACE_C.r + 2, 70, 24, 'Grille de départ');            // les karts
   for (const g of gangs) if (g.base) P(g.base[0], g.base[1] + 7, 20, 16, 'Base ' + (g.nom || 'de gang'));
+}
+// ============ LE RANGEMENT DU MOBILIER URBAIN (round 83, item 3) ============
+// Le même balayage que pour les arbres, mais pour TOUT le mobilier déclaré : bancs, poubelles,
+// panneaux, lampadaires, feux, abribus, bornes, totems. Trois questions, trois chiffres :
+//   1. MORD-IL UNE CHAUSSÉE ? Relévé avant : 75 meubles sur le bitume, dont 6 dans le gabarit
+//      de la voie de droite — le pire est un ABRIBUS planté à 2,08 m DANS la rue de (-145 ; 264),
+//      et deux lampadaires à 1,18 m dans celle de (0 ; -27). Ils n'ont pas bouge : c'est la rue
+//      qui s'est élargie par-dessus eux (`elargirLesVoies`, round 75).
+//   2. BOUCHE-T-IL UNE PORTE ? Relévé avant : 0 porte sur 30 sous le seuil. On garde le contrôle
+//      en garde-fou : le rangement n'a pas le droit d'en boucher une.
+//   3. FERME-T-IL UN TROTTOIR ? Relévé avant : 44 trottoirs sur 311 laissent moins que le gabarit
+//      du joueur, mais **7 seulement** à cause d'un meuble ; les 37 autres sont des murs, des
+//      clôtures et des piliers de portail — de l'architecture, qu'on ne déplace pas (c'est
+//      exactement ce qui mangerait les 10 cm de marge de la ville).
+// LE MEUBLE SE DÉPLACE, IL NE DISPARAÎT JAMAIS. Et il garde son SENS : on cherche la place
+// valable LA PLUS PROCHE, en s'écartant d'abord perpendiculairement à la rue, du côté opposé au
+// bitume. Un abribus reste donc au bord de la route, un banc contre son trottoir, un panneau à
+// vue des voitures : personne ne part à l'autre bout du quartier.
+const MOB_GARDE_RUE = 0.3;     // 30 cm entre le meuble et la rive, comme pour la végétation
+const MOB_PASSE_PIED = 0.9;    // trottoir : 0,80 m de gabarit (2 × P.hw) + 5 cm de jeu de chaque côté
+const MOB_PASSE_PORTE = 1.0;   // une baie est un entonnoir : 0,80 m + 10 cm de jeu de chaque côté
+// DEUX CACHES POUR LA PASSE. `refusMeuble` relisait les 311 trottoirs ET les 5 300 solides a
+// CHAQUE essai de position : 0,84 s de chargement en plus, mesure au banc. Les portes sont
+// sorties une fois pour toutes, et les trottoirs ranges dans une grille de 16 m.
+let MOB_PORTES = null, MOB_TROT = null;
+const caseMob = (x, z) => Math.floor(x / 16) + ',' + Math.floor(z / 16);
+function cacheMobilier() {
+  MOB_PORTES = solids.filter(o => o.porte);
+  MOB_TROT = new Map();
+  for (const t of (city.trottoirs || []))
+    for (let i = Math.floor((t.x - t.w / 2 - 3) / 16); i <= Math.floor((t.x + t.w / 2 + 3) / 16); i++)
+      for (let j = Math.floor((t.z - t.d / 2 - 3) / 16); j <= Math.floor((t.z + t.d / 2 + 3) / 16); j++) {
+        const k = i + ',' + j; if (!MOB_TROT.has(k)) MOB_TROT.set(k, []); MOB_TROT.get(k).push(t);
+      }
+}
+function meubleBloqueJoueur(o) { return o.y + o.h / 2 > 0.6 && o.y - o.h / 2 < 1.9; }   // STEP_UP, P.h
+function meubleBloqueVoiture(o) { return o.y + o.h / 2 > 0.45 && o.y - o.h / 2 < 1.6; } // seuils de carBlocked
+// l'emprise du meuble une fois posé en (nx, nz)
+function empriseMeuble(m, nx, nz) {
+  const dx = nx - m.x, dz = nz - m.z;
+  let x1 = Infinity, x2 = -Infinity, z1 = Infinity, z2 = -Infinity, pied = false, roule = false;
+  for (const so of m.solides) {
+    x1 = Math.min(x1, so.x + dx - so.w / 2); x2 = Math.max(x2, so.x + dx + so.w / 2);
+    z1 = Math.min(z1, so.z + dz - so.d / 2); z2 = Math.max(z2, so.z + dz + so.d / 2);
+    if (meubleBloqueJoueur(so)) pied = true;
+    if (meubleBloqueVoiture(so)) roule = true;
+  }
+  return { x1, x2, z1, z2, pied, roule };
+}
+// la place visée tient-elle debout ? (bitume, bâti, voisins, trottoir, porte)
+function placeMeubleOk(m, nx, nz) { return !refusMeuble(m, nx, nz); }
+// LA RAISON DU REFUS, nommee : c'est elle qui donne les chiffres AVANT, par question.
+function refusMeuble(m, nx, nz) {
+  const e = empriseMeuble(m, nx, nz);
+  if (nx < MONDE.x1 + 2 || nx > MONDE.x2 - 2 || nz < MONDE.z1 + 2 || nz > MONDE.z2 - 2) return 'carte';
+  // 1. le bitume
+  if (e.roule) for (const r of (city.routes || []))
+    if (Math.min(r.w / 2 + (e.x2 - e.x1) / 2 - Math.abs((e.x1 + e.x2) / 2 - r.x),
+                 r.d / 2 + (e.z2 - e.z1) / 2 - Math.abs((e.z1 + e.z2) / 2 - r.z)) > -MOB_GARDE_RUE) return 'chaussee';
+  if (!e.pied) return refusMeubleReste(m, e);
+  // 4. le trottoir : il doit rester de quoi marcher à côté
+  for (const t of (MOB_TROT ? (MOB_TROT.get(caseMob(nx, nz)) || []) : (city.trottoirs || []))) {
+    const tx1 = t.x - t.w / 2, tx2 = t.x + t.w / 2, tz1 = t.z - t.d / 2, tz2 = t.z + t.d / 2;
+    if (e.x1 >= tx2 || e.x2 <= tx1 || e.z1 >= tz2 || e.z2 <= tz1) continue;
+    const c0 = t.alongZ ? t.x : t.z, W = (t.alongZ ? t.w : t.d) / 2;
+    const a = t.alongZ ? e.x1 : e.z1, b2 = t.alongZ ? e.x2 : e.z2;
+    if (Math.max(a - (c0 - W), (c0 + W) - b2) < MOB_PASSE_PIED) return 'trottoir';
+  }
+  // 5. les portes : on ne se met jamais dans l'axe d'une entrée
+  for (const p of (MOB_PORTES || solids)) {
+    if (!p.porte) continue;
+    const alongX = p.w >= p.d, L = Math.max(p.w, p.d) / 2;
+    const px = alongX ? p.x : p.z, pz = alongX ? p.z : p.x;
+    const ea = alongX ? e.x1 : e.z1, eb = alongX ? e.x2 : e.z2;
+    const ec = alongX ? e.z1 : e.x1, ed = alongX ? e.z2 : e.x2;
+    if (ed < pz - 2.6 || ec > pz + 2.6) continue;
+    if (eb <= px - L || ea >= px + L) continue;
+    if (Math.max(ea - (px - L), (px + L) - eb) < MOB_PASSE_PORTE) return 'porte';
+  }
+  return refusMeubleReste(m, e);
+}
+// L'ÉTAT PRÉALABLE, jugé APRÈS les trois questions du poste. Un meuble déjà planté dans un mur
+// ou dans un autre objet n'est PAS un défaut de voirie : c'est du décor posé à la main (une
+// poubelle contre la cabane du Bois, un panneau dans une haie). On ne le dérange pas — mais on
+// n'a pas le droit d'y ENVOYER un meuble qu'on range, donc ces contrôles restent des refus.
+function refusMeubleReste(m, e) {
+  for (const b of [...(city.batiments || []), ...(city.interieurs || [])])
+    if (e.x1 < b.x + b.w / 2 + 0.2 && e.x2 > b.x - b.w / 2 - 0.2 && e.z1 < b.z + b.d / 2 + 0.2 && e.z2 > b.z - b.d / 2 - 0.2) return 'batiment';
+  // UNE PLACE DE STATIONNEMENT MARQUÉE N'EST PAS UN TROTTOIR. Un lampadaire range sur une place
+  // du Parking du Sud, et le test des places n'en comptait plus que 15 libres sur 16.
+  for (const q of (city.parkings || [])) for (const pl of (q.places || []))
+    if (e.x1 < pl[0] + PARK_PLACE_L / 2 && e.x2 > pl[0] - PARK_PLACE_L / 2
+     && e.z1 < pl[1] + PARK_PLACE_P / 2 && e.z2 > pl[1] - PARK_PLACE_P / 2) return 'place';
+  const miens = new Set(m.solides);
+  for (const o of solidsAutour((e.x1 + e.x2) / 2, (e.z1 + e.z2) / 2, Math.max(e.x2 - e.x1, e.z2 - e.z1) / 2 + 2.2, true)) {
+    if (miens.has(o) || o.sol || o.trottoir || o.porte || o.h <= 0.3) continue;
+    if (o.y - o.h / 2 > 1.9) continue;
+    if (e.x1 < o.x + o.w / 2 + 0.15 && e.x2 > o.x - o.w / 2 - 0.15 && e.z1 < o.z + o.d / 2 + 0.15 && e.z2 > o.z - o.d / 2 - 0.15) return 'voisin';
+  }
+  return '';
+}
+function rangeLeMobilier() {
+  cacheMobilier();
+  const fautes = [], deplaces = [], restants = [];
+  // les essais, du plus petit déplacement au plus grand
+  const essais = [];
+  for (let a = 0.3; a <= 4.51; a += 0.3) for (let b = 0; b <= 6.01; b += 0.6)
+    for (const sa of [1, -1]) for (const sb of (b ? [1, -1] : [0])) essais.push([a * sa, b * sb, Math.hypot(a, b)]);
+  essais.sort((u, v) => u[2] - v[2]);
+  for (const m of (city.meubles || [])) {
+    const pourquoi = refusMeuble(m, m.x, m.z);
+    // ON NE RANGE QUE LES TROIS QUESTIONS DU POSTE : chaussee, trottoir, porte. Un meuble deja
+    // pose dans un mur, dans un autre objet ou hors carte est du decor ancien pose a la main :
+    // le deplacer casse la scene (mesure : la poubelle du camp du Bois, controle 485).
+    if (pourquoi !== 'chaussee' && pourquoi !== 'trottoir' && pourquoi !== 'porte') continue;
+    // la rue la plus proche donne l'axe : on s'écarte EN TRAVERS d'elle, jamais le long du seul hasard
+    let rue = null, dd = 1e9;
+    for (const r of (city.routes || [])) {
+      const q = Math.max(Math.abs(m.x - r.x) - r.w / 2, Math.abs(m.z - r.z) - r.d / 2);
+      if (q < dd) { dd = q; rue = r; }
+    }
+    const long = rue ? rue.d >= rue.w : true;
+    const axe = rue ? (long ? rue.x : rue.z) : 0, t0 = long ? m.x : m.z;
+    const loin = t0 >= axe ? 1 : -1;                     // le sens qui ÉLOIGNE du bitume
+    fautes.push({ fam: m.fam, quoi: pourquoi, x: +m.x.toFixed(2), z: +m.z.toFixed(2), rue: rue ? `${rue.x}/${rue.z}` : null });
+    let fait = false;
+    for (const [a, b] of essais) {
+      const nt = t0 + loin * a, nl = (long ? m.z : m.x) + b;
+      const nx = long ? nt : nl, nz = long ? nl : nt;
+      if (!placeMeubleOk(m, nx, nz)) continue;
+      const de = [+m.x.toFixed(2), +m.z.toFixed(2)];
+      bougeMeuble(m, nx, nz);
+      deplaces.push({ fam: m.fam, de, vers: [+nx.toFixed(2), +nz.toFixed(2)], recul: +Math.hypot(a, b).toFixed(2) });
+      fait = true; break;
+    }
+    if (!fait) restants.push({ fam: m.fam, quoi: pourquoi, x: +m.x.toFixed(2), z: +m.z.toFixed(2) });
+  }
+  MOB_PORTES = null; MOB_TROT = null;   // les caches ne survivent pas a la passe : le monde bouge apres
+  const parQuoi = {}; for (const f of fautes) parQuoi[f.quoi] = (parQuoi[f.quoi] || 0) + 1;
+  const parFam = {}; for (const f of fautes) parFam[f.fam] = (parFam[f.fam] || 0) + 1;
+  return { meubles: (city.meubles || []).length, fautes: fautes.length, parQuoi, parFam, deplaces, restants };
 }
 // ============ STATIONNEMENT ALTERNÉ : DEUX VOITURES GARÉES NE FERMENT PLUS UNE RUE ============
 // La largeur libre d'une rue n'a RIEN à voir avec la largeur de son bitume dès qu'on se gare
@@ -5823,6 +5966,42 @@ function elargirLesVoies() {
 // PERPENDICULAIREMENT à la rue fautive, du côté le plus court d'abord, par pas de 60 cm. Si
 // aucun des seize essais ne convient, on rend le point de départ : l'appelant plante quand
 // même (`degageLesRoutes` le reprendra ensuite) — on ne SUPPRIME jamais un arbre.
+// ============ LE MOBILIER URBAIN SE DECLARE A LA POSE (round 83, item 3) ============
+// L'item 1 n'a marque que la vegetation. Le reste du mobilier — bancs, poubelles, panneaux,
+// abribus, bornes, totems — n'etait connu de personne : un banc pose au bord d'un trottoir de
+// 1,80 m le ferme completement, et rien ne le voyait. Chaque meuble s'inscrit maintenant dans
+// `city.meubles` avec SON GROUPE, SES SOLIDES et SES FICHES (city.benches, city.panneaux) :
+// c'est la seule facon de le DEPLACER d'un bloc au lieu de le supprimer.
+function declareMeuble(fam, g, x, z, solides, reg) {
+  if (!city.meubles) city.meubles = [];
+  const m = { fam, g, x, z, solides: (solides || []).filter(Boolean), reg: (reg || []).filter(Boolean) };
+  for (const so of m.solides) so.meuble = m;
+  city.meubles.push(m);
+  return m;
+}
+// LE REGISTRE DOIT RESTER VRAI. Le jeu retire deliberement deux sortes de meubles : les feux
+// qui n'ont aucune file a arreter (`elagueLesFeux`) et ceux qui tombent dans une parcelle de
+// villa. Sans cet oubli, `city.meubles` garderait des fiches dont les solides n'existent plus
+// et le controle « aucun meuble n'a disparu » crierait au loup.
+function oublieMeuble(o) {
+  const m = o && o.meuble; if (!m || !city.meubles) return;
+  const i = city.meubles.indexOf(m); if (i >= 0) city.meubles.splice(i, 1);
+  for (const so of m.solides) so.meuble = null;
+}
+function bougeMeuble(m, nx, nz) {
+  const dx = nx - m.x, dz = nz - m.z;
+  if (!dx && !dz) return;
+  m.x = nx; m.z = nz;
+  if (m.g) { m.g.position.x += dx; m.g.position.z += dz; }
+  for (const so of m.solides) {
+    so.x += dx; so.z += dz;
+    if (so.mesh && (!m.g || so.mesh.parent !== m.g)) { so.mesh.position.x += dx; so.mesh.position.z += dz; }
+    if (so.brk) { so.brk.x += dx; so.brk.z += dz; }
+    for (const f of (so.feuillage || [])) { f.position.x += dx; f.position.z += dz; }
+  }
+  for (const r of m.reg) { r.x += dx; r.z += dz; }
+  sgridSale(); navSale();
+}
 function bitumeSous(x, z, r) {
   for (const rt of (city.routes || []))
     if (Math.abs(x - rt.x) < rt.w / 2 + r && Math.abs(z - rt.z) < rt.d / 2 + r) return rt;
@@ -5914,6 +6093,11 @@ function degageLesRoutes() {
   for (let i = solids.length - 1; i >= 0; i--) {
     const o = solids[i];
     if (vus.has(o) || garde(o) || !o.mesh) continue;
+    // UN MEUBLE DECLARE N'EST PLUS JAMAIS RAMASSE. Il attend `rangeLeMobilier()`, qui tourne
+    // tout a la fin et le DEPLACE. Avant, ce nettoyage jetait 2 lampadaires et les 4 pieds d'un
+    // abribus a chaque chargement (releve a graine figee) — on ne repare pas un decor en le
+    // supprimant.
+    if (o.meuble) continue;
     if (o.feu || o.lampe) continue;
     // LA VÉGÉTATION SE REPLANTE (arbres et palmiers). Elle est jugée plus sévèrement que le reste
     // du mobilier — 30 cm de garde, pas 60 cm de chevauchement toléré — et, si un trottoir voisin
@@ -5990,7 +6174,11 @@ function degageLesRoutes() {
         && Math.abs(x - o.x) < o.w / 2 + 0.25 && Math.abs(z - o.z) < o.d / 2 + 0.25);
     const ok = essais.find(([x, z]) => libre(x, z));
     if (ok) { br.x = ok[0]; br.z = ok[1]; if (br.g) br.g.position.set(br.x, br.g.position.y, br.z); if (br.solid) { br.solid.x = br.x; br.solid.z = br.z; } }
-    else {   // en plein carrefour : aucun trottoir n'est libre, on retire le lampadaire
+    // EN PLEIN CARREFOUR, ON NE LE JETTE PLUS. Aucun des deux trottoirs n'est libre : le
+    // lampadaire reste ou il est et attend `rangeLeMobilier()`, qui essaie quatre-vingt-dix
+    // places a la fin de la construction, quand tout le monde est pose. Mesure a graine figee :
+    // 2 lampadaires partaient a la benne a chaque chargement.
+    else if (!br.solid || !br.solid.meuble) {
       if (br.g) worldGroup.remove(br.g);
       const si = solids.indexOf(br.solid); if (si >= 0) solids.splice(si, 1);
       br.retire = true;
@@ -6021,6 +6209,7 @@ function degageDecorSurRoutes() {
     if (breakables.some(b => b.solid === o)) continue;       // le mobilier cassable a son propre traitement
     // UN ARBRE N'EST PAS UN PIED DE GRANDE ROUE : lui retirer sa collision le laisse planté au
     // milieu de la rue, bien visible, et l'enfant le traverse. On le REPLANTE sur le trottoir.
+    if (o.meuble) continue;   // un meuble declare attend `rangeLeMobilier()` : on ne lui retire pas sa collision
     if (o.vegetal && vegetalMordLaVoie(o) && replanteHorsChaussee(o)) { n++; continue; }
     if (!surChaussee(o.x, o.z)) continue;
     solids.splice(i, 1); n++;
@@ -6096,6 +6285,7 @@ function poubelle(x, z) {
   const solid = { mesh: corps, x, y: 0.45, z, w: 0.55, h: 0.9, d: 0.55, noRoute: true };
   solids.push(solid); sgridSale();
   fragile(g, solid, x, z, 'poubelle', 0.45);
+  declareMeuble('poubelle', g, x, z, [solid]);
   return solid;
 }
 function glissiere(x, z, len, alongZ) {   // glissiere de securite : poteaux et lisse, decor sans collision
@@ -7139,7 +7329,7 @@ const WORLDS = [
       B('routes de l\'ouest', routesOuest); B('gangs', buildGangs);
       B('quartier', buildResidential);
       // sécurité : aucun feu tricolore ne doit se retrouver dans un jardin ou une maison
-      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } } sgridSale();
+      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); oublieMeuble(t.solid); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } } sgridSale();
       // routes : anneau + croix
       road(26, 0, 6, 58); road(-26, 0, 6, 58); road(0, 26, 58, 6); road(0, -26, 58, 6); road(0, -4, 6, 38); road(0, 0, 46, 6);   // l'axe nord-sud s'arrete devant la salle de sport au lieu de la traverser
       // quartiers (trottoirs / pelouses)
@@ -7282,6 +7472,9 @@ const WORLDS = [
       // APRÈS le décor solidifié : c'est le dernier moment où un nouveau mur peut apparaître
       // dans le plancher d'une cabine d'ascenseur (voir degageLesCabines).
       B('cabines d\'ascenseur', degageLesCabines);
+      // TOUT LE MOBILIER, APRÈS TOUT LE MONDE : c'est le dernier moment où une rue, un mur ou un
+      // véhicule peut encore apparaître sous un banc. On déplace, on ne supprime jamais.
+      B('rangement du mobilier', () => { city.range = rangeLeMobilier(); });
       B('architecture et voirie', () => { city.art = MarlonCityDetail.build(THREE, city, worldGroup); });
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
@@ -8760,8 +8953,11 @@ function bench(x, z, facing = 0) {   // banc public sur lequel on peut s'asseoir
   mk(2.2, 0.12, 0.7, 0, 0.6, 0, C.wood); mk(2.2, 0.55, 0.1, 0, 0.95, -0.35, C.wood); for (const dx of [-0.9, 0.9]) { mk(0.12, 0.6, 0.6, dx, 0.3, 0, 0x3b4252); mk(0.12, 0.7, 0.08, dx, 0.7, -0.35, 0x3b4252); }
   // collision : le banc était purement décoratif, on le traversait
   const long = Math.abs(Math.sin(facing)) > 0.5;
-  box(x, 0.33, z, long ? 0.85 : 2.3, 0.66, long ? 2.3 : 0.85, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
-  city.benches.push({ x, z, facing, y: 0, assise: 0.66 });
+  const boite = box(x, 0.33, z, long ? 0.85 : 2.3, 0.66, long ? 2.3 : 0.85, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+  const fiche = { x, z, facing, y: 0, assise: 0.66 };
+  city.benches.push(fiche);
+  declareMeuble('banc', g, x, z, [boite], [fiche]);
+  return fiche;
 }
 function sitBench(b) { if (P.sit || drive.car) return; if (P.snack && !P.eat) setTimeout(() => eatCarried(), 400); P.sit = b;
   animTransArme(me);   // on ne se téléporte plus sur le banc : le corps y glisse (poste Animation)
@@ -8881,7 +9077,9 @@ function trafficLight(x, z, ry, group) {
   // la moitie des chaussees n'existe pas encore.
   const ligne = { x: +(x - Math.cos(sens) * 2.7).toFixed(2), z: +(z + Math.sin(sens) * 2.7).toFixed(2) };
   const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, groupe: group, sens, ligne, etat: 'rouge', state: 0, broken: false };
-  solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl); return tl;
+  solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl);
+  declareMeuble('feu', g, x, z, [solid], [tl, ligne]);   // la ligne d'arret suit le feu
+  return tl;
 }
 // OU s'arrete-t-on a ce feu ? Sur l'axe de la file qu'il arrete, au droit du feu. On cherche
 // la chaussee qui porte cette file (celle dont l'orientation suit `sens` et qui passe sous le
@@ -8921,7 +9119,7 @@ function elagueLesFeux() {
     const tl = city.trafficLights[i];
     const l = ligneFeu(tl);
     if (l) { tl.ligne = l; continue; }
-    worldGroup.remove(tl.g);
+    worldGroup.remove(tl.g); oublieMeuble(tl.solid);
     const si = solids.indexOf(tl.solid); if (si >= 0) solids.splice(si, 1);
     const bi = breakables.indexOf(tl); if (bi >= 0) breakables.splice(bi, 1);
     city.trafficLights.splice(i, 1); n++;
@@ -8981,7 +9179,9 @@ function panneau(x, z, type, sens, route) {
   const solid = { mesh: post, x, y: 1.2, z, w: 0.36, h: 2.4, d: 0.36, panneau: true }; solids.push(solid); sgridSale();
   const p = { x: +x.toFixed(2), z: +z.toFixed(2), type, sens: +sens.toFixed(3), route: route == null ? -1 : route, g, solid };
   p.brk = fragile(g, solid, x, z, 'panneau', 0.45);   // un pare-chocs le tord ; les employes le redressent
-  city.panneaux.push(p); return p;
+  city.panneaux.push(p);
+  declareMeuble('panneau', g, x, z, [solid], [p]);
+  return p;
 }
 function buildStreets() {   // nouvelles rues, passages piétons, feux tricolores aux carrefours de l'anneau
   road(6, -44, 154, 6, 0, true); road(4, 110, 122, 6, 0, true); road(-42, 25, 5, 56, 0, true); road(52, -9, 6, 72, 0, true);   // la rue du nord rejoint la rue est ; la rue de l'ouest ne traverse plus la piscine, la banque ni la cabane ; la rue de l'heliport monte d'une traite jusqu'a la rue commercante, QU'ELLE RECOUVRE sur 2 m (z 27) : bout a bout exactement, le graphe des voies posait encore une liaison virtuelle de 5 m entre les deux depuis que l'armurerie a demenage : le trou de 12 m est bouche   // la rue de l'ouest ne traverse plus la piscine ni la cabane du bout de l'avenue
@@ -9573,13 +9773,16 @@ function abribus(x, z, ry = 0) {
   const fond = new THREE.Mesh(unitBox, new THREE.MeshLambertMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.45 })); fond.scale.set(4, 2.1, 0.1); fond.position.set(0, 1.3, -0.9); g.add(fond);
   const ens = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ map: textTexture('🚌 Arrêt') })); ens.scale.set(1.6, 0.5, 0.06); ens.position.set(0, 2.9, 0); g.add(ens);
   // collision : les quatre pieds et le fond. Le toit reste traversable (on est dessous).
+  const pieces = [];
   for (const dx of [-1.9, 1.9]) for (const dz of [-0.85, 0.85])
-    box(x + cs * dx - sn * dz, 1.2, z + sn * dx + cs * dz, 0.16, 2.4, 0.16, 0x3b4252, { studs: false, noRoute: true });
-  box(x - sn * -0.9, 1.05, z + cs * -0.9, Math.abs(cs) * 4 + 0.12, 2.1, Math.abs(sn) * 4 + 0.12, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
+    pieces.push(box(x + cs * dx - sn * dz, 1.2, z + sn * dx + cs * dz, 0.16, 2.4, 0.16, 0x3b4252, { studs: false, noRoute: true }));
+  pieces.push(box(x - sn * -0.9, 1.05, z + cs * -0.9, Math.abs(cs) * 4 + 0.12, 2.1, Math.abs(sn) * 4 + 0.12, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }));
   // le banc de l'abri : on s'y assoit (E), comme sur tous les bancs de la ville
   const assise = new THREE.Mesh(unitRound, lam(C.wood)); assise.scale.set(3, 0.12, 0.45); assise.position.set(0, 0.6, -0.55); assise.castShadow = true; g.add(assise);
-  box(x - sn * -0.55, 0.33, z + cs * -0.55, Math.abs(cs) * 3 + 0.12, 0.66, Math.abs(sn) * 3 + 0.12, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true });
-  city.benches.push({ x: x - sn * -0.55, z: z + cs * -0.55, facing: ry, y: 0, assise: 0.66 });
+  pieces.push(box(x - sn * -0.55, 0.33, z + cs * -0.55, Math.abs(cs) * 3 + 0.12, 0.66, Math.abs(sn) * 3 + 0.12, 0, { material: invisibleMat, noEdges: true, noShadow: true, studs: false, noRoute: true }));
+  const fiche = { x: x - sn * -0.55, z: z + cs * -0.55, facing: ry, y: 0, assise: 0.66 };
+  city.benches.push(fiche);
+  declareMeuble('abribus', g, x, z, pieces, [fiche]);
 }
 // LA BORNE-FONTAINE A BOIRE : 1 m de haut, solide (on ne traverse pas une borne en fonte).
 function borneEau(x, z) {
@@ -9587,14 +9790,18 @@ function borneEau(x, z) {
   const f = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1, 10), lam(0x2f6f4a)); f.position.y = 0.5; f.castShadow = true; g.add(f);
   const vasque = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.14, 12), lam(0xc9ced8)); vasque.position.y = 1.03; g.add(vasque);
   const bec = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 6), lam(0xb9c2cf)); bec.position.set(0, 1.18, 0); g.add(bec);
-  solids.push({ mesh: f, x, y: 0.5, z, w: 0.4, h: 1, d: 0.4, noRoute: true }); sgridSale();
+  const so = { mesh: f, x, y: 0.5, z, w: 0.4, h: 1, d: 0.4, noRoute: true };
+  solids.push(so); sgridSale();
+  declareMeuble('borne', g, x, z, [so]);
 }
 // LE TOTEM D'INFORMATION du quartier : un panneau sur pied, solide, qui dit ou l'on est.
 function totemInfo(x, z, titre, couleur) {
   const g = new THREE.Group(); g.position.set(x, 0, z); worldGroup.add(g);
   const pied = new THREE.Mesh(unitBox, lam(0x3b4252)); pied.scale.set(0.3, 2.6, 0.3); pied.position.y = 1.3; pied.castShadow = true; g.add(pied);
   const panneau = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ map: enseigneTexture(titre, couleur) })); panneau.scale.set(3.4, 1, 0.12); panneau.position.y = 3.2; g.add(panneau);
-  solids.push({ mesh: pied, x, y: 1.3, z, w: 0.34, h: 2.6, d: 0.34, noRoute: true }); sgridSale();
+  const so = { mesh: pied, x, y: 1.3, z, w: 0.34, h: 2.6, d: 0.34, noRoute: true };
+  solids.push(so); sgridSale();
+  declareMeuble('totem', g, x, z, [so]);
 }
 // ================= QUARTIER : LE HAMEAU DE LA FERME (sud-ouest) =================
 // Deuxieme quartier demande par le joueur. Le sud-ouest (x < −100, z > 250) etait le plus
@@ -13231,7 +13438,7 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
   // et la promenade du littoral qui tient x = 101,5 à 106,5 (5 m de large, la plus étroite de la
   // ville) : un tirage sur quatre plantait le tronc EN PLEINE VOIE. `placeHorsBitume` le repousse
   // à l'est du bitume, donc toujours sur le sable, sans toucher au pas de 38 m de la rangée.
-  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const p0 = placeHorsBitume(rnd(105, 110), -50 + i * 38, 0.3), tx = p0[0], tz = p0[1]; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); const sp = { mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6, vegetal: 'palmier', feuillage: [] }; solids.push(sp); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); sp.feuillage.push(leaf); } }   // palmiers sgridSale();
+  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const p0 = placeHorsBitume(rnd(105, 110), -50 + i * 38, 0.3), tx = p0[0], tz = p0[1]; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); const sp = { mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6, vegetal: 'palmier', feuillage: [] }; solids.push(sp); declareMeuble('palmier', null, tx, tz, [sp]); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); sp.feuillage.push(leaf); } }   // palmiers sgridSale();
   // poste de secours
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(112 + dx, 1.5, 30 + dz, 0.2, 3, 0.2, 0xf4f6fa, { studs: false, noRoute: true });
   box(112, 3.1, 30, 3, 0.2, 3, 0xf4f6fa, { studs: false, noRoute: true }); box(112.4, 3.9, 30 + 1.4, 2.2, 1.4, 0.15, 0xff5c5c, { studs: false, noRoute: true });   // garde-corps raccourci : il barrait l'arrivée de l'escalier box(112, 4.9, 30, 3.4, 0.3, 3.4, 0xffd23f, { deco: true, studs: false });
@@ -14801,7 +15008,7 @@ function dropDecor() {
   placeLibre(P.deco.id, pt.x, pt.y, pt.z, pt.ry, pt.mur);
   worldGroup.remove(P.decoMesh); P.deco = null; P.decoMesh = null; city.pose = null;
 }
-function palm(x, z) { if (city.routes && city.routes.length) { const q = placeHorsBitume(x, z, 0.35); x = q[0]; z = q[1]; } const t = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 5.5, 8), lam(0x8b5a2b)); t.position.set(x, 3, z); t.rotation.z = 0.1; worldGroup.add(t); const sp = { mesh: t, x, y: 3, z, w: 0.7, h: 5.5, d: 0.7, vegetal: 'palmier', feuillage: [] }; solids.push(sp); for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3.2); leaf.position.set(x + Math.cos(k) * 1.3, 5.7, z + Math.sin(k) * 1.3); leaf.rotation.y = k; leaf.rotation.z = -0.5; worldGroup.add(leaf); sp.feuillage.push(leaf); } } sgridSale();
+function palm(x, z) { if (city.routes && city.routes.length) { const q = placeHorsBitume(x, z, 0.35); x = q[0]; z = q[1]; } const t = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 5.5, 8), lam(0x8b5a2b)); t.position.set(x, 3, z); t.rotation.z = 0.1; worldGroup.add(t); const sp = { mesh: t, x, y: 3, z, w: 0.7, h: 5.5, d: 0.7, vegetal: 'palmier', feuillage: [] }; solids.push(sp); declareMeuble('palmier', null, x, z, [sp]); for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3.2); leaf.position.set(x + Math.cos(k) * 1.3, 5.7, z + Math.sin(k) * 1.3); leaf.rotation.y = k; leaf.rotation.z = -0.5; worldGroup.add(leaf); sp.feuillage.push(leaf); } } sgridSale();
 function openFridge() {
   $('fridgeGrid').innerHTML = RAW.map((it, i) => `<div class="item" data-i="${i}"><span class="e">${it.e}</span>${it.n}<span class="pr">${it.cook ? 'à cuire' : 'à boire / manger'}</span></div>`).join('');
   $('fridgeGrid').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => {
@@ -17559,7 +17766,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.camPieces = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.zebras = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.habitants = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => EPHEMERES.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null; city.meubles = [];  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.camPieces = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.zebras = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.habitants = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => EPHEMERES.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol

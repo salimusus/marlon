@@ -19812,10 +19812,43 @@ test('un véhicule posé à contresens de sa destination repart aussitôt et ARR
 // GARÉES, qui ne vont nulle part. On ne compte donc que ce qui a une DESTINATION (une mission,
 // un itinéraire en cours, un conducteur bot, un constat), et on laisse à la ville une minute
 // de vie avant de mesurer, épave et incendie compris, pour qu'elle soit déjà jouée.
+// POURQUOI CE TEST NE MESURAIT RIEN (round 82). Il annoncait « 1 vehicule AVEC une destination
+// suivi » puis « 0 bloque » : deux chiffres faux, et pour la MEME raison. Son registre etait un
+// Map dont il SUPPRIMAIT la fiche (`etats.delete(c)`) des qu'un vehicule perdait son but.
+//   a) `suivis` ne comptait donc pas les vehicules suivis mais LES SURVIVANTS DU DERNIER RELEVE.
+//      Son autre chiffre le disait deja : 8 082 relevés pour 900 echantillons, soit 8,98
+//      vehicules a chaque fois. La ville n'a jamais manque de vehicules qui ont un but — mesure
+//      refaite ici, 9 a chaque releve pendant 90 s : les 8 voitures et camions de la circulation
+//      de fond, plus la depanneuse partie chercher l'epave.
+//   b) Et surtout, la fiche supprimee emportait LE COMPTEUR D'ARRET. Or le jeu retire son
+//      itineraire (`c.ia = null`) a tout vehicule de la circulation bloque 2,5 s (`bloqueT`) ou
+//      fige 8 s (`figeT`) : le test oubliait donc, par construction, exactement les vehicules en
+//      train de se bloquer. Son « plus long arret sans raison 2,8 s » n'etait pas une propriete
+//      de la ville, c'etait SON PROPRE PLAFOND.
+// MESURE COTE A COTE, meme ville, meme graine, meme horloge (sonde) : ancienne metrique
+// 9 suivis / pire 4,0 s ; nouvelle metrique, fiche gardee, 9 suivis / pire 5,3 s — un blocage
+// de plus de cinq secondes que l'ancienne ne POUVAIT PAS voir. Il etait reel : voiture de la
+// circulation immobile 5,5 s en (-171,5 ; 129), raison « - », `bloqueVeh`=true et
+// `bloqueSol`=false (aucun mur : une tole a 4,08 m), et la soupape de degagement n'agissait
+// qu'au bout de 5,5 s parce qu'elle est armee par `figeT`, qui est une moyenne glissante.
+// Corrige dans le jeu (DEGAGE_BLOQUE) : pire arret sans raison 1,6 s au lieu de 5,5 s.
+// LA CONTRE-EPREUVE FAIT PARTIE DU TEST. Un test qui ne peut plus echouer ne garantit rien :
+// apres la mesure, on CLOUE un vehicule de la circulation sur place pendant dix secondes et on
+// rejoue LA MEME fonction de mesure. Si elle ne le signale pas, le test est rouge.
 test('dans une ville déjà jouée, aucun véhicule qui a une destination ne reste bloqué sans raison', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
+    const vrai = Math.random;
+    const semer = g => { let x = g; Math.random = () => ((x = (x * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); };
+    try {
+    // RECETTE DU BANC. L'horloge est posee a une valeur FIXE avant la reconstruction (le cycle
+    // des feux vaut 28 s, la journee 360 s = 12 x 28 + 24 : sans ca la phase des feux avance de
+    // 24 s a chaque test et le carrefour est vert ou rouge selon le RANG du test dans la suite),
+    // et la graine est re-semee APRES (la construction consomme un nombre de tirages qui depend
+    // de l'etat trouve : palier de reputation, nombre de gangs, nombre d'habitants).
+    semer(20240607); G.simTime = 3000;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    semer(20240607);
     const dt = 1 / 60;
     const garage = G.city.garage || { x: -22, z: -30 };
     const cands = (G.city.cars || []).filter(c => G.voitureEmpruntable(c) && !c.rider)
@@ -19829,35 +19862,75 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
     // service dont la mission est finie garde son tracé en mémoire alors que PLUS PERSONNE ne
     // le conduit — mesuré, le camion de pompiers reste 67 s à l'arrêt en (4, 25) avec 81 points
     // de passage et un incendie déjà éteint. Ce n'est pas un blocage, c'est un camion garé avec
-    // une vieille feuille de route. On compte donc : la circulation de fond (elle est conduite à
-    // chaque image), et tout véhicule qui a une mission, un constat ou un conducteur bot.
+    // une vieille feuille de route. On compte donc : la circulation de fond, et tout véhicule
+    // qui a une mission, un constat ou un conducteur bot.
+    // MAIS ON NE DEMANDE PLUS `c.ia` A LA CIRCULATION DE FOND. Un vehicule de `city.aiCars` qui
+    // a un `spd` est de la circulation : il est TOUJOURS cense rouler, et le jeu lui redonne un
+    // itineraire des qu'il en perd un. Lui demander son `ia` revenait a fermer les yeux pendant
+    // le recalcul — c'est-a-dire pendant le blocage, puisque c'est le blocage qui fait jeter
+    // l'itineraire. Mesure du trou : 1,4 s au pire sur 90 s (les huit vehicules, `ia` absent),
+    // tres loin des 5 s de seuil : la periode de recalcul ne peut pas, a elle seule, sonner.
     const fond = new Set(G.city.aiCars || []);
-    const aUnBut = (c, pil) => !!(c.mission || c.constat || c.srvBut || pil.has(c) || (fond.has(c) && c.ia && c.ia.route));
-    const etats = new Map(); let ech = 0;
-    for (let k = 0; k < 60 * 90; k++) {
-      G.step(dt, true);
-      if (k % 6) continue;
-      const pil = pilotes();
-      for (const c of (G.city.cars || []).concat(G.city.aiCars || [], (G.police && G.police.cars) || [])) {
-        if (c.heli || c === G.drive.car) continue;
-        if (!aUnBut(c, pil)) { etats.delete(c); continue; }
-        ech++;
-        let e = etats.get(c); if (!e) { e = { x: c.x, z: c.z, planteT: 0, pire: 0, ou: null, kind: c.kind || 'voiture' }; etats.set(c, e); }
-        const bouge = Math.hypot(c.x - e.x, c.z - e.z); e.x = c.x; e.z = c.z;
-        if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
-          e.planteT += dt * 6;
-          if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-']; }
-        } else e.planteT = 0;
+    const aUnBut = (c, pil) => !!(c.mission || c.constat || c.srvBut || pil.has(c) || (fond.has(c) && c.spd));
+    // LA MESURE, EN UNE FONCTION : c'est elle qu'on rejouera sur la ville sabotee.
+    // ON NE SUPPRIME PLUS JAMAIS UNE FICHE. Un vehicule qui perd son but (service qui rentre au
+    // depot) voit seulement son chronometre en cours remis a zero : sa fiche, son identite et
+    // son PIRE ARRET restent au registre.
+    const mesure = (images, saboter) => {
+      const etats = new Map(); let ech = 0, relevs = 0;
+      for (let k = 0; k < images; k++) {
+        G.step(dt, true);
+        if (saboter) saboter();
+        if (k % 6) continue;
+        relevs++;
+        const pil = pilotes();
+        for (const c of (G.city.cars || []).concat(G.city.aiCars || [], (G.police && G.police.cars) || [])) {
+          if (c.heli || c === G.drive.car) continue;
+          const but = aUnBut(c, pil);
+          let e = etats.get(c);
+          if (!but) { if (e) { e.planteT = 0; e.x = c.x; e.z = c.z; } continue; }
+          ech++;
+          if (!e) { e = { x: c.x, z: c.z, planteT: 0, pire: 0, ou: null, kind: c.kind || 'voiture', vu: 0 }; etats.set(c, e); }
+          e.vu++;
+          const bouge = Math.hypot(c.x - e.x, c.z - e.z); e.x = c.x; e.z = c.z;
+          if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
+            e.planteT += dt * 6;
+            if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-']; }
+          } else e.planteT = 0;
+        }
       }
+      const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null;
+      etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; }
+        if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou }); });
+      return { suivis: etats.size, relevs, echantillons: ech, bloques: bloques.length, liste: bloques.slice(0, 5),
+        pire: +pireGlobal.toFixed(1), pireOu, pireKind, parReleve: +(ech / Math.max(1, relevs)).toFixed(2) };
+    };
+    const bilan = mesure(60 * 90, null);
+    // ===================== LA CONTRE-EPREUVE =====================
+    // On CLOUE un vehicule de la circulation : a chaque image on le remet a sa place, vitesse
+    // nulle, sans raison legale. Rien d'autre ne change — meme ville, meme fonction de mesure,
+    // meme seuil de 5 s. Si elle ne le signale pas, c'est qu'elle ne mesure rien.
+    const cobaye = (G.city.aiCars || []).filter(c => c.spd && !c.busy).sort((a, b) => (b.speed || 0) - (a.speed || 0))[0];
+    let contre = null;
+    if (cobaye) {
+      const piege = { x: cobaye.x, z: cobaye.z, h: cobaye.h, y: cobaye.y };
+      contre = mesure(60 * 10, () => {
+        cobaye.x = piege.x; cobaye.z = piege.z; cobaye.h = piege.h; cobaye.y = piege.y;
+        cobaye.g.position.set(piege.x, piege.y, piege.z); cobaye.g.rotation.y = piege.h;
+        cobaye.speed = 0; cobaye.stopped = true; cobaye.raison = null;
+        if (G.vehicleSolid) G.vehicleSolid(cobaye);
+      });
+      contre.cobaye = { kind: cobaye.kind || 'voiture', x: +piege.x.toFixed(0), z: +piege.z.toFixed(0) };
     }
-    const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null;
-    etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; }
-      if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou }); });
-    return { suivis: etats.size, echantillons: ech, bloques: bloques.length, liste: bloques.slice(0, 5),
-      pire: +pireGlobal.toFixed(1), pireOu, pireKind };
+    return { bilan, contre };
+    } finally { Math.random = vrai; }   // la graine est rendue : les tests suivants retrouvent le vrai hasard
   });
-  const ok = r.bloques === 0 && r.suivis >= 4 && r.pire < 5;
-  return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées · maintenant, 90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${r.suivis} véhicules AVEC une destination suivis sur ${r.echantillons} relevés, ${r.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${r.pire} s${r.pireOu ? ` (${r.pireKind} en ${r.pireOu[0]}, ${r.pireOu[1]})` : ''}` };
+  const b = r.bilan, k = r.contre;
+  // le test n'est vert que s'il est AUSSI capable d'etre rouge : la contre-epreuve doit sonner
+  const ok = b.bloques === 0 && b.suivis >= 4 && b.pire < 5 && !!k && k.bloques >= 1 && k.pire > 5;
+  return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées ; puis, la métrique corrigée mais AMNÉSIQUE (la fiche du véhicule était supprimée dès qu'il perdait son itinéraire — c'est-à-dire dès qu'il se bloquait) : « 1 véhicule suivi, plus long arrêt 2,8 s », alors que ses propres 8 082 relevés sur 900 échantillons en annonçaient 8,98 · maintenant, fiche gardée : `
+    + `90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${b.suivis} véhicules AVEC un but suivis sur ${b.echantillons} relevés (${b.parReleve} par échantillon), ${b.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${b.pire} s${b.pireOu ? ` (${b.pireKind} en ${b.pireOu[0]} ; ${b.pireOu[1]})` : ''} — il durait 5,5 s avant DEGAGE_BLOQUE`
+    + ` · CONTRE-ÉPREUVE, même ville, même fonction de mesure, un seul véhicule cloué sur place 10 s (${k ? k.cobaye.kind + ' en ' + k.cobaye.x + ' ; ' + k.cobaye.z : 'aucun cobaye'}) : ${k ? k.bloques : 0} bloqué(s) signalé(s), plus long arrêt ${k ? k.pire : 0} s — le test SAIT donc encore devenir rouge` };
 });
 
 test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier dans son habitacle', async p => {

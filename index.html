@@ -11680,6 +11680,23 @@ function traceSuit(c, R, st) {
 }
 const DEGAGE_SANS_RAISON = 4;    // s immobile sans raison legale avant de se degager
 const DEGAGE_QUAND_MEME = 22;    // s immobile MEME avec une bonne raison (file qui ne repart pas)
+// ON EST CLOUE PAR UNE AUTRE TOLE : ON RECULE SANS ATTENDRE LES QUATRE SECONDES.
+// `figeT` mesure le chemin REELLEMENT parcouru sur une fenetre glissante : il met environ une
+// seconde et demie a demarrer apres l'arret complet, et la soupape « sans raison » n'agit donc
+// qu'au bout de 5,5 s. Mesure (test 450, 90 s de ville deja jouee, horloge et graine figees) :
+// une voiture de la circulation immobile 5,5 s en (-171,5 ; 129), raison « - », bloqueVeh=true
+// et bloqueSol=false — elle n'etait donc arretee par AUCUN mur, seulement par une tole a 4,08 m
+// qui, elle, roulait a 6 m/s. `bloqueT` dit exactement cela, et sans fenetre glissante : le pas
+// vient d'etre REFUSE par le garde-fou de collision. On s'en sert comme second declencheur.
+// Ce n'est pas un desserrage de seuil : c'est le meme degagement, arme par la mesure directe
+// au lieu de la mesure moyennee. Apres : pire arret sans raison 2,9 s au lieu de 5,5 s.
+const DEGAGE_BLOQUE = 1.6;       // s de pas REFUSES par une autre tole avant de se degager
+// LES BONNES RAISONS DE NE PAS AVANCER, en un seul endroit : un feu, un stop, un cedez, un
+// passage pieton, un pieton, une file. La liste etait ecrite deux fois (ici et dans le banc
+// d'essai) et une seule des deux copies a recu « demi-tour » : on la nomme.
+function excuseLegale(r) {
+  return r === 'feu' || r === 'stop' || r === 'cede' || r === 'passage' || r === 'pieton' || r === 'file';
+}
 // COMBIEN DE TEMPS ON A LE DROIT DE TRAVERSER. Pendant le degagement, les caisses cessent
 // d'etre des murs (mode « mou ») : cette duree est donc AUSSI la duree maximale pendant
 // laquelle deux tolles peuvent rester l'une dans l'autre. Mesure (test 332, nouveau reseau
@@ -11751,11 +11768,12 @@ function traficRoule(c, dt, opt) {
   //   — MEME AVEC UNE BONNE RAISON, plus tard (DEGAGE_QUAND_MEME) : une file qui ne repart pas
   //     est une file dont la tete est coincee, et « file » n'est plus une excuse a ce stade.
   if (simTime > (c.degageFin || 0)
-      && ((c.figeT || 0) > DEGAGE_SANS_RAISON || (c.attenteT || 0) > DEGAGE_QUAND_MEME)
+      && ((c.figeT || 0) > DEGAGE_SANS_RAISON || (c.attenteT || 0) > DEGAGE_QUAND_MEME
+          || ((c.bloqueT || 0) > DEGAGE_BLOQUE && !excuseLegale(c.raison)))
       && simTime > (c.degageRepos || 0)) {
     c.degageFin = simTime + DEGAGE_DUREE; c.degageSens = (c.degageSens === 1) ? -1 : 1;
     c.degageRepos = simTime + DEGAGE_DUREE + DEGAGE_REPOS;
-    c.figeT = 0; c.attenteT = 0;
+    c.figeT = 0; c.attenteT = 0; c.bloqueT = 0;
     // le trace qu'on suivait nous a menes la : on en redemande un autre, et on renonce a la
     // voie de depart convoitee si c'est elle qui exigeait une manoeuvre impossible.
     st.refaire = 0; if (opt.pilote) renonceDepart(c);
@@ -11821,7 +11839,7 @@ function traficRoule(c, dt, opt) {
   // voiture arretee SANS RAISON est coincee (un chantier tout neuf en travers de sa voie, une
   // impasse ou elle ne peut pas tourner). Au bout de 8 s elle se cherche une autre destination,
   // au bout de 20 s elle va reprendre la circulation ailleurs — la ville ne se fige jamais.
-  const excuse = c.raison === 'feu' || c.raison === 'stop' || c.raison === 'cede' || c.raison === 'passage' || c.raison === 'pieton' || c.raison === 'file';
+  const excuse = excuseLegale(c.raison);
   // On juge sur le chemin REELLEMENT parcouru : une voiture qui rabote un mur affiche encore
   // 1,2 m/s au compteur et n'avance que de trente centimetres par seconde.
   if (avanceReel(c) < 2.2 * dt && !excuse) c.figeT = (c.figeT || 0) + dt; else c.figeT = 0;

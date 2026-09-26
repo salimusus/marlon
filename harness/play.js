@@ -21365,6 +21365,22 @@ test('un habitant ordinaire ne lève jamais la main sur un enfant qui n\'a rien 
     // verrait rien du tout. On se place donc APRÈS cette accalmie, là où le défaut vivait.
     G.vie.debut = G.simTime - 1000; G.vie.t = 0;
     P.hp = 100;
+    // UN ENFANT SANS HISTOIRE, ET ON LE DIT AU JEU (round 83). Les deux moitiés du test ne
+    // partaient pas du même état : le tirage forcé, plus bas, remet à zéro les quatre
+    // marqueurs de provocation, et la mesure de 240 s, elle, héritait de ceux du test
+    // précédent. Or `P.crime` et `P.crimeTir` sont des DATES ABSOLUES (simTime + 20 s) que
+    // `__SHOT.go()` ne remettait pas à plat, et le test 465 REMBOBINE l'horloge à 3 000 s :
+    // un coup de poing porté vers t = 9 000 s par un test bien plus haut laissait donc un
+    // délit « frais » valable jusqu'à t = 9 020, soit 6 000 secondes après l'entrée ici.
+    // joueurAProvoque() rendait VRAI pendant toute la mesure et `lancerActivite` envoyait
+    // légitimement les habitants sur le joueur : « 961 images où un habitant est lancé sur
+    // lui, ❤️ au plus bas 19 » — reproduit à l'identique à la sonde (960 images, ❤️ 37, un
+    // seul écrivain de fight : « chase < lancerActivite < vieTick »), et 0 image dès que ces
+    // quatre lignes sont là. La garde à la source n'a jamais failli ; c'est l'ÉTAT DU JOUEUR
+    // qui mentait. (Le ménage est aussi fait dans `__SHOT.go` pour tous les autres tests.)
+    G.police.wanted = 0; P.crime = 0; P.crimeTir = 0; P.drawn = false;
+    const entree = { crime: +(P.crime || 0), crimeTir: +(P.crimeTir || 0), simTime: +G.simTime.toFixed(0),
+      provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
     // 1) LA SCÈNE DU CONTRÔLEUR : manette posée, 240 s de simulation, relevé À CHAQUE PAS.
     let minHp = 100, chasse = 0, portee = 0, wantedMax = 0, coups = [], dernier = '';
     for (let i = 0; i < 14400; i++) {
@@ -21407,14 +21423,15 @@ test('un habitant ordinaire ne lève jamais la main sur un enfant qui n\'a rien 
     };
     const propre = tirage(false);
     const cherche = tirage(true);
-    return { pose, propre, cherche };
+    return { pose, propre, cherche, entree };
   });
   // 0 coup reçu d'un habitant non provoqué ; la ville se bagarre quand même entre bots ;
   // et un enfant qui VIENT de frapper reste, lui, une cible légitime.
   const ok = r.pose.chasse === 0 && r.pose.portee === 0 && r.pose.minHp === 100
     && r.propre.surJoueur === 0 && r.propre.surBot > 0
-    && r.cherche.surJoueur > 0;
-  return { ok, detail: `avant : profil vierge, manette posée, « 🤕 −9 ❤️ · Karim_flash » puis « 😵 KO par Karim_flash ! −7 🪙 » — et sur 10 tirages « bagarre » forcés à moins de 45 m, 10 partaient sur le JOUEUR, 0 sur un autre bot · maintenant 240 s de simulation (14 400 pas, relevés à chaque pas, après l'accalmie des 180 premières secondes) : ${r.pose.chasse} image où un habitant est lancé sur lui, ${r.pose.portee} image où il est à portée de coup, ❤️ au plus bas ${r.pose.minHp}, ★ au plus haut ${r.pose.wantedMax}${r.pose.coups.length ? ' (' + r.pose.coups.join(' | ') + ')' : ' (aucun coup encaissé)'} · tirage forcé sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent à lui et ${r.propre.surBot} à un autre habitant (la ville vit toujours) · même tirage sur ${r.cherche.essais} habitants APRÈS un coup porté par l'enfant : ${r.cherche.surJoueur} s'en prennent à lui — la provocation marche encore` };
+    && r.cherche.surJoueur > 0
+    && !r.entree.provoque;   // la mesure de 240 s part bien d'un enfant sans histoire
+  return { ok, detail: `avant : profil vierge, manette posée, « 🤕 −9 ❤️ · Karim_flash » puis « 😵 KO par Karim_flash ! −7 🪙 » — et sur 10 tirages « bagarre » forcés à moins de 45 m, 10 partaient sur le JOUEUR, 0 sur un autre bot · maintenant, horloge d'entrée ${r.entree.simTime} s, délit frais ${r.entree.crime} / tir ${r.entree.crimeTir}, provocateur=${r.entree.provoque} · 240 s de simulation (14 400 pas, relevés à chaque pas, après l'accalmie des 180 premières secondes) : ${r.pose.chasse} image où un habitant est lancé sur lui, ${r.pose.portee} image où il est à portée de coup, ❤️ au plus bas ${r.pose.minHp}, ★ au plus haut ${r.pose.wantedMax}${r.pose.coups.length ? ' (' + r.pose.coups.join(' | ') + ')' : ' (aucun coup encaissé)'} · tirage forcé sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent à lui et ${r.propre.surBot} à un autre habitant (la ville vit toujours) · même tirage sur ${r.cherche.essais} habitants APRÈS un coup porté par l'enfant : ${r.cherche.surJoueur} s'en prennent à lui — la provocation marche encore` };
 });
 
 test('une infraction n\'est imputée à l\'enfant que s\'il en est l\'auteur : un bot qui en tue un autre ne le fait pas rechercher', async p => {

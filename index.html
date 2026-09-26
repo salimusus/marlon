@@ -2557,6 +2557,9 @@ function sign(x, top, z, text, big, ry = 0) {
 }
 function tree(x, top, z, leaf = C.leaf, pine = false) {
   if (city.on) {
+    // UN ARBRE NE SE PLANTE PAS SUR LA CHAUSSÉE (ni sur un passage piéton) : le tronc fait 48 cm
+    // de côté, on lui demande 50 cm de garde et on l'écarte perpendiculairement s'il faut.
+    if (city.routes && city.routes.length) { const q = placeHorsBitume(x, z, 0.24); x = q[0]; z = q[1]; }
     if (!empire.treeGeo) {
       empire.treeGeo = new THREE.SphereGeometry(.5, 10, 7); empire.trunkGeo = new THREE.CylinderGeometry(.36, .5, 1, 8);
       shared.add(empire.treeGeo); shared.add(empire.trunkGeo);
@@ -2566,8 +2569,10 @@ function tree(x, top, z, leaf = C.leaf, pine = false) {
     // Les houppiers du commit distant faisaient 3,5 m de large (contre 2,4 m pour les anciens
     // feuillages) : un arbre planté contre l'école passait à travers le mur et masquait 0,94 m² du
     // tableau de la classe de maths. Même allure ronde, mais dans l'emprise d'origine (1,2 m de rayon).
+    trunk.vegetal = 'arbre'; trunk.feuillage = [];   // le houppier suit le tronc s'il faut le replanter
     for (const [dx,dy,dz,w,h] of [[0,3.3,0,2.4,2.8],[-.5,3.0,.2,1.4,1.7],[.5,3.6,.3,1.4,1.8]]) {
       const m = new THREE.Mesh(empire.treeGeo, lam(leaves.getHex())); m.scale.set(w,h,w*.85); m.position.set(x+dx,top+dy,z+dz); m.castShadow=true; worldGroup.add(m);
+      trunk.feuillage.push(m);
     }
     return;
   }
@@ -5686,6 +5691,59 @@ function elargirLesVoies() {
   navSale(); sgridSale();
   return { montees, bloquees, gagne: +(gagne / Math.max(1, montees)).toFixed(2) };
 }
+// ON NE PLANTE PLUS RIEN SUR LE BITUME. Un arbre ou un palmier posé au milieu d'une chaussée
+// arrête les voitures, arrête l'enfant, et arrête même les balles : la rangée de palmiers de la
+// plage est tirée à l'abscisse par `rnd(105, 110)` alors que la promenade du littoral tient
+// x = 101,5 à 106,5 — une VOIE DE 5 M — et deux tests du banc d'essai (17 et 488) tiraient dans
+// un tronc. `placeHorsBitume` rend le point le plus proche de (x, z) qui laisse `marge` mètres
+// entre l'écorce et la rive de toute chaussée ET de tout passage piéton : on s'écarte
+// PERPENDICULAIREMENT à la rue fautive, du côté le plus court d'abord, par pas de 60 cm. Si
+// aucun des seize essais ne convient, on rend le point de départ : l'appelant plante quand
+// même (`degageLesRoutes` le reprendra ensuite) — on ne SUPPRIME jamais un arbre.
+function bitumeSous(x, z, r) {
+  for (const rt of (city.routes || []))
+    if (Math.abs(x - rt.x) < rt.w / 2 + r && Math.abs(z - rt.z) < rt.d / 2 + r) return rt;
+  for (const p of (city.passages || []))
+    if (Math.abs(x - p.x) < p.w / 2 + r && Math.abs(z - p.z) < p.d / 2 + r) return { x: p.x, z: p.z, w: p.w, d: p.d };
+  return null;
+}
+function placeHorsBitume(x, z, r, marge = 0.5) {
+  const R = r + marge;
+  const rt = bitumeSous(x, z, R);
+  if (!rt) return [x, z];
+  const long = rt.d >= rt.w;                       // la rue court selon z : on s'écarte en x
+  const demi = (long ? rt.w : rt.d) / 2;
+  const s1 = long ? (x >= rt.x ? 1 : -1) : (z >= rt.z ? 1 : -1);   // le bord le plus proche d'abord
+  for (let e = 0.1; e < 4.9; e += 0.6) for (const sg of [s1, -s1]) {
+    const nx = long ? rt.x + sg * (demi + R + e) : x, nz = long ? z : rt.z + sg * (demi + R + e);
+    if (!bitumeSous(nx, nz, R)) return [nx, nz];
+  }
+  return [x, z];
+}
+// LE REFUS REPLACE, IL NE SUPPRIME PAS. `degageLesRoutes()` jetait purement et simplement tout
+// arbre ou palmier qui mordait la chaussée — et pour un palmier il n'emportait que le TRONC :
+// les six palmes restaient en l'air à 5,10 m, au-dessus d'une rue vide. On replante d'abord sur
+// le trottoir d'à côté, feuillage compris ; on ne ramasse que si aucun essai ne tient.
+function replanteHorsChaussee(o) {
+  const r = Math.max(o.w, o.d) / 2;
+  const p = placeHorsBitume(o.x, o.z, r, 0.4);
+  if (p[0] === o.x && p[1] === o.z) return false;
+  const bats = [...(city.batiments || []), ...(city.interieurs || [])];
+  if (bats.some(b => Math.abs(p[0] - b.x) < b.w / 2 + 0.3 && Math.abs(p[1] - b.z) < b.d / 2 + 0.3)) return false;
+  if (solidsAutour(p[0], p[1], r + 1.6, false).some(q => q !== o && !q.sol && !q.trottoir && q.h > 0.5
+      && Math.abs(p[0] - q.x) < (q.w + o.w) / 2 + 0.2 && Math.abs(p[1] - q.z) < (q.d + o.d) / 2 + 0.2)) return false;
+  const dx = p[0] - o.x, dz = p[1] - o.z;
+  o.x = p[0]; o.z = p[1];
+  if (o.mesh) { o.mesh.position.x += dx; o.mesh.position.z += dz; }
+  for (const m of (o.feuillage || [])) { m.position.x += dx; m.position.z += dz; }
+  return true;
+}
+// Une plantation garde 30 cm entre son écorce et la rive : un tronc qui mord de 24 cm sur une
+// chaussée de 8 m est déjà DANS la voie de droite (axe à largeur/4, demi-gabarit 1,20 m).
+function vegetalMordLaVoie(o) {
+  return (city.routes || []).some(r =>
+    Math.min(r.w / 2 + o.w / 2 - Math.abs(o.x - r.x), r.d / 2 + o.d / 2 - Math.abs(o.z - r.z)) > -0.3);
+}
 // ON DÉGAGE LES CHAUSSÉES. Bancs, poubelles, caisses, palmiers ou bornes posés au fil des
 // quartiers finissaient parfois AU MILIEU d'une rue : les conducteurs s'y encastraient. On
 // enlève tout ce dont le centre tombe sur une chaussée — sauf les véhicules, les portes et
@@ -5723,12 +5781,18 @@ function degageLesRoutes() {
     || o.y - o.h / 2 > 0.8 || dedans(o.x, o.z);   // portes, véhicules, barrières, vitrages, murs, étages, intérieurs et sol
   const vus = new Set();
   for (const c of [...city.cars, ...city.aiCars, ...police.cars, ...raceKarts]) if (c && c.solid) vus.add(c.solid);
-  let n = 0;
+  let n = 0, replantes = 0;
   for (let i = solids.length - 1; i >= 0; i--) {
     const o = solids[i];
     if (vus.has(o) || garde(o) || !o.mesh) continue;
     if (o.feu || o.lampe) continue;
-    if (!mordChaussee(o)) continue;
+    // LA VÉGÉTATION SE REPLANTE (arbres et palmiers). Elle est jugée plus sévèrement que le reste
+    // du mobilier — 30 cm de garde, pas 60 cm de chevauchement toléré — et, si un trottoir voisin
+    // est libre, elle DÉMÉNAGE avec son feuillage au lieu de disparaître.
+    if (o.vegetal) {
+      if (!vegetalMordLaVoie(o)) continue;
+      if (replanteHorsChaussee(o)) { replantes++; continue; }
+    } else if (!mordChaussee(o)) continue;
     // Le mobilier cassable (poubelle, cone, panneau) vit dans un GROUPE : enlever son seul
     // maillage laissait le couvercle et le socle flotter au milieu de la rue. On retire le
     // groupe entier quand il y en a un.
@@ -5804,7 +5868,8 @@ function degageLesRoutes() {
     n++;
   }
   for (let i = breakables.length - 1; i >= 0; i--) if (breakables[i].retire) breakables.splice(i, 1);
-  if (n) sgridSale();
+  if (n || replantes) sgridSale();
+  city.replantes = replantes;
   return n;
 }
 // LE DÉCOR SOLIDIFIÉ QUI TOMBE EN PLEINE VOIE. Le poste Collisions rend solide, tout a la fin,
@@ -5824,7 +5889,10 @@ function degageDecorSurRoutes() {
     // tiré au hasard tombe parfois pile sur la promenade du littoral)
     if (!o.decor && !(o.h > 0.3 && Math.max(o.w, o.d) <= 1.2)) continue;
     if (breakables.some(b => b.solid === o)) continue;       // le mobilier cassable a son propre traitement
-    if (!surChaussee(o.x, o.z)) continue;
+    // UN ARBRE N'EST PAS UN PIED DE GRANDE ROUE : lui retirer sa collision le laisse planté au
+    // milieu de la rue, bien visible, et l'enfant le traverse. On le REPLANTE sur le trottoir.
+    if (o.vegetal) { if (!vegetalMordLaVoie(o)) continue; if (replanteHorsChaussee(o)) { n++; continue; } }
+    else if (!surChaussee(o.x, o.z)) continue;
     solids.splice(i, 1); n++;
   }
   if (n) { sgridSale(); navSale(); }
@@ -13003,7 +13071,11 @@ function buildBeach() {   // plage à l'est : sable, mer avec vagues, parasols, 
     if (i % 3 === 0) { const sb = new THREE.Mesh(unitRound, lam(pickOne([0xff5c5c, 0x4f8dff, 0xffd23f]))); sb.scale.set(0.6, 2.2, 0.1); sb.position.set(px - 1.2, 1.1, pz - 1); sb.rotation.x = 0.25; worldGroup.add(sb); }   // planche de surf plantée
     if (i % 3 === 1) { const sb = new THREE.Mesh(unitRound, lam(0xffffff)); sb.scale.set(0.6, 0.1, 2.2); sb.position.set(px - 1.2, 0.21, pz + 1.5); worldGroup.add(sb); }
   }
-  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const tx = rnd(105, 110), tz = -50 + i * 38; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); solids.push({ mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6 }); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); } }   // palmiers sgridSale();
+  // LA RANGÉE DE PALMIERS DE LA PLAGE ÉTAIT TIRÉE À L'ABSCISSE DANS LA CHAUSSÉE. `rnd(105, 110)`
+  // et la promenade du littoral qui tient x = 101,5 à 106,5 (5 m de large, la plus étroite de la
+  // ville) : un tirage sur quatre plantait le tronc EN PLEINE VOIE. `placeHorsBitume` le repousse
+  // à l'est du bitume, donc toujours sur le sable, sans toucher au pas de 38 m de la rangée.
+  for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5, 8), lam(0x8b5a2b)); const p0 = placeHorsBitume(rnd(105, 110), -50 + i * 38, 0.3), tx = p0[0], tz = p0[1]; t.position.set(tx, 2.5, tz); t.rotation.z = 0.12; worldGroup.add(t); const sp = { mesh: t, x: tx, y: 2.5, z: tz, w: 0.6, h: 5, d: 0.6, vegetal: 'palmier', feuillage: [] }; solids.push(sp); for (let k = 0; k < 6; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3); leaf.position.set(tx + 0.3 + Math.cos(k) * 1.2, 5.1, tz + Math.sin(k) * 1.2); leaf.rotation.y = k; leaf.rotation.z = -0.5; leaf.rotation.x = Math.sin(k) * 0.4; worldGroup.add(leaf); sp.feuillage.push(leaf); } }   // palmiers sgridSale();
   // poste de secours
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(112 + dx, 1.5, 30 + dz, 0.2, 3, 0.2, 0xf4f6fa, { studs: false, noRoute: true });
   box(112, 3.1, 30, 3, 0.2, 3, 0xf4f6fa, { studs: false, noRoute: true }); box(112.4, 3.9, 30 + 1.4, 2.2, 1.4, 0.15, 0xff5c5c, { studs: false, noRoute: true });   // garde-corps raccourci : il barrait l'arrivée de l'escalier box(112, 4.9, 30, 3.4, 0.3, 3.4, 0xffd23f, { deco: true, studs: false });
@@ -14573,7 +14645,7 @@ function dropDecor() {
   placeLibre(P.deco.id, pt.x, pt.y, pt.z, pt.ry, pt.mur);
   worldGroup.remove(P.decoMesh); P.deco = null; P.decoMesh = null; city.pose = null;
 }
-function palm(x, z) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 5.5, 8), lam(0x8b5a2b)); t.position.set(x, 3, z); t.rotation.z = 0.1; worldGroup.add(t); solids.push({ mesh: t, x, y: 3, z, w: 0.7, h: 5.5, d: 0.7 }); for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3.2); leaf.position.set(x + Math.cos(k) * 1.3, 5.7, z + Math.sin(k) * 1.3); leaf.rotation.y = k; leaf.rotation.z = -0.5; worldGroup.add(leaf); } } sgridSale();
+function palm(x, z) { if (city.routes && city.routes.length) { const q = placeHorsBitume(x, z, 0.35); x = q[0]; z = q[1]; } const t = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 5.5, 8), lam(0x8b5a2b)); t.position.set(x, 3, z); t.rotation.z = 0.1; worldGroup.add(t); const sp = { mesh: t, x, y: 3, z, w: 0.7, h: 5.5, d: 0.7, vegetal: 'palmier', feuillage: [] }; solids.push(sp); for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(unitRound, lam(0x3fae4a)); leaf.scale.set(0.5, 0.08, 3.2); leaf.position.set(x + Math.cos(k) * 1.3, 5.7, z + Math.sin(k) * 1.3); leaf.rotation.y = k; leaf.rotation.z = -0.5; worldGroup.add(leaf); sp.feuillage.push(leaf); } } sgridSale();
 function openFridge() {
   $('fridgeGrid').innerHTML = RAW.map((it, i) => `<div class="item" data-i="${i}"><span class="e">${it.e}</span>${it.n}<span class="pr">${it.cook ? 'à cuire' : 'à boire / manger'}</span></div>`).join('');
   $('fridgeGrid').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => {

@@ -50,6 +50,8 @@ globalThis.__G = {
   // du tout sur l'ancien index.html. On les exporte comme tous les ajouts recents : gardees.
   // (PAS D'ACCENT GRAVE DANS CE BLOC : c'est un litteral de gabarit, il le couperait en deux.)
   gabaritCollision: typeof gabaritCollision === 'function' ? gabaritCollision : null,
+  rangeLeMobilier: typeof rangeLeMobilier === 'function' ? rangeLeMobilier : null,
+  refusMeuble: typeof refusMeuble === 'function' ? refusMeuble : null,
   gabaritDeService: typeof gabaritDeService === 'function' ? gabaritDeService : null,
   stationnementAlterne: typeof stationnementAlterne === 'function' ? stationnementAlterne : null,
   placeHorsBitume: typeof placeHorsBitume === 'function' ? placeHorsBitume : null,

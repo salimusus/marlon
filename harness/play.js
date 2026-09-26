@@ -24432,27 +24432,37 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
       return +d.toFixed(2); };
     // LE PIEGE. L'horloge AVANCE (une synchro, un test), le jeu pose ses marqueurs, puis elle
     // RECULE : c'est `step` qui doit s'en apercevoir. On n'appelle JAMAIS horlogeArriere ici.
-    const recule = pose => { G.simTime = t0 + 9000; G.step(DT, true); pose();
-      G.simTime = t0 + 9000 - RECUL; G.step(DT, true);
+    // La base est RELATIVE a l'horloge du moment et le piege la rend 100 s PLUS LOIN : aucun
+    // test suivant n'herite d'un recul, et deux pieges de suite ne s'empilent pas.
+    const recule = pose => { const base = G.simTime + RECUL + 100;
+      G.simTime = base; G.step(DT, true); pose();
+      G.simTime = base - RECUL; G.step(DT, true);
       return G.horlogeBilan ? G.horlogeBilan() : null; };
+    // UN MONDE PROPRE AVANT CHAQUE PIEGE. Mesure a l'appui : deux pieges enchaines sans remise
+    // a neuf laissent 12 000 s de dates dans le PASSE, la ville rattrape tout d'un coup et
+    // l'enfant ne marche plus que 24,7 m au lieu de 40,4 — on aurait impute a l'etourdissement
+    // ce qui venait du montage du piege. Avec la remise a neuf : 40,44 m libre, 38,10 m avec un
+    // etourdissement de 0,5 s, et 40,44 m au piege suivant (trois essais, chiffres identiques).
+    const neuf = async () => { __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+      await new Promise(z => setTimeout(z, 350));
+      G.jail.on = false; if (G.uiOpen) G.closeUI(); propre();
+      P.pos.set(0, 1, 8); P.vel.set(0, 0, 0); };
 
-    // LE TEMOIN PASSE PAR LE MEME PIEGE, SANS MARQUEUR : meme horloge d'arrivee, donc meme
-    // heure du jour, meme meteo, meme sol. Mesure a l'appui du contraire : marcher a t0+9000
-    // donne 40,44 m et a t0+3000 24,7 m — deux heures differentes du cycle du jour ne se
-    // comparent pas, et c'est ce qui aurait fait mentir ce test.
-    propre(); recule(() => {}); P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
+    // LE TEMOIN PASSE PAR LE MEME PIEGE, SANS MARQUEUR : meme remise a neuf, meme recul,
+    // meme horloge d'arrivee. C'est la seule facon de comparer deux fois la meme marche.
+    await neuf(); recule(() => {}); P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
     R.temoin = pas(MARCHE, true);
 
     // 1. P.stunT : il ne peut plus bouger, et rien a l'ecran ne le lui dit
-    propre(); P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
+    await neuf();
     R.bilan = recule(() => { P.stunT = G.simTime + 0.5; });
     P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
     R.stun = { ecart: +(P.stunT - G.simTime).toFixed(2), metres: pas(MARCHE, true) };
-    propre(); P.pos.set(0, 1, 8); P.vel.set(0, 0, 0); P.stunT = G.simTime + 12;
+    await neuf(); P.stunT = G.simTime + 12;
     R.stun.fraisMetres = pas(MARCHE, true);   // non-regression : vraiment sonne = vraiment bloque
 
     // 2. P.crime : declare provocateur, et battu tout a fait legitimement (defaut 84)
-    propre(); recule(() => { P.crime = G.simTime + 20; P.crimeTir = G.simTime + 1; });
+    await neuf(); recule(() => { P.crime = G.simTime + 20; P.crimeTir = G.simTime + 1; });
     R.crime = { ecart: +(P.crime - G.simTime).toFixed(2), aussitot: !!G.joueurAProvoque() };
     pas(1320);                                 // 22 s : un delit de 20 s doit avoir expire
     R.crime.apres22s = !!G.joueurAProvoque();
@@ -24473,7 +24483,7 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     R.crime.tirageFrais = { ...tir(), provoque: !!G.joueurAProvoque() };
 
     // 3. P.aTerreT : il reste a terre (le chien de garde du relevage desarme)
-    propre(); P.pos.set(0, 1, 8);
+    await neuf();
     recule(() => { P.hp = 0; G.step(DT, true); });   // relevageTick pose P.aTerreT tout seul
     R.aTerre = { ecart: +(G.simTime - (P.aTerreT || 0)).toFixed(2), poseParLeJeu: !!P.aTerreT };
     let n = 0; while (n < CAP && P.hp <= 0) { G.step(DT, true); n++; }
@@ -24483,7 +24493,7 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     R.aTerre.fraisPas = P.hp > 0 ? n2 : -1;    // non-regression : il ne se releve pas d'un coup
 
     // 4. P.sleep : il dort
-    propre(); P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
+    await neuf();
     recule(() => { P.sleep = G.simTime + 4.2; });
     R.sommeil = { ecart: +(P.sleep - G.simTime).toFixed(2), dort: !!(P.sleep && G.simTime < P.sleep) };
     let n3 = 0; while (n3 < CAP && P.sleep && G.simTime < P.sleep) { G.step(DT, true); n3++; }
@@ -24497,7 +24507,7 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     // le rappel « Espace / SAUT pour sauter » — le seul geste que l'enfant de six ans ne
     // devine pas. Restee dans l'avenir, elle rend ce rappel MUET pendant 100 minutes. Et
     // `P.swingT`, qu'on nous donnait pour le siege, est le coup de RAQUETTE envoye au reseau.
-    propre(); const sw = (G.city.swings || [])[0];
+    await neuf(); const sw = (G.city.swings || [])[0];
     R.balancoire = { siege: !!sw };
     if (sw) {
       G.sitSwing(sw);
@@ -24515,7 +24525,7 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     // 6. L'ESQUIVE BAISSEE, la seule date de l'avatar du JOUEUR : `me` etait la 35e racine
     // manquante. Sa seule sortie est `simTime > cc.esqFin` — NaN la rend impossible, l'avenir
     // aussi, et l'enfant reste ACCROUPI.
-    propre(); const esq = {};
+    await neuf(); const esq = {};
     try {
       const rig = G.me && G.me.rig;
       const cbt = rig ? (rig.cbt = rig.cbt || { coup: 0, coupD: 0.4, main: 1, couteau: 0, chute: 0, esqK: 0, souffle: 0 }) : null;
@@ -24534,7 +24544,7 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
 
     // 7. LES CINQ DATES QUE LE RECENSEUR A SORTIES DE L'OMBRE (round 83) : elles doivent
     // maintenant suivre l'horloge comme les autres.
-    propre(); recule(() => {
+    await neuf(); recule(() => {
       try { G.gym.on = 'course'; G.gym.debut = G.simTime; G.gym.end = G.simTime + 20; } catch (e) {}
       try { G.race.goT = G.simTime + 5; } catch (e) {}
       try { const c = (G.city.aiCars || [])[0]; if (c) { c.ia = c.ia || {}; c.ia.refaire = G.simTime + 6; } } catch (e) {}

@@ -23512,3 +23512,62 @@ test('apres un KO en ville, on se reveille les pieds sur le carrelage de l\'hopi
     && o.banc > 1.8 && !o.benchNear && !/🪑/.test(o.pastille));
   return { ok, detail: `defaut 105 : \`pointDeReveil()\` rendait medDesk + (1,6 ; 2,4) = (22 ; 207,9), or \`city.benches\` a un banc en (22 ; 208) — boite de 2,30 × 0,85 m, assise 0,66 m, donc de z = 207,575 a 208,425. \`groundUnder()\` trouvait ce banc, et apres CHAQUE KO en ville l'enfant se reveillait DEBOUT SUR LES LATTES, 30 cm au-dessus du carrelage (0,36 m), avec « 🪑 △ : s'asseoir » sur le banc ou il etait deja debout · le point est passe a medDesk + (1,6 ; 0,4), devant le comptoir : sur ${k.length} KO, le sol trouve est ${k.map(o => o.sol).join(' / ')} m (le carrelage de l'accueil est a ${r.carrelage} m), les pieds sont a y = ${k.map(o => o.y).join(' / ')} (30 cm plus bas qu'avant), le banc le plus proche est a ${k.map(o => o.banc).join(' / ')} m (au-dela des 1,8 m de \`benchNear\`), et la pastille dit « ${[...new Set(k.map(o => o.pastille))].join(' | ')} » · bancs de l'hopital : ${JSON.stringify(r.bancsHopital)}` };
 });
+
+// ================= LE GARDE-FOU DU DEFAUT 84 (poste REPARATEUR, round 83) =================
+// Le test « un habitant ordinaire ne leve jamais la main sur un enfant qui n'a rien fait »
+// etait vert lance seul et rouge en suite complete : 961 images ou un habitant courait sur
+// l'enfant, coeur descendu a 19. Ni la garde a la source ni un chemin cache en aval n'etaient
+// en cause — c'etait l'ETAT DU JOUEUR qui mentait. `P.crime` (et `P.crimeTir`) sont des DATES
+// ABSOLUES, posees a `simTime + 20 s` par le moindre delit ; `joueurAProvoque()` les lit, et
+// c'est lui qui ouvre la garde. Or l'horloge de simulation court d'un test a l'autre et
+// plusieurs tests la REMBOBINENT : un coup de poing porte tres haut dans la suite redevenait
+// alors un delit « frais » pour des milliers de secondes.
+// Ce test-ci monte le piege a la main et verifie les deux bouts a la fois : l'entree d'un test
+// rend l'enfant sans histoire, ET la provocation marche encore quand elle est reelle. Il ne
+// simule aucun agresseur : il n'utilise que le tirage d'activite de la vie de la ville.
+test('un delit perime ne rend pas l\'enfant provocateur, et une vraie provocation marche toujours', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    // L'HORLOGE NE RECULE JAMAIS POUR LES TESTS SUIVANTS : tout se passe dans le futur de
+    // l'horloge trouvee a l'entree, et elle est rendue au-dela du piege a la toute fin.
+    const t0 = G.simTime;
+    G.simTime = t0 + 9000; P.crime = G.simTime + 20; P.crimeTir = G.simTime + 20;   // un delit quelconque, tres haut dans la suite
+    G.simTime = t0 + 3000;                                                          // le rembobinage d'un test plus bas
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    const apresGo = { crime: +(P.crime || 0), crimeTir: +(P.crimeTir || 0),
+      avance: +((t0 + 9020) - G.simTime).toFixed(0),   // de combien le delit etait « dans l'avenir »
+      provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    P.hp = 100; G.vie.debut = G.simTime - 1000; G.vie.t = 0;
+    const bag = (G.ACTIVITES || []).find(a => a.k === 'bagarre');
+    const vrai = Math.random;
+    // TIRAGE FORCE de l'activite « bagarre », avec le hasard bloque sur la valeur qui, avant
+    // la garde du defaut 84, envoyait tout le monde sur le joueur (0,1 < 0,6).
+    const tir = () => {
+      const proches = G.bots.filter(b => !b.ko && b.av && b.av.group.visible
+        && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40).slice(0, 10);
+      let surJoueur = 0, surBot = 0;
+      Math.random = () => 0.1;
+      for (const b of proches) {
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null; b.rdv = null; b.wait = 0;
+        G.lancerActivite(b, bag);
+        if (b.fight && b.fight !== 'flee') surJoueur++;
+        if (b.bagarre) surBot++;
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null;
+      }
+      Math.random = vrai;
+      return { essais: proches.length, surJoueur, surBot };
+    };
+    const propre = tir();
+    P.crime = G.simTime + 20;                      // cette fois le delit est VRAIMENT frais
+    const provoque = { ...tir(), provoque: !!(G.joueurAProvoque && G.joueurAProvoque()) };
+    P.crime = 0; P.crimeTir = 0;
+    G.simTime = Math.max(G.simTime, t0 + 9021);    // on rend l'horloge devant le piege
+    return { apresGo, propre, provoque, horloge: +G.simTime.toFixed(0) };
+  });
+  const ok = r.apresGo.crime === 0 && r.apresGo.crimeTir === 0 && !r.apresGo.provoque
+    && r.apresGo.avance > 5000
+    && r.propre.essais >= 5 && r.propre.surJoueur === 0 && r.propre.surBot > 0
+    && r.provoque.provoque && r.provoque.surJoueur === r.provoque.essais;
+  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · horloge rendue a ${r.horloge} s, jamais en arriere` };
+});

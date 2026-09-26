@@ -24252,7 +24252,8 @@ test('un delit perime ne rend pas l\'enfant provocateur, et une vraie provocatio
     && r.apresGo.avance > 5000
     && r.propre.essais >= 5 && r.propre.surJoueur === 0 && r.propre.surBot > 0
     && r.provoque.provoque && r.provoque.surJoueur === r.provoque.essais;
-  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · horloge rendue a ${r.horloge} s, jamais en arriere` };
+  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · une horloge cassee ne met plus le feu a un immeuble : prochainFeu posee a ${r.feu.posee}, reposee a +${r.feu.ecart} s, ${r.feu.incendies} incendie apres 120 pas (la version d'avant ce correctif la mettait a zero et allumait 1 incendie)`
+    + ` · horloge rendue a ${r.horloge} s, jamais en arriere` };
 });
 
 // ====== UN TROTTOIR NE MENE PLUS DANS UN MUR (round 83, item 4) ======
@@ -24333,14 +24334,17 @@ test('aucun trottoir ne mene dans un mur : le pave s\'arrete la ou le passage s\
 // LA CLASSE. Le jeu ecrit 555 dates « maintenant + tant de secondes » sur 275 champs. Quand
 // l'horloge de simulation recule d'un coup — une synchro reseau, un banc qui repose l'horloge —
 // toutes ces dates se retrouvent dans l'avenir et TOUT ce qui les lit se fige. `horlogeArriere`
-// ne remettait d'aplomb qu'une liste ECRITE A LA MAIN : 38 champs sur 244. Mesure du piege sur
-// la version d'avant (recul de 6 000 s, meme script, meme endroit) :
-//     P.stunT   metres parcourus en 400 pas   4,17 m  ->  39,25 m  (temoin 40,58 m)
-//     P.crime   provocateur 22 s apres        OUI     ->  NON      (10/10 habitants -> 0/10)
-//     P.aTerreT pas pour se relever           jamais  ->  96       (temoin frais : 96)
-//     P.sleep   pas pour se reveiller         jamais  ->  252      (temoin frais : 252)
-//     sw.diraT  le rappel « SAUT pour sauter » muet 6 000 s -> 4 s
-// LES DEUX MOITIES DE CE TEST. 1) LE RECENSEUR relit le TEXTE du jeu (le bloc <script> entier
+// ne remettait d'aplomb qu'une liste ECRITE A LA MAIN : 38 champs sur 244. Mesure du piege, le
+// MEME script sur l'ancien jeu (c7565b0) puis sur le nouveau, recul de 6 000 s, meme depart,
+// meme cap choisi par la mesure, temoin libre 31,51 m dans les deux cas :
+//     P.stunT   metres en 400 pas         4,14 m  ->  31,50 m   (vraiment sonne : 4,14 m)
+//     P.crime   provocateur 22 s apres    OUI     ->  NON       (10/10 habitants -> 0/10)
+//     P.aTerreT pas pour se relever       jamais  ->  96        (un vrai KO : 96)
+//     P.sleep   pas pour se reveiller     jamais  ->  252       (un vrai sommeil : 252)
+//     sw.diraT  le rappel « SAUT pour sauter »  muet 6 004 s -> 4 s
+//     cbt.esqFin  pas pour se redresser   jamais  ->  33        (et NaN -> 0)
+//     gym.end / race.goT / ia.refaire / b.dead   +6 000 s -> +20, +5, +6, +8 s
+// LES DEUX MOITIES DE CE TEST. 1) LE RECENSEUR relit le TEXTE du jeu (le bloc de script entier
 // plus les trois fichiers voisins), cherche mecaniquement toute pose de date tiree de
 // l'horloge, ne garde que les champs RELUS contre l'horloge, et les recoupe avec `DATES_JEU`.
 // Le jour ou un poste ecrit `X = simTime + 5` sans inscrire `X` au registre, ce test passe au
@@ -24575,6 +24579,24 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
       botDead: G.bots[0] ? +((G.bots[0].dead || 0) - G.simTime).toFixed(1) : null };
     try { G.gym.on = null; if (G.bots[0]) G.bots[0].dead = 0; } catch (e) {}
 
+    // 8. UNE HORLOGE CASSEE NE MET PAS LE FEU A UN IMMEUBLE. Dans la branche « horloge
+    // cassee » on remet a zero toute date devenue NaN, parce que zero la LIBERE. Trois dates
+    // font l'inverse : zero les DECLENCHE. La meteo et la reunion de gang etaient recensees ;
+    // `METIERS.prochainFeu`, lue par `simTime > METIERS.prochainFeu`, appelle `declencheIncendie`
+    // a l'image suivante. Mesure sur la version d'avant ce correctif : 1 incendie allume dans
+    // les 2 s qui suivent la reparation de l'horloge. Ici : reposee a +100 s, 0 incendie.
+    await neuf();
+    const feu = {};
+    try {
+      G.simTime = NaN; G.METIERS.prochainFeu = G.simTime + 100;   // posee pendant l'image cassee
+      feu.posee = String(G.METIERS.prochainFeu);
+      G.step(DT, true);
+      feu.ecart = +((G.METIERS.prochainFeu || 0) - G.simTime).toFixed(1);
+      for (let i = 0; i < 120; i++) G.step(DT, true);
+      feu.incendies = (G.city.incendies || []).length;
+    } catch (e) { feu.erreur = String(e).slice(0, 90); }
+    R.feu = feu;
+
     // ON REND L'HORLOGE DEVANT LE PIEGE : aucun test suivant ne doit heriter d'un recul.
     propre(); G.simTime = Math.max(G.simTime, t0 + 9100);
     R.horloge = +G.simTime.toFixed(0);
@@ -24594,6 +24616,7 @@ test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni 
     && r.balancoire.pasRaquette > 0 && r.balancoire.descendu
     && r.esquive.nanApres === '0' && r.esquive.horlogeSaine && r.esquive.ecart < 2 && r.esquive.pas > 0
     && N(r).gymEnd < 25 && N(r).raceGoT < 10 && N(r).iaRefaire < 12 && N(r).botDead < 15
+    && r.feu.posee === 'NaN' && r.feu.ecart > 50 && r.feu.incendies === 0
     // ... et le mecanisme n'est pas desarme
     && r.stun.fraisMetres < r.temoin * 0.4
     && r.crime.tirageFrais.provoque && r.crime.tirageFrais.surJoueur === r.crime.tirageFrais.essais

@@ -3891,9 +3891,9 @@ function casinoTick(dt) {
     if (simTime < (b.casinoT || 0)) continue;
     b.casinoT = simTime + rnd(2.5, 5);
     m.rouleaux = tireRouleaux(); m.anim = simTime + 0.9; dessineMachine(m);
-    b.av.rig.swing = 0.35; sfx.tone(380, 0, .07, 'square', .04);
+    b.av.rig.swing = 0.35; sonNote(m.x, 1.2, m.z, 380, .07, 'square', .04, null, { portee: 20 });
     const g = gainMachine(m.rouleaux, 10);
-    if (g.mult >= 10) { bubble(b.av, pickOne(['JACKPOT ! 🎉', 'j\'ai gagné ! 🤑', 'incroyable !'])); sfx.coin(); }
+    if (g.mult >= 10) { bubble(b.av, pickOne(['JACKPOT ! 🎉', 'j\'ai gagné ! 🤑', 'incroyable !'])); sonSfx('coin', m.x, 1.2, m.z, { portee: 24 }); }
     else if (Math.random() < 0.25) bubble(b.av, pickOne(['encore raté 😩', 'une dernière…', 'ça va tomber']));
     if (Math.random() < 0.18) { m.bot = null; b.casino = null; b.rdv = null; b.wait = rnd(1, 3); }   // il s'en va
   }
@@ -12392,7 +12392,7 @@ function meteoTick(dt) {
   // bruit d'averse et coups de tonnerre
   if (f > 0.35 && !meteo.abri && simTime > meteo.tonnerre) {
     meteo.tonnerre = simTime + (neige ? 999 : rnd(14, 34));
-    if (!neige) { sfx.noise(1.1, 260, .06); sfx.tone(48, 0, 1.3, 'sine', .07, 32); meteo.ecl = simTime + 0.12; }
+    if (!neige) { sonEn(0, 0, 0, d => { sB(d, 1.1, 260, .06, 0.7); sT(d, 48, 0, 1.3, 'sine', .07, 32); }, { duree: 1.45, oreille: true, bus: 'ambiance' }); meteo.ecl = simTime + 0.12; }   // le tonnerre est PARTOUT : sans lieu, mais au registre
   }
   if (city.on && meteo.ecl > simTime) { hemi.intensity += 1.6; if (scene.background && scene.background.isColor) scene.background.lerp(new THREE.Color(0xffffff), 0.5); }
   // LE BRUIT DE LA PLUIE SORTAIT DEUX FOIS. Ici, un souffle du bus « effets » a 0,05 de
@@ -12404,7 +12404,7 @@ function meteoTick(dt) {
   // ambiance, a un tiers du volume, avec un recul automatique des qu'un son de jeu arrive.
   // Il ne reste ici que le CHUINTEMENT DE LA NEIGE, qui n'a pas d'autre source — au quart de
   // son volume d'avant et deux fois moins souvent.
-  if (neige && f > 0.2 && !meteo.abri && simTime > (meteo.sonT || 0)) { meteo.sonT = simTime + 4.2; sfx.noise(.5, 900, .004); }
+  if (neige && f > 0.2 && !meteo.abri && simTime > (meteo.sonT || 0)) { meteo.sonT = simTime + 4.2; sonEn(0, 0, 0, d => sB(d, .5, 900, .004, 0.7), { duree: .6, oreille: true, bus: 'ambiance' }); }
 }
 function buildDeco() {   // lampadaires et fleurs le long des grands axes, statue au centre
   for (const z of [-30, -20, 20, 30]) for (const x of [-4.2, 4.2]) lamp(x, z);   // rapprochés : à ±34 ils tombaient dans les immeubles du pourtour
@@ -12852,7 +12852,7 @@ function sharkTick(dt) {   // le requin blanc patrouille, charge le nageur le pl
   sh.x = clamp(sh.x + Math.sin(sh.h) * spd * dt, 124, 204); sh.z = clamp(sh.z + Math.cos(sh.h) * spd * dt, -72, 162);
   sh.g.position.set(sh.x, 0.5 + Math.sin(simTime * 1.2) * 0.15, sh.z); sh.g.rotation.set(Math.sin(simTime * 2) * 0.06, sh.h, Math.sin(simTime * 3) * 0.05, 'YXZ');
   sh.tail.rotation.y = Math.sin(simTime * (sh.state === 'chase' ? 8 : 4)) * 0.5;
-  if (sh.state === 'chase' && simTime > (sh.warnT || 0) && Math.hypot(P.pos.x - sh.x, P.pos.z - sh.z) < 22) { sh.warnT = simTime + 6; msg('🦈 UN REQUIN ! Sors de l\'eau !', 2000); sfx.tone(80, 0, .6, 'sine', .1, 40); if (navigator.vibrate) { try { navigator.vibrate(120); } catch (e) {} } }
+  if (sh.state === 'chase' && simTime > (sh.warnT || 0) && Math.hypot(P.pos.x - sh.x, P.pos.z - sh.z) < 22) { sh.warnT = simTime + 6; msg('🦈 UN REQUIN ! Sors de l\'eau !', 2000); sonNote(sh.x, 0.5, sh.z, 80, .6, 'sine', .1, 40, { portee: 30, coupure: 60 }); if (navigator.vibrate) { try { navigator.vibrate(120); } catch (e) {} } }
   if (meIn && Math.hypot(P.pos.x - sh.x, P.pos.z - sh.z) < 3 && simTime > sh.biteT && P.hp > 0) {
     sh.biteT = simTime + 2.2; const dxp = (P.pos.x - sh.x) / 3, dzp = (P.pos.z - sh.z) / 3;
     hurt(22, 'le requin', dxp, dzp, 2.4); burst(P.pos.x, P.pos.y + 0.5, P.pos.z, 0xff2020, 14); sfx.noise(.35, 300, .12);
@@ -12868,7 +12868,7 @@ function safesTick(dt) {
     sf.progress += dt / (sf.planque ? 2.6 : 3.2); sf.dial.rotation.x += dt * 12;
     const pc = Math.round(sf.progress * 100), plein = Math.round(sf.progress * 12);
     $('act').textContent = `🔐 ${sf.planque ? (sf.joueur ? 'Ta cachette' : 'Coffre du gang') : 'Coffre'} ${'█'.repeat(plein)}${'░'.repeat(12 - plein)} ${pc}% — ne lâche pas !`;
-    if (simTime > (sf.tickT || 0)) { sf.tickT = simTime + 0.25; sfx.tone(1200, 0, .03, 'square', .03); }
+    if (simTime > (sf.tickT || 0)) { sf.tickT = simTime + 0.25; sonNote(sf.x, sf.y + 1, sf.z, 1200, .03, 'square', .03, null, { portee: 16 }); }
     // L'alarme ne part qu'une fois le coffre entamé (15 %), et une seule fois : une simple
     // tape sur E devant un coffre déclenchait toute la police sans rien voler.
     if (!sf.planque && sf.progress > 0.15 && !sf.alerte) { sf.alerte = true; bankAlarm(); }
@@ -12879,11 +12879,11 @@ function safesTick(dt) {
     const pris = sf.amount; sf.amount = 0;
     setTimeout(() => { sf.open = false; sf.door.position.z -= 0.5; sf.door.rotation.x = 0; }, 4000);
     if (sf.joueur) {
-      gang.magot = 0; wallet += pris; saveWallet(); updateHud(); sfx.coin(); sfx.win();
+      gang.magot = 0; wallet += pris; saveWallet(); updateHud(); sonEn(sf.x, sf.y + 1, sf.z, d => { SFX_MONDE.coin(d); SFX_MONDE.win(d); }, { duree: 1.2, portee: 30 });
       msg(pris ? `💰 Tu reprends ${pris} 🪙 dans ta planque` : '🕳️ Ta planque est vide pour l\'instant', 3000);
     } else {
       const G = sf.gang;
-      wallet += pris; saveWallet(); updateHud(); sfx.win(); sfx.coin();
+      wallet += pris; saveWallet(); updateHud(); sonEn(sf.x, sf.y + 1, sf.z, d => { SFX_MONDE.win(d); SFX_MONDE.coin(d); }, { duree: 1.2, portee: 30 });
       if (G) {
         G.magot = 0; G.relation = clamp((G.relation || 0) - 60, -100, 100); G.etat = 'joueur'; G.cible = [P.pos.x, P.pos.z]; G.t = simTime + 60; G.allieJoueur = false;
         msg(`💰 Planque des ${G.nom} braquée : +${pris} 🪙 ! Ils arrivent, file !`, 4600);
@@ -12904,8 +12904,14 @@ function safesTick(dt) {
     bank.coffresJour++;
     wallet += sf.amount; saveWallet(); updateHud();
     police.butin = (police.butin || 0) + sf.amount;   // le butin ne part pas dans les 30 % perdus si on tombe
-    burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20); sfx.win(); sfx.register(); sfx.coin();
-    for (let k = 0; k < 6; k++) setTimeout(() => { try { sfx.coin(); } catch (e) {} }, 120 * k);
+    // LA PLUIE DE PIECES TENAIT NEUF SOURCES HORS REGISTRE (trois d'un coup, puis six
+    // `setTimeout` de 120 ms) : neuf fois le meme son en mono, au meme volume qu'on soit devant
+    // le coffre ou dehors. C'est UN SEUL geste musical : une seule source placee sur le coffre,
+    // dont les notes sont decalees par l'horloge audio — plus juste que six minuteurs du
+    // navigateur, et une seule place de budget au lieu de neuf.
+    burst(sf.x, sf.y + 1, sf.z, 0xffd23f, 20);
+    sonEn(sf.x, sf.y + 1, sf.z, d => { SFX_MONDE.win(d); SFX_MONDE.register(d);
+      for (let k = 0; k < 7; k++) { sT(d, 1320, k * .12, .08, 'square', .045); sT(d, 1760, k * .12 + .07, .16, 'square', .045); } }, { duree: 1.35, portee: 32 });
     police.coffres = (police.coffres || 0) + 1;   // plus on force de coffres, plus la fuite est dure
     const reste = ['un jeu d\'enfant', 'ça va se corser', 'ils vont te traquer', 'presque impossible'][Math.min(3, police.coffres - 1)];
     msg(`💰 +${sf.amount} 🪙 dans ta poche ! Tu as maintenant ${wallet} 🪙 · ${police.coffres} coffre${police.coffres > 1 ? 's' : ''} (${reste}) — file vers ta villa`, 4200);
@@ -14599,14 +14605,14 @@ function stoveTick(dt) {
       const v = 1 + Math.sin(simTime * 13 + b.x) * 0.14 + Math.sin(simTime * 31) * 0.05;
       b.fl.scale.set(1, v, 1); b.fl.rotation.y = simTime * 0.6;
       if (b.fl.userData.halo) b.fl.userData.halo.intensity = 0.75 + v * 0.35;
-      if (simTime > (b.sndT || 0)) { b.sndT = simTime + 1.2; sfx.noise(.4, 800, .02); }
+      if (simTime > (b.sndT || 0)) { b.sndT = simTime + 1.2; sonSouffle(b.x, 1.9, b.z, .4, 800, .02, { portee: 12 }); }   // le grattement de la poele s'entendait d'un bout a l'autre de la ville
     }
     if (b.on && b.food) {
       b.t += dt;
       if (b.mesh) { b.mesh.position.y = 1.86 + Math.sin(simTime * 14) * 0.02; if (b.t > 2) b.mesh.children[0].material = lam(b.t > 5 ? 0x3b2a1a : 0x8b4a2b); }
       if (simTime > (b.smokeT || 0)) { b.smokeT = simTime + 0.4; burst(b.x, 2.1, b.z, b.t > 6 ? 0x333333 : 0xdddddd, 2); }
-      if (b.t > 4 && !b.done) { b.done = true; msg(`${b.food.e} C'est cuit ! E pour manger`, 2200); sfx.check(); }
-      if (b.t > 9 && !b.burnt) { b.burnt = true; msg('🔥 Ça brûle !', 1600); sfx.hit(); }
+      if (b.t > 4 && !b.done) { b.done = true; msg(`${b.food.e} C'est cuit ! E pour manger`, 2200); sonSfx('check', b.x, 1.9, b.z, { portee: 18 }); }
+      if (b.t > 9 && !b.burnt) { b.burnt = true; msg('🔥 Ça brûle !', 1600); sonSfx('hit', b.x, 1.9, b.z, { portee: 18 }); }
     }
   }
   const b2 = city.stove && Math.hypot(P.pos.x - city.stove.x, P.pos.z - city.stove.z) < 2 ? city.burners[city.panBurner] : null;
@@ -14907,7 +14913,7 @@ function liftTick(L, dt) {
     if (onIt && !moving) {
       if (!L.since) { L.since = simTime; L.msgT = 0; }
       if (simTime - L.since > 1.2 && simTime > (L.cd || 0)) { L.cd = simTime + 2.5; L.since = 0;
-        L.target = L.target === L.low ? L.high : L.low; msg(L.target === L.high ? '🛗 Montée…' : '🛗 Descente…', 1200); sfx.tone(700, 0, .12, 'sine', .05); }
+        L.target = L.target === L.low ? L.high : L.low; msg(L.target === L.high ? '🛗 Montée…' : '🛗 Descente…', 1200); sonNote(L.x, L.y + 1, L.z, 700, .12, 'sine', .05, null, { portee: 22 }); }
     } else if (!onIt) L.since = 0;
     const before = L.y; L.y += (L.target - L.y) * Math.min(1, dt * 2.2);
     L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
@@ -14915,7 +14921,7 @@ function liftTick(L, dt) {
       // pendant le trajet la cabine retient le joueur ; à l'arrivée elle le relâche, sinon on ne pourrait jamais sortir
       if (moving) { P.pos.x = clamp(P.pos.x, L.x - 1.3, L.x + 1.3); P.pos.z = clamp(P.pos.z, L.z - 1.3, L.z + 1.3); }
       if (P.pos.y < L.y + 0.1) { P.pos.y = L.y + 0.1; P.vel.y = 0; P.grounded = true; P.coyote = 0.12; P.standing = L.solid; }
-      if (Math.abs(L.y - before) > 0.001 && simTime > (L.sndT || 0)) { L.sndT = simTime + 0.6; sfx.tone(220, 0, .2, 'sine', .02); }
+      if (Math.abs(L.y - before) > 0.001 && simTime > (L.sndT || 0)) { L.sndT = simTime + 0.6; sonNote(L.x, L.y + 1, L.z, 220, .2, 'sine', .02, null, { portee: 20 }); }
       if (!moving && L.target === L.high && simTime > (L.msgT || 0)) { L.msgT = simTime + 6; msg(L.toit ? '🛗 Sur le toit ! Prends un parachute ou un deltaplane (E)' : '🛗 Étage : sors vers la gauche', 2200); }
     }
     // les policiers à pied prennent l'ascenseur eux aussi (mais ne sautent jamais du toit)
@@ -15006,10 +15012,10 @@ function hoopTick(dt) {
   }
   h.vel.y -= 22 * dt; h.pos.addScaledVector(h.vel, dt); h.ball.rotation.x += h.vel.z * dt * 2; h.ball.rotation.z -= h.vel.x * dt * 2;
   const gy = 0.6;
-  if (h.pos.y < gy) { h.pos.y = gy; if (Math.abs(h.vel.y) > 1) { h.vel.y = -h.vel.y * 0.62; sfx.tone(180, 0, .12, 'sine', .06, 90); } else h.vel.y = 0; h.vel.x *= 0.86; h.vel.z *= 0.86; }
+  if (h.pos.y < gy) { h.pos.y = gy; if (Math.abs(h.vel.y) > 1) { h.vel.y = -h.vel.y * 0.62; sonNote(h.pos.x, h.pos.y, h.pos.z, 180, .12, 'sine', .06, 90, { portee: 26 }); } else h.vel.y = 0; h.vel.x *= 0.86; h.vel.z *= 0.86; }
   // panier : la balle descend et passe dans l'arceau
   if (h.vel.y < 0 && simTime > h.cd && Math.abs(h.pos.x - h.x) < 0.5 && Math.abs(h.pos.z - h.z) < 0.5 && Math.abs(h.pos.y - h.y) < 0.45) {
-    h.cd = simTime + 1.5; h.score++; wallet += 5; saveWallet(); updateHud(); sfx.win(); sfx.cheer(); burst(h.x, h.y, h.z, 0xff8f3a, 14); msg(`🏀 PANIER ! +5 🪙 (${h.score})`, 1800); h.vel.multiplyScalar(0.3);
+    h.cd = simTime + 1.5; h.score++; wallet += 5; saveWallet(); updateHud(); sonEn(h.x, h.y, h.z, d => { SFX_MONDE.win(d); SFX_MONDE.cheer(d); }, { duree: 1.3, portee: 34 }); burst(h.x, h.y, h.z, 0xff8f3a, 14); msg(`🏀 PANIER ! +5 🪙 (${h.score})`, 1800); h.vel.multiplyScalar(0.3);
   }
   if (h.pos.y < 0.65 && h.vel.lengthSq() < 0.4 && (Math.abs(h.pos.x - h.spawn[0]) > 26 || Math.abs(h.pos.z - h.spawn[1]) > 26)) { h.pos.set(h.spawn[0], 0.6, h.spawn[1]); h.vel.set(0, 0, 0); }
 }
@@ -16269,7 +16275,7 @@ function armeeTick(dt) {
     shots.push(sh); spawnShot(sh); sonDetonation('rifle', o.x, o.y, o.z, 0.9);   // poste SON : la mitrailleuse de l'helicoptere, placee la-haut
     if (simTime > (armee.avertT || 0)) { armee.avertT = simTime + 6; msg('🚁 L\'hélicoptère te tire dessus sur le toit !', 2200); }
   }
-  if (simTime > (armee.rotorT || 0)) { armee.rotorT = simTime + 0.55; if (dF < 60) sfx.tone(60, 0, .5, 'sawtooth', .03, 40); }
+  if (simTime > (armee.rotorT || 0)) { armee.rotorT = simTime + 0.55; sonNote(h.x, h.y, h.z, 60, .5, 'sawtooth', .03, 40, { portee: 40, coupure: 60 }); }   // la coupure du registre remplace le `dF < 60` fait a la main
 }
 // Le bandeau « recherché » ne disait qu'une chose : le nombre d'étoiles. On y lit maintenant
 // l'ÉTAT DE LA RECHERCHE — ils te voient, ils te cherchent (avec le temps qu'il reste à tenir),
@@ -19497,10 +19503,11 @@ function sonEn(x, y, z, faire, opt) {
   const proche = Math.max(1, portee * 0.12);
   let att = proche / (proche + d);
   att *= clamp((coupure - d) / Math.max(1, coupure - portee), 0, 1);
+  if (oreille) att = 1;
   att = clamp(att * (opt.gain == null ? 1 : opt.gain), 0, 1);
   const g = c.createGain(); g.gain.value = Math.max(0.0001, att);
   const sortie = sfx.sortie(opt.bus || 'effets');
-  if (c.createStereoPanner) {
+  if (!oreille && c.createStereoPanner) {
     // le vecteur « droite » de la camera : le produit scalaire donne le panoramique
     const p = c.createStereoPanner();
     const rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
@@ -19510,7 +19517,7 @@ function sonEn(x, y, z, faire, opt) {
   // la rumeur du quartier recule le temps du son (sauf pour les sons d'ambiance eux-memes :
   // une mouette n'a pas a faire taire la ville)
   if ((opt.bus || 'effets') !== 'ambiance' && att > 0.05) { try { ambiance.duck(); } catch (e) {} }
-  const v = { fin: now + (opt.duree || 0.5), d, g };
+  const v = { fin: now + (opt.duree || 0.5), d, g, oreille };
   SON.vivants.push(v); SON.joues++; SON.dernier = { x, y, z, d: +d.toFixed(2), att: +att.toFixed(4) };
   if (SON.vivants.length > SON.pic) SON.pic = SON.vivants.length;
   try { faire(g, att, d); } catch (e) {}
@@ -20211,6 +20218,57 @@ function sonCouteau(x, y, z, touche) {   // la lame siffle ; si elle touche, l'e
     sT(d, 3000, 0, .1, 'sine', .02, 5200);
     if (touche) { sB(d, .09, 900, .07, 0.8, .1); sT(d, 150, .1, .14, 'triangle', .05, 90); }
   }, { duree: .4, portee: 30 });
+}
+// ============ LE PONT « BOITE A SONS » -> REGISTRE (poste SON) ============
+// `sfx.pok()`, `sfx.check()`, `sfx.coin()`, `sfx.tone()`... ecrivent EN DUR dans le bus
+// « effets » : ils sortent au MEME volume qu'on soit dessus ou a cinquante metres, en mono, et
+// ils sont INVISIBLES du registre SON — ni budget des seize places, ni purge, ni panoramique,
+// ni recul de la rumeur. C'est comme cela que la ville s'etait remplie de sources sonores
+// fantomes : la boite aux lettres du facteur claquait dans l'oreille de l'enfant alors que le
+// facteur faisait sa tournee a l'autre bout du quartier, le chantier des employes municipaux
+// aussi (alors que le marteau et la soudure du MEME chantier, eux, etaient bien places), le
+// grattement de la poele tournait a plein volume d'un bout a l'autre de la ville, et le drone
+// se fabriquait un volume a la main (`0.055 - droneDist() * 0.0007`) faute de pouvoir demander
+// au registre de le faire.
+// SFX_MONDE rejoue note pour note les melodies de la boite a sons, mais avec `sT`/`sB` — donc
+// vers un noeud de destination, donc par `sonEn`. Meme timbre, meme instant, meme volume a
+// distance nulle : seule la distance change quelque chose, et c'est precisement ce qu'on veut.
+const SFX_MONDE = {
+  jump:     d => sT(d, 300, 0, .14, 'sine', .09, 620),
+  coin:     d => { sT(d, 1320, 0, .08, 'square', .045); sT(d, 1760, .07, .16, 'square', .045); },
+  check:    d => [523, 659, 784, 1047].forEach((f, i) => sT(d, f, i * .08, .22, 'triangle', .1)),
+  die:      d => { sT(d, 220, 0, .45, 'triangle', .08, 55); sT(d, 90, .05, .3, 'sine', .06, 40); },
+  hit:      d => { sT(d, 110, 0, .12, 'triangle', .07, 60); sB(d, .08, 250, .04, 0.7); },
+  kick:     d => { sT(d, 140, 0, .09, 'square', .09, 60); sB(d, .06, 500, .06, 0.7); },
+  win:      d => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => sT(d, f, i * .12, .3, 'triangle', .11)),
+  pok:      d => { sT(d, 520, 0, .07, 'triangle', .1, 260); sB(d, .05, 1800, .05, 0.7); },
+  clack:    d => { sT(d, 1400, 0, .04, 'square', .05, 700); sB(d, .03, 3000, .04, 0.7); },
+  whoosh:   d => sB(d, .28, 900, .05, 0.7),
+  cheer:    d => { sB(d, 1.1, 700, .12, 0.7); [523, 659, 784].forEach((f, i) => sT(d, f, .1 + i * .08, .5, 'triangle', .05)); },
+  register: d => { sT(d, 1568, 0, .08, 'square', .05); sT(d, 2093, .09, .14, 'square', .05); },
+  bird:     d => { const b = 2400 + Math.random() * 900; sT(d, b, 0, .07, 'sine', .025, b * 1.4); sT(d, b * 1.2, .09, .06, 'sine', .02, b * 1.6); },
+};
+// La duree ANNONCEE au registre doit couvrir toute la melodie : c'est elle qui decide quand la
+// source est morte, et la purge debranche son gain 80 ms plus tard. Trop court = la fin du son
+// coupee ; c'est la seule chose a ne pas rater en passant par le pont.
+const SFX_DUREE = { jump: .25, coin: .3, check: .55, die: .6, hit: .25, kick: .2, win: 1.15, pok: .25, clack: .15, whoosh: .4, cheer: 1.25, register: .3, bird: .25 };
+// `sonSfx('pok', x, y, z)` = `sfx.pok()`, mais A SA PLACE dans le monde et inscrit au registre.
+// `opt` passe tel quel a sonEn : { portee, coupure, gain, bus, oreille }. Si la melodie n'a pas
+// (encore) son equivalent place, on retombe sur la boite a sons : un son mal place vaut toujours
+// mieux qu'un silence.
+function sonSfx(nom, x, y, z, opt) {
+  const m = SFX_MONDE[nom];
+  if (!m) { try { sfx[nom](); } catch (e) {} return false; }
+  return !!sonEn(x, y, z, d => m(d), Object.assign({ duree: SFX_DUREE[nom] || 0.5, portee: 34 }, opt || {}));
+}
+// Un son du monde qui n'est ni une melodie de la boite a sons ni un son nomme : une note ou un
+// souffle, mais PLACE. Ces deux-la remplacent `sfx.tone(...)` et `sfx.noise(...)` partout ou
+// l'evenement a un lieu.
+function sonNote(x, y, z, f, dur, type, vol, slide, opt) {
+  return !!sonEn(x, y, z, d => sT(d, f, 0, dur, type, vol, slide), Object.assign({ duree: dur + 0.1, portee: 34 }, opt || {}));
+}
+function sonSouffle(x, y, z, dur, freq, vol, opt) {
+  return !!sonEn(x, y, z, d => sB(d, dur, freq, vol, 0.7), Object.assign({ duree: dur + 0.1, portee: 34 }, opt || {}));
 }
 // ---- LE BATTEMENT DE COEUR DES SONS DU MONDE (appele par cityVie) ----
 const SONV = { ambT: 0, mouetteT: 0, vagueT: 0, oiseauT: 0, ventT: 0, pluieT: 0, clocheT: 0, ambuT: 0, vitPrec: 0, pneuT: 0, veloT: 0, jetT: 0, feuVehT: 0 };
@@ -21941,7 +21999,7 @@ function chienTick(dt) {
         chien.morsT = simTime + 1.1;
         if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
-          impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sfx.noise(.08, 500, .07);
+          impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sonSouffle(b.pos.x, b.pos.y + 1.1, b.pos.z, .08, 500, .07, { portee: 30 });
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
           if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; chien.attaque = null; botSay(b, ['j\'abandonne… 🐶']); infraction('chien lâché sur ' + b.name, 1, 2, true); }
           else if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('chien lâché sur ' + b.name, 1, 2, true); }
@@ -21982,7 +22040,7 @@ function chienTick(dt) {
       const tx = bl.dep[0] + (bl.x - bl.dep[0]) * bl.t, tz = bl.dep[2] + (bl.z - bl.dep[2]) * bl.t;
       const sol = groundUnder(tx, tz, null, 6);
       bl.m.position.set(tx, sol + 0.25 + Math.sin(bl.t * Math.PI) * 4, tz);
-      if (bl.etat === 'sol') { bl.y = sol + 0.25; bl.m.position.set(bl.x, bl.y, bl.z); sfx.tone(500, 0, .06, 'sine', .04, 320); }
+      if (bl.etat === 'sol') { bl.y = sol + 0.25; bl.m.position.set(bl.x, bl.y, bl.z); sonNote(bl.x, bl.y, bl.z, 500, .06, 'sine', .04, 320, { portee: 24 }); }
     }
     const versBalle = bl.etat === 'sol' || bl.etat === 'vol';
     const cible = versBalle ? { x: bl.x, z: bl.z } : { x: P.pos.x, z: P.pos.z };
@@ -22570,7 +22628,7 @@ function droneTick(dt) {
   if (drone.bat <= DRONE_BAS && drone.mode !== 'retour' && drone.vol) {
     drone.mode = 'retour'; drone.vue = false; document.body.classList.remove('dronevue');
     msg(`🔋 Batterie à ${Math.round(drone.bat)} % : le drone rentre tout seul`, 3400);
-    try { sfx.tone(300, 0, .12, 'square', .05); sfx.tone(220, .14, .18, 'square', .05); } catch (e2) {}
+    try { sonEn(drone.x, drone.y, drone.z, d => { sT(d, 300, 0, .12, 'square', .05); sT(d, 220, .14, .18, 'square', .05); }, { duree: .4, oreille: true }); } catch (e2) {}   // une ALERTE de batterie doit s'entendre ou que soit le drone : au registre, mais a l'oreille
   }
   if (drone.bat <= 0 && drone.vol) { drone.vol = false; msg('🔋 Batterie vide : le drone se pose là où il est', 3000); }
   // ---- hors de portée : la liaison se coupe, il rentre ----
@@ -22617,7 +22675,7 @@ function droneTick(dt) {
   // POSÉ, IL RESTE POSÉ. Le test « y < sol + 0,22 » se retournait à l'image suivante (y VAUT
   // sol + 0,22 après le calage) : le drone repassait « pas posé », rallumait ses hélices et
   // clignotait entre les deux états. On garde une marge d'un demi-centimètre.
-  if (drone.y <= sol + 0.225) { drone.y = sol + 0.22; if (drone.vy < 0) drone.vy = 0; if (!drone.vol && !drone.posee) { drone.posee = true; try { sfx.tone(120, 0, .12, 'sine', .04); } catch (e3) {} } }
+  if (drone.y <= sol + 0.225) { drone.y = sol + 0.22; if (drone.vy < 0) drone.vy = 0; if (!drone.vol && !drone.posee) { drone.posee = true; try { sonNote(drone.x, drone.y, drone.z, 120, .12, 'sine', .04, null, { portee: 26 }); } catch (e3) {} } }
   else if (!drone.vol) drone.posee = false;
   if (drone.y > sol + DRONE_PLAFOND) { drone.y = sol + DRONE_PLAFOND; if (drone.vy > 0) drone.vy = 0;
     if (simTime > (drone.plafT || 0)) { drone.plafT = simTime + 6; msg(`🚁 Plafond atteint : ${DRONE_PLAFOND} m au-dessus du sol`, 2200); } }
@@ -22641,8 +22699,11 @@ function droneTick(dt) {
   // ---- le bourdonnement : il faiblit avec la distance, il monte avec les gaz ----
   if (tourne && simTime > drone.sonT) {
     drone.sonT = simTime + 0.13;
-    const vol = Math.max(0, 0.055 - droneDist() * 0.0007) * (drone.vue ? 1.5 : 1);
-    if (vol > 0.002) { try { sfx.tone(148 + gaz * 70, 0, .14, 'sawtooth', vol); } catch (e4) {} }
+    // LE ROTOR SE FABRIQUAIT SON VOLUME A LA MAIN (`0,055 - distance x 0,0007`, coupe a 78 m),
+    // faute de passer par le registre : en mono, sans panoramique, et sans jamais rendre sa place
+    // dans le budget. C'est exactement le travail de sonEn. Et quand l'enfant REGARDE par la
+    // camera du drone, son oreille est dans le drone : le rotor passe alors « a l'oreille ».
+    try { sonNote(drone.x, drone.y, drone.z, 148 + gaz * 70, .14, 'sawtooth', drone.vue ? 0.0825 : 0.055, null, { portee: 34, coupure: 78, oreille: !!drone.vue }); } catch (e4) {}
   }
   droneHudMaj();
 }
@@ -23573,7 +23634,7 @@ function jouetsTick(dt) {
     if (!b.touche) for (const o of bots) {
       if (o.ko || !o.av || !o.av.group.visible) continue;
       if (Math.hypot(o.pos.x - x, o.pos.z - z) > 1) continue;
-      b.touche = o; try { botSay(o, ['aïe ! fais attention avec ça 😠']); sfx.hit(); } catch (e) {} break;
+      b.touche = o; try { botSay(o, ['aïe ! fais attention avec ça 😠']); sonSfx('hit', o.pos.x, o.pos.y + 1.2, o.pos.z, { portee: 26 }); } catch (e) {} break;
     }
     if (u >= 1) {
       boomerangRanger();
@@ -23996,7 +24057,7 @@ function soinTick(dt) {
     wallet -= px; saveWallet(); updateHud();
     b.hp = 100; b.ko = 0; b.soin = 0; b.fight = null;
     b.av.group.rotation.x = 0;
-    burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0x5cc453, 14); sfx.win(); sfx.register();
+    burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0x5cc453, 14); sonEn(b.pos.x, b.pos.y + 1.2, b.pos.z, d => { SFX_MONDE.win(d); SFX_MONDE.register(d); }, { duree: 1.2, portee: 30 });
     botDit(b, pickOne(['me revoilà d\'aplomb ! 💪', 'comme neuf, merci chef', 'les docteurs m\'ont retapé']));
     msg(`🏥 ${b.name} est soigné : 100/100 PV · −${px} 🪙`, 3200);
     chat(null, `🏥 ${b.name} sort de l'hôpital, remis sur pied`);
@@ -26338,7 +26399,7 @@ function debrisTick(dt) {
     // un trottoir, la dalle d'un dépôt ou le perron d'un immeuble s'enfonçait de 30 cm dedans
     // (le plancher valait 0,34 m quel que soit le relief). On relève donc la surface sous lui.
     const sol = (d.sol || 0.15) + groundUnder(d.m.position.x, d.m.position.z, null, d.m.position.y + 0.4);
-    if (d.m.position.y > sol) { d.v.y -= 20 * dt; d.m.position.addScaledVector(d.v, dt); d.m.rotation.x += d.av.x * dt; d.m.rotation.z += d.av.z * dt; if (d.m.position.y <= sol) { d.m.position.y = sol; if (d.roule) d.v.y = 0; else d.v.set(0, 0, 0); sfx.clack(); } }
+    if (d.m.position.y > sol) { d.v.y -= 20 * dt; d.m.position.addScaledVector(d.v, dt); d.m.rotation.x += d.av.x * dt; d.m.rotation.z += d.av.z * dt; if (d.m.position.y <= sol) { d.m.position.y = sol; if (d.roule) d.v.y = 0; else d.v.set(0, 0, 0); sonSfx('clack', d.m.position.x, d.m.position.y, d.m.position.z, { portee: 22 }); } }
     // UN PNEU ARRACHÉ ROULE : il tombe au sol, part sur sa lancée et ralentit en tournant.
     // Avant, tout ce qui se détachait se figeait sur place — une roue posée à plat.
     else if (d.roule) {
@@ -28357,7 +28418,7 @@ function depanneusesTick(dt) {
       c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
       facturerDepannage(m);
       m.phase = 'retour'; m.fini = true; d.remorque = null;
-      msg('🔧 Réparé sur place, tu peux repartir', 2400); sfx.pok();
+      msg('🔧 Réparé sur place, tu peux repartir', 2400); sonSfx('pok', c.x, (c.y || 0) + 1, c.z, { portee: 28 });
     } else if (m.phase === 'treuil') {
       // `depCible` (et non `outilCible`) : c'est la manœuvre COMPLÈTE du poste Animation —
       // plateau incliné en rampe, crochet qui descend de 3 m, câble qui se tend, et le
@@ -28403,7 +28464,7 @@ function depanneusesTick(dt) {
       c.dmg = 0; c.dead = false; c.explosed = false; try { repairVisual(c); } catch (e) {}
       facturerDepannage(m);
       m.phase = 'retour'; m.fini = true;
-      msg('🚚 Véhicule remorqué au garage et réparé', 2800); sfx.register();
+      msg('🚚 Véhicule remorqué au garage et réparé', 2800); sonSfx('register', c.x, (c.y || 0) + 1, c.z, { portee: 28 });
     } else if (m.phase === 'retour') {
       // ELLE RENTRE. Il n'existait AUCUN état de retour (l'ambulance, elle, en a un) : le
       // travail fini, la dépanneuse était simplement libérée sur place et restait plantée là
@@ -29340,7 +29401,7 @@ function cityVie(dt) {
       b.pos.lerp(b.tgt, 1 - Math.exp(-12 * dt)); b.tgt.addScaledVector(b.vel, dt);
       const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, dh = Math.hypot(dx, dz), reach = (drive.car ? 2.2 : P.hw) + b.r + 0.3;
       if (dh < reach && b.pos.y - b.r < P.pos.y + P.h && b.pos.y + b.r > P.pos.y - 0.2 && b.hitCd <= 0 && (b.kind === 'foot' || P.racket)) {
-        b.hitCd = 0.5; sfx.kick(); if (b.kind === 'tennis') { me.rig.swing = 0.35; P.swingT = simTime + 0.35; }
+        b.hitCd = 0.5; sonSfx('kick', b.pos.x, b.pos.y, b.pos.z, { portee: 28 }); if (b.kind === 'tennis') { me.rig.swing = 0.35; P.swingT = simTime + 0.35; }
         netSend({ t: 'hit', i: b.id, x: P.pos.x, z: P.pos.z, f: P.facing, sp: Math.hypot(P.vel.x, P.vel.z), side: P.pos.z > -13 ? 0 : 1 });
       }
       b.mesh.position.copy(b.pos); b.mesh.rotation.x += b.vel.z * dt * 2; b.mesh.rotation.z -= b.vel.x * dt * 2;
@@ -29350,7 +29411,7 @@ function cityVie(dt) {
     b.vel.y -= (b.kind === 'tennis' ? 24 : G) * dt; b.pos.addScaledVector(b.vel, dt);
     if (b.pos.y < b.ground + b.r) {
       b.pos.y = b.ground + b.r;
-      if (Math.abs(b.vel.y) > 1.5) { b.bounces++; if (b.kind === 'boule') sfx.clack(); b.vel.y = -b.vel.y * (b.kind === 'tennis' ? 0.7 : b.kind === 'boule' ? 0.15 : 0.5); b.vel.x *= b.kind === 'boule' ? 0.6 : 0.85; b.vel.z *= b.kind === 'boule' ? 0.6 : 0.85; if (b.kind === 'tennis') tennisBounce(b); }
+      if (Math.abs(b.vel.y) > 1.5) { b.bounces++; if (b.kind === 'boule') sonSfx('clack', b.pos.x, b.pos.y, b.pos.z, { portee: 22 }); b.vel.y = -b.vel.y * (b.kind === 'tennis' ? 0.7 : b.kind === 'boule' ? 0.15 : 0.5); b.vel.x *= b.kind === 'boule' ? 0.6 : 0.85; b.vel.z *= b.kind === 'boule' ? 0.6 : 0.85; if (b.kind === 'tennis') tennisBounce(b); }
       else { b.vel.y = 0; if (b.kind === 'tennis' && b.state === 'launched') { b.state = 'done'; msg('🎾 Raté…', 800); setTimeout(() => removeBall(b), 600); } }
     }
     if (b.vel.y === 0) { const fr = b.kind === 'tennis' ? 2.5 : b.kind === 'boule' ? 3.5 : 0.9; b.vel.x -= b.vel.x * fr * dt; b.vel.z -= b.vel.z * fr * dt; if (b.kind === 'boule' && Math.hypot(b.vel.x, b.vel.z) < 0.3) b.vel.set(0, 0, 0); }
@@ -29400,7 +29461,7 @@ function cityVie(dt) {
   // lance-balles de tennis (entraînement, quand il n'y a pas de match)
   if (!guest && !tm.on && P.racket && city.zone && city.zone.name === 'Tennis' && !city.balls.some(b => b.kind === 'tennis')) {
     city.launchT += dt;
-    if (city.launchT > 2.6) { city.launchT = 0; const b = makeBall('tennis', 13, 1.4, -21.3); b.ground = 0.3; b.vel.set(rnd(-1.5, 1.5), 8.5, 15.5); b.state = 'launched'; sfx.jump(); }
+    if (city.launchT > 2.6) { city.launchT = 0; const b = makeBall('tennis', 13, 1.4, -21.3); b.ground = 0.3; b.vel.set(rnd(-1.5, 1.5), 8.5, 15.5); b.state = 'launched'; sonSfx('jump', 13, 1.4, -21.3, { portee: 30 }); }
   } else city.launchT = 1.5;
   // petit tour de ville (chrono libre sur l'anneau)
   const r = city.race, inStart = P.pos.x > 23 && P.pos.x < 29 && P.pos.z > 19 && P.pos.z < 21;
@@ -29793,13 +29854,13 @@ function grenadesTick(dt) {
   for (let i = grenades.length - 1; i >= 0; i--) {
     const gr = grenades[i]; gr.t += dt; gr.v.y -= 22 * dt; gr.p.addScaledVector(gr.v, dt);
     const gy = groundUnder(gr.p.x, gr.p.z, null, gr.p.y);
-    if (gr.p.y < gy + 0.16) { gr.p.y = gy + 0.16; gr.v.y = -gr.v.y * 0.35; gr.v.x *= 0.7; gr.v.z *= 0.7; if (Math.abs(gr.v.y) > 1) sfx.clack(); }
+    if (gr.p.y < gy + 0.16) { gr.p.y = gy + 0.16; gr.v.y = -gr.v.y * 0.35; gr.v.x *= 0.7; gr.v.z *= 0.7; if (Math.abs(gr.v.y) > 1) sonSfx('clack', gr.p.x, gr.p.y, gr.p.z, { portee: 26 }); }
     gr.m.position.copy(gr.p); gr.m.rotation.x += dt * 6;
     if (gr.t > 2) {   // explosion : éclats colorés, onde de choc, souffle
       scene.remove(gr.m); grenades.splice(i, 1);
       burst(gr.p.x, gr.p.y + 0.5, gr.p.z, 0xff8f3a, 18); burst(gr.p.x, gr.p.y + 0.5, gr.p.z, 0xffd23f, 12); burst(gr.p.x, gr.p.y + 0.5, gr.p.z, 0x3ef2ff, 10);
       const wave = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })); wave.position.copy(gr.p); EPHEMERES.add(wave); shockwaves.push({ m: wave, t: 0 });
-      sfx.noise(.5, 220, .14); sfx.tone(60, 0, .5, 'sine', .12, 30); if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) {} }
+      sonEn(gr.p.x, gr.p.y + 0.5, gr.p.z, d => { sB(d, .5, 220, .14, 0.7); sT(d, 60, 0, .5, 'sine', .12, 30); }, { duree: .65, portee: 55, coupure: 110 }); if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) {} }
       const R = 6;
       if (gr.mine) {
         for (const b of bots) { const d = Math.hypot(b.pos.x - gr.p.x, b.pos.z - gr.p.z); if (b.av.group.visible && d < R) { const k = (1 - d / R); b.wait = 2.5; b.dance = 0; b.pos.x += (b.pos.x - gr.p.x) / (d || 1) * 3 * k; b.pos.z += (b.pos.z - gr.p.z) / (d || 1) * 3 * k; city.tags++; wallet += 1; saveWallet(); botSay(b, ['BOUM !!', 'hé !', 'ça décoiffe !']); if (!P.crime || simTime > P.crime) { P.crime = simTime + 20; infraction('grenade sur ' + b.name, 1, 3); } } }
@@ -30407,12 +30468,12 @@ function shotsTick(dt) {
       // une vitrine, un lampadaire ou un feu encaisse la balle : il se fissure puis vole en éclats
       const br = cible && cible.brk;
       const nd = { x: dx, y: dy, z: dz };
-      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine, s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sfx.clack(); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
+      if (br && !br.broken) { breakThing(br, { x: s.p.x, z: s.p.z }, !s.mine, s.mine); impact(s.p.x, s.p.y, s.p.z, nd, 'metal', 1.2); fxEclats(s.p.x, s.p.y, s.p.z, { x: -dx, y: 0.6, z: -dz }, 0x9fdcff, 8, 1.1); sonSfx('clack', s.p.x, s.p.y, s.p.z, { portee: 30 }); sonImpactBalle('tole', s.p.x, s.p.y, s.p.z, 1); }
       else { impact(s.p.x, s.p.y, s.p.z, nd, quoi === 'sol' ? 'mur' : 'mur', 1); sonImpactBalle('mur', s.p.x, s.p.y, s.p.z, 1); }
     }
     else if (quoi === 'moi') hurt(s.dmg || 20, s.police ? 'la police' : (s.byName || 'un joueur'), s.v.x / L2, s.v.z / L2, 1.2);
     else if (quoi === 'cible') {
-      const tg = cible; tg.hidden = simTime + 2.4; city.shots++; perfGagne(P, 1, null); sfx.check(); sfx.clack();
+      const tg = cible; tg.hidden = simTime + 2.4; city.shots++; perfGagne(P, 1, null); sonEn(s.p.x, s.p.y, s.p.z, d => { SFX_MONDE.check(d); SFX_MONDE.clack(d); }, { duree: .6, portee: 34 });
       impact(tg.m.position.x, tg.y, tg.z, { x: dx, y: dy, z: dz }, 'metal', 1.2); updateAct(); msg('🎯 Touché !', 500);
     } else if (quoi === 'distant') {
       const r = cible; city.tags++; msg(`🎯 Touché : ${r.name} !`, 700); impact(r.cur.x, r.cur.y + 1, r.cur.z, { x: dx, y: dy, z: dz }, 'balle', 1); updateAct();
@@ -34181,7 +34242,7 @@ function activiteTick(b, dt) {
     const gain = Math.floor(rnd(15, 60));
     botSay(b, [`et hop, ${gain} 🪙 dans la poche ! 😏`, 'trop facile 😎']);
     chat(null, `🕵️ ${b.name} a chapardé ${gain} 🪙 dans une boutique`);
-    burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0xffd23f, 8); sfx.coin();
+    burst(b.pos.x, b.pos.y + 1.2, b.pos.z, 0xffd23f, 8); sonSfx('coin', b.pos.x, b.pos.y + 1.2, b.pos.z, { portee: 26 });
     const h = pickOne(city.hideouts || []) || pickOne(city.wander);
     b.rdv = { x: h.x != null ? h.x : h[0], z: h.z != null ? h.z : h[2], y: 0.3, nom: '🕳️ sa planque', arrive: false, libre: true };
     b.rdvRoute = null; b.wait = 0;
@@ -34191,7 +34252,7 @@ function activiteTick(b, dt) {
     a.etape = 'fuite'; a.fin = Math.min(a.fin, simTime + 40);
     botSay(b, ['j\'ai le magot, je file ! 💰💨', 'ça a marché !!']);
     chat(null, `🚨 ${b.name} a braqué la banque et prend la fuite !`);
-    burst(b.pos.x, b.pos.y + 1.4, b.pos.z, 0xffd23f, 16); sfx.win();
+    burst(b.pos.x, b.pos.y + 1.4, b.pos.z, 0xffd23f, 16); sonSfx('win', b.pos.x, b.pos.y + 1.4, b.pos.z, { portee: 30 });
     try { bankAlarmBot(b); } catch (e) {}
     // Avant, on mettait toutes les voitures en « active » pour de bon (pc.chasse n'est lu
     // nulle part) : la fenêtre de fuite du joueur sautait à sa prochaine infraction.
@@ -34726,7 +34787,7 @@ function gangUneMissionTick(m, dt) {
     if (m.type === 'gangeur' && m.proie && m.proie.m) {
       const v = m.proie.m, G2 = m.proie.gang;
       v.ko = simTime + 20; v.hp = 0; v.chasse = null; corpsAuSol(v.av, v.x, v.z, v.y);
-      burst(v.x, v.y + 1.2, v.z, 0xffd23f, 12); sfx.hit();
+      burst(v.x, v.y + 1.2, v.z, 0xffd23f, 12); sonSfx('hit', v.x, (v.y || 0) + 1.2, v.z, { portee: 30 });
       G2.relation = clamp((G2.relation || 0) - 25, -100, 100);
       chat(G2.chefNom, `vous allez me le payer, ${myCfg.name} !`, G2.couleur);
       const place = rangJoueur().max - (gang.membres.length + (gang.membresLibres || []).length);
@@ -34977,7 +35038,7 @@ function gangTick(dt) {
           for (const m of envoyes) m.chasse = { joueur: !!proie.joueur, bot: proie.bot || null, fin: simTime + 70 };
           msg(`⚔️ ${envoyes.length > 1 ? envoyes.length + ' hommes des' : 'Un homme des'} ${G.nom} ${envoyes.length > 1 ? 'foncent' : 'fonce'} sur ${proie.joueur ? 'toi' : proie.nom} !`, 4200);
           chat(G.chefNom, proie.joueur ? `on va s'occuper de ${myCfg.name}…` : `chopez ${proie.nom}, il est seul`, G.couleur);
-          sfx.tone(140, 0, .35, 'sawtooth', .06, 90);
+          sonEn(0, 0, 0, d => sT(d, 140, 0, .35, 'sawtooth', .06, 90), { duree: .45, oreille: true });
           G.t = simTime + 80;
           continue;
         }
@@ -35002,7 +35063,7 @@ function gangTick(dt) {
         G.etat = 'planque'; G.cible = [gang.planque.x, gang.planque.z]; G.t = simTime + 70;
         chat(G.chefNom, `on va se servir dans la planque de ${myCfg.name}…`, G.couleur);
         msg(`🚩 Les ${G.nom} marchent sur ta planque ! Va la défendre`, 4200);
-        setBeacon(gang.planque.x, gang.planque.z, 0.3); sfx.tone(150, 0, .4, 'sawtooth', .07, 80);
+        setBeacon(gang.planque.x, gang.planque.z, 0.3); sonEn(0, 0, 0, d => sT(d, 150, 0, .4, 'sawtooth', .07, 80), { duree: .5, oreille: true });
       }
       else if (r < 0.85 && VILLAS.length) { const v = pickOne(VILLAS); G.etat = 'cambriolage'; G.cible = [v.x, v.z];
         if (v.mine) declencheCambriolage(G); }
@@ -35213,7 +35274,7 @@ function cambrioTick(dt) {
   // montre : elle clignote en rouge tant que l'alarme sonne
   if (cambrio.alerte && simTime < cambrio.alerte) {
     if (me.cadran && me.montre && me.montre.visible) me.cadran.material.color.setHex(Math.sin(simTime * 9) > 0 ? 0xff2020 : 0x3a0a0a);
-    if (simTime > (cambrio.bipT || 0)) { cambrio.bipT = simTime + 1.1; sfx.tone(1000, 0, .1, 'square', .05); }
+    if (simTime > (cambrio.bipT || 0)) { cambrio.bipT = simTime + 1.1; sonEn(0, 0, 0, d => sT(d, 1000, 0, .1, 'square', .05), { duree: .2, oreille: true }); }   // le bip vient de TA montre : pas de lieu, mais au registre
   } else if (me.cadran) me.cadran.material.color.setHex(0x9fdcff);
   // le joueur ou ses amis arrivent : les voleurs s'enfuient
   const proche = v && Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < 22;
@@ -35858,7 +35919,7 @@ function revenusTick() {
   gang.magot += gainT;
   if (gang.planque) gang.planque.coffre.amount = gang.magot;
   msg(`💵 Protection des quartiers : +${gainT} 🪙 déposés dans ta planque (${gang.magot} 🪙)`, 3600);
-  sfx.coin();
+  sonSfx('coin', 0, 0, 0, { oreille: true });   // l'argent des quartiers ne tombe nulle part dans le monde : au registre, mais a l'oreille
   saveGuerre();
 }
 // les gangs reprennent les quartiers laissés sans surveillance
@@ -37378,7 +37439,7 @@ function incendiesTick(dt) {
     if (simTime - f.t > 240) f.force -= dt * 10;
     if (f.force <= 0) {
       feuEteint(f.anim); city.incendies.splice(i, 1);   // il retombe en fondu au lieu de disparaître d'un coup
-      burst(f.x, 1.4, f.z, 0xf4f6fa, 12); sfx.check();
+      burst(f.x, 1.4, f.z, 0xf4f6fa, 12); sonSfx('check', f.x, 1.4, f.z, { portee: 40, coupure: 80 });
       msg('💧 Feu éteint ! Merci les pompiers 🚒', 2600);
       // le joueur a arrosé avec le camion : son petit boulot de pompier est rempli
       if (f.aide && city.boulot && city.boulot.metier === 'pompier') boulotAvance(1);
@@ -39287,7 +39348,7 @@ function enginCreuseTick(c, dt) {
     k.creuse = true;
     if (k.trou) creuseGodet(k.trou);
     if (typeof burst === 'function') burst(k.trou ? k.trou.x : c.x, (k.trou ? k.trou.y : 0) + 0.35, k.trou ? k.trou.z : c.z, TERRE_C, 7);
-    if (typeof sfx !== 'undefined' && sfx.pok) try { sfx.pok(); } catch (e) {}
+    if (typeof sonSfx === 'function') try { sonSfx('pok', k.trou ? k.trou.x : c.x, (k.trou ? k.trou.y : 0) + 0.35, k.trou ? k.trou.z : c.z, { portee: 30 }); } catch (e) {}
   }
   // 2. L'EFFET — LA TERRE TOMBE QUAND LE GODET BASCULE. Quatre mottes quittent le godet à sa
   //    position RÉELLE dans le monde (on lit sa matrice, il est au bout de deux articulations
@@ -39708,7 +39769,7 @@ function employesTick(dt) {
         chef.chantier = poseChantier(cible.x, cible.z, cible.kind === 'nid' ? 0 : Math.PI / 2);
         majEtat('repare'); w0.t = simTime + 9;
         metierDit(w0, pickOne(['attention, chantier ! 🚧', 'on pose le filet, ne passez pas 🚧', 'voie barrée, on répare 🚧']));
-        sfx.pok();
+        sonSfx('pok', cible.x, cible.kind === 'nid' ? 0.4 : 1.5, cible.z, { portee: 30 });
       }
       return;
     }
@@ -39738,7 +39799,7 @@ function employesTick(dt) {
         repareCible(cible);
         majEtat('range'); w0.t = simTime + 2.5;
         metierDit(w0, pickOne(['et voilà, réparé ! ✅', 'c\'est réparé, bonne journée ✅', 'nickel, on range le chantier 🧰']));
-        sfx.check();
+        sonSfx('check', cible.x, cible.kind === 'nid' ? 0.4 : 1.5, cible.z, { portee: 30 });
       }
       return;
     }
@@ -40040,7 +40101,7 @@ function facteurTick(m, dt) {
       if (b.volet) b.volet.rotation.x = -Math.abs(Math.sin(simTime * 5)) * 0.9;
       if (simTime > w.t) {
         b.lettres++; if (b.volet) b.volet.rotation.x = 0;
-        sfx.pok(); burst(b.x, 1.35, b.z, 0xf4f6fa, 4);
+        sonSfx('pok', b.x, 1.35, b.z, { portee: 26 }); burst(b.x, 1.35, b.z, 0xf4f6fa, 4);
         // BOÎTE SUIVANTE, SANS REPASSER PAR LE DÉPÔT. C'est toute la différence entre une
         // tournée et une navette : il enchaîne, et ce n'est qu'une fois la sacoche vide
         // qu'il rentre.

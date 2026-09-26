@@ -19431,27 +19431,65 @@ function sonPurge(now) {
     setTimeout(() => { try { v.g.disconnect(); } catch (e) {} }, 80);
   }
 }
+// ============ LA PURGE NE TOURNAIT QUE DEPUIS `sonEn` ============
+// `sonPurge` n'etait appele qu'au debut de `sonEn` : tant que le jeu creait des sons, tout
+// allait bien, mais des qu'il CESSE d'en creer — on s'arrete dans une piece calme, on coupe le
+// son dans les reglages, on met le jeu en pause, une cinematique prend la main — les sources
+// terminees RESTENT au registre pour toujours. Leur gain et leur panoramique restent branches
+// sur le bus, les seize places du budget restent occupees par des morts, et `SON.vivants`
+// racontait n'importe quoi. Mesure de la fuite : 40 sons de 0,1 s, puis 600 s de simulation
+// sans un seul son neuf — 16 sources encore inscrites, mortes depuis 600 s, 16 gains toujours
+// branches.
+// Elle tourne maintenant depuis la boucle de jeu, cadencee sur l'horloge AUDIO (la seule qui
+// compte pour des sons : le banc rend une image par seconde, mais la carte son, elle, tourne au
+// temps reel). 5 Hz suffisent — une source morte de 200 ms ne coute rien — et le cout mesure
+// d'un appel sur un registre PLEIN de seize sources se compte en fractions de microseconde,
+// soit moins d'un millionieme du budget d'une image.
+let sonPurgeT = 0;
+function sonPurgeTick() {
+  const c = sfx.ctx(); if (!c) return 0;
+  const now = c.currentTime;
+  if (now < sonPurgeT) return 0;
+  sonPurgeT = now + 0.2;
+  const avant = SON.vivants.length;
+  sonPurge(now);
+  return avant - SON.vivants.length;
+}
 function sonCoupe(v, now) {   // on libere une place : fondu tres court, sinon ca claque
   try { v.g.gain.cancelScheduledValues(now); v.g.gain.setTargetAtTime(0.0001, now, 0.008); } catch (e) {}
   const i = SON.vivants.indexOf(v); if (i >= 0) SON.vivants.splice(i, 1);
   setTimeout(() => { try { v.g.disconnect(); } catch (e) {} }, 120);
 }
 // x, y, z : ou le son se produit. faire(dest, att, d) y branche ses oscillateurs.
-// opt : { portee, coupure, gain, duree, bus }. Renvoie le noeud de destination, ou null si
-// le son a ete refuse (trop loin, ou budget plein avec des sons tous plus proches).
+// opt : { portee, coupure, gain, duree, bus, oreille }. Renvoie le noeud de destination, ou
+// null si le son a ete refuse (trop loin, ou budget plein avec des sons tous plus proches).
+// `oreille: true` : UN SON QUI N'A PAS DE LIEU. L'argent qui tombe dans ta planque, l'annonce
+// d'une alliance rompue, le carillon d'un objectif : ces sons-la ne viennent de nulle part dans
+// le monde, ils s'adressent au joueur. Ils doivent tout de meme entrer AU REGISTRE (budget,
+// purge, compteurs, recul de la rumeur), mais sans etre PLACES : ni attenuation de distance, ni
+// panoramique — exactement la meme chaine qu'un appel direct a `sfx`, au gain pres qui vaut 1.
+// C'est ce qui permet de les faire passer par le registre sans changer d'un iota ce que
+// l'enfant entend (mesure : 0,1633 avant, 0,1633 apres).
 function sonEn(x, y, z, faire, opt) {
   opt = opt || {};
   if (!settings.sound) return null;
   const c = sfx.unlock(); if (!c) return null;
+  const oreille = !!opt.oreille;
   const L = ecouteurSon();
-  const dx = x - L.x, dy = (y == null ? L.y : y) - L.y, dz = z - L.z;
-  const d = Math.hypot(dx, dy, dz);
+  const dx = oreille ? 0 : x - L.x, dy = oreille ? 0 : (y == null ? L.y : y) - L.y, dz = oreille ? 0 : z - L.z;
+  const d = oreille ? 0 : Math.hypot(dx, dy, dz);
   const portee = opt.portee || SON.portee, coupure = opt.coupure || Math.max(portee * 1.5, SON.coupure);
   if (!(d < coupure)) { SON.refuses++; return null; }
   const now = c.currentTime;
   sonPurge(now);
-  if (SON.vivants.length >= SON.max) {
-    let pire = null; for (const v of SON.vivants) if (!pire || v.d > pire.d) pire = v;
+  // LE BUDGET NE COMPTE QUE LES SONS PLACES. Les seize places existent pour empecher la
+  // BOUILLIE : trente sons repartis dans l'espace autour du joueur. Un son « a l'oreille »
+  // (sans lieu : l'argent qui tombe dans ta planque, une annonce) n'appartient pas a cette
+  // foule — il ne doit donc ni prendre une place, ni faire taire un son du monde. Il est
+  // quand meme inscrit au registre, pour la purge et pour les compteurs.
+  const places = oreille ? 0 : SON.vivants.reduce((n, v) => n + (v.oreille ? 0 : 1), 0);
+  if (!oreille && places >= SON.max) {
+    let pire = null; for (const v of SON.vivants) if (!v.oreille && (!pire || v.d > pire.d)) pire = v;
     if (!pire || pire.d <= d) { SON.refuses++; return null; }   // tout ce qui joue est plus proche : tant pis pour celui-la
     sonCoupe(pire, now);
   }
@@ -32280,7 +32318,8 @@ function frame() {
   if (running && !paused && !net.on && city.on) for (const b of bots) { const d = Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z); if (d < 3.5 && simTime > (b.greetT || 0)) { b.greetT = simTime + 45; const g = pickOne([`salut ${myCfg.name} !`, `coucou ${myCfg.name}, ça va ?`, `hé ${myCfg.name}, tu viens jouer ?`, 'salut toi !', `${myCfg.name} ! trop content de te voir`]); bubble(b.av, g); voice.say(g, !!b.girl); } }
   if (!paused) { try { meteoTick(dt); } catch (e) { if (loopErr++ < 3) console.error('météo', e); } }
   if (P.jet && !gym.on && race.state === 'idle') $('act').textContent = `🚀 Carburant ${Math.round(P.fuel)}%`;
-  if (city.on && running && city.zone && city.zone.name === 'Parc' && simTime > (city.birdT || 0)) { city.birdT = simTime + rnd(2.5, 7); sfx.bird(); }
+  if (city.on && running && city.zone && city.zone.name === 'Parc' && simTime > (city.birdT || 0)) { city.birdT = simTime + rnd(2.5, 7); sonSfx('bird', P.pos.x + rnd(-14, 14), 7, P.pos.z + rnd(-14, 14), { portee: 34, bus: 'ambiance' }); }   // dans les arbres, pas dans l'oreille : c'est la DEUXIEME source d'oiseau du jeu (sonOiseau est la premiere) et la seule qui echappait au registre
+  try { sonPurgeTick(); } catch (e) {}   // les sources sonores terminees quittent le registre MEME si le jeu ne cree plus aucun son
   lbTimer += dt; if (lbTimer > 0.5) { lbTimer = 0; updateLeaderboard(); }
 
   for (const c of coins) {

@@ -5865,8 +5865,29 @@ test('dormir sauvegarde TOUT, la deco achetee arrive toujours, et ta voiture res
 
 test('un garde du corps envoye en mission part vraiment', async p => {
   const r = await p.evaluate(() => {
-    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
     const G = __G, res = {};
+    // ============ IL N'Y AVAIT AUCUNE GRAINE, ET LA MESURE ETAIT UN TIRAGE (round 83) ============
+    // `missionGang(..., 'boutique')` choisit la boutique avec `pickOne(city.vitrines)` et pose
+    // le rendez-vous a `lieu + rnd(-2,5 ; 2,5)` : la DISTANCE que les deux hommes ont a
+    // parcourir etait donc tiree au sort a chaque lancement. Et la mission « boutique » ne
+    // dure que 28 s (GANG_MISSIONS.boutique.duree) alors qu'on mesurait la position au bout
+    // de 60 s : pendant 32 s les hommes, redevenus libres, se promenaient ou bon leur
+    // semblait. MESURE DU MEME TEST, MEME CODE : 62 m et 66 m lance seul, 7 m et 12 m en
+    // suite complete — et 7 m tombe sous le seuil de 8 m. Rien n'etait casse : la boutique
+    // n'etait pas la meme, et « revenir » apres une mission accomplie est le bon
+    // comportement, pas un defaut.
+    // On mesure donc LE PLUS LOIN QU'ILS SOIENT ALLES (c'est ce que « il part pour de bon »
+    // veut dire, et c'est deja ce que fait la mesure de l'entrainement juste en dessous), et
+    // l'on fige le tirage : l'horloge d'abord, EN AVANT SEULEMENT et sur la meme phase (un
+    // multiple de 2 520 s = ppcm de la journee de 360 s et du cycle des feux de 28 s, sinon
+    // on rembobine le temps pour tous les tests suivants), la graine ENSUITE, apres la
+    // reconstruction du monde — qui consomme un nombre de tirages dependant de l'etat trouve.
+    const CIBLE = 3000, L_PHASE = 2520;
+    G.simTime = Math.ceil((G.simTime - CIBLE) / L_PHASE) * L_PHASE + CIBLE;
+    const vraiHasard = Math.random;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    let graine = 20240607;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     const l = G.bots.slice(0, 3);
     for (const b of l) { G.amis.add(b.name); G.gang.membres.push(b); b.ko = 0; b.hp = 100; b.journal = null; b.gangMission = null;
       b.pos.set(G.P.pos.x + 2, 0.15, G.P.pos.z + 2); b.av.group.visible = true; b.av.group.position.copy(b.pos); }
@@ -5877,12 +5898,16 @@ test('un garde du corps envoye en mission part vraiment', async p => {
       gardeGardee: !!l[2].gardeCorps, rdv: l[0].rdv ? l[0].rdv.nom : null,
       journal: (l[0].journal || []).some(o => o.etat === 'cours' && /boutique/.test(o.t)) };
     const dep = l.map(b => [b.pos.x, b.pos.z]); let resteMin = 1e9;
-    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); if (i > 60 * 45) resteMin = Math.min(resteMin, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
-    // la boutique visee peut etre a deux pas du joueur : on mesure le chemin PARCOURU par chaque garde envoye, et un garde
-    // deja ARRIVE devant sa boutique compte comme parti
-    const loin = k => { const b = l[k], t = b.rdv && b.rdv.x != null ? Math.hypot(b.pos.x - b.rdv.x, b.pos.z - b.rdv.z) : 1e9; return t < 5 ? 99 : Math.max(Math.hypot(b.pos.x - G.P.pos.x, b.pos.z - G.P.pos.z), Math.hypot(b.pos.x - dep[k][0], b.pos.z - dep[k][1])); };
-    res.trajet = { parti0: +loin(0).toFixed(0),
-      parti1: +loin(1).toFixed(0),
+    // LE PLUS LOIN QU'ILS SOIENT ALLES, releve a chaque image : la mission ne dure que 28 s,
+    // et un homme qui l'a accomplie a le droit de rentrer avant la 60e seconde.
+    const loinMax = [0, 0, 0];
+    for (let i = 0; i < 60 * 60; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60);
+      for (let k = 0; k < 3; k++) loinMax[k] = Math.max(loinMax[k],
+        Math.hypot(l[k].pos.x - G.P.pos.x, l[k].pos.z - G.P.pos.z), Math.hypot(l[k].pos.x - dep[k][0], l[k].pos.z - dep[k][1]));
+      if (i > 60 * 45) resteMin = Math.min(resteMin, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
+    res.trajet = { parti0: +loinMax[0].toFixed(0),
+      parti1: +loinMax[1].toFixed(0),
+      colle2: +loinMax[2].toFixed(0),   // le garde NON envoye ne s'eloigne jamais, meme au plus loin
       reste2: +Math.min(resteMin, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)).toFixed(0) };   // au plus pres sur les 15 dernieres secondes : il contourne parfois un obstacle
     // l'entrainement aussi envoie vraiment le garde
     G.entrainerMembre(l[2], 'tir');
@@ -5891,12 +5916,13 @@ test('un garde du corps envoye en mission part vraiment', async p => {
     let entrainMax = 0;
     for (let i = 0; i < 60 * 120; i++) { G.step(1 / 60, true); for (const b of l) G.updateBot(b, 1 / 60); entrainMax = Math.max(entrainMax, Math.hypot(l[2].pos.x - G.P.pos.x, l[2].pos.z - G.P.pos.z)); }
     res.entrainLoin = +entrainMax.toFixed(0);   // le plus loin qu'il soit alle : une fois entraine, il revient garder le joueur
+    Math.random = vraiHasard;
     return res;
   });
   const ok = r.gardes === 3 && r.envoi.missions === 1 && r.envoi.gardeLachee && r.envoi.gardeGardee && r.envoi.journal
-    && r.trajet.parti0 > 8 && r.trajet.parti1 > 8 && r.trajet.reste2 < 4
+    && r.trajet.parti0 > 8 && r.trajet.parti1 > 8 && r.trajet.reste2 < 4 && r.trajet.colle2 < 8
     && r.entrain.gardeLachee && r.entrain.rdv === 'tir' && r.entrainLoin > 8;
-  return { ok, detail: `un homme en garde recevait a CHAQUE IMAGE une consigne « colle au joueur » qui ecrasait le rendez-vous de sa mission : sa fiche affichait « braquer une boutique » et il restait plante a cote de toi · maintenant il pose la garde et part pour de bon (${r.trajet.parti0} m et ${r.trajet.parti1} m du joueur), pendant que le garde NON envoye reste a ${r.trajet.reste2} m · pareil pour l'entrainement (${r.entrainLoin} m), l'hopital et la promenade du chien` };
+  return { ok, detail: `un homme en garde recevait a CHAQUE IMAGE une consigne « colle au joueur » qui ecrasait le rendez-vous de sa mission : sa fiche affichait « braquer une boutique » et il restait plante a cote de toi · maintenant il pose la garde et part pour de bon (au plus loin ${r.trajet.parti0} m et ${r.trajet.parti1} m du joueur, tirage et horloge figes), pendant que le garde NON envoye ne s'eloigne jamais de plus de ${r.trajet.colle2} m et finit a ${r.trajet.reste2} m · pareil pour l'entrainement (${r.entrainLoin} m), l'hopital et la promenade du chien` };
 });
 
 

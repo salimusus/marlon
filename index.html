@@ -19810,6 +19810,52 @@ const CAM_VPITCH = 3.4;        // rad/s au bord, vertical : 62 % de l'horizontal
 const CAM_PITCH_HAUT = -0.5;
 const CAM_RECENTRE = 2.2;      // rad/s : vitesse MAXIMALE du replacement automatique derrière le joueur (126 °/s)
 const CAM_LAISSE = 2;          // mètres : retard MAXIMAL du point visé sur le joueur ou la voiture (voir « LA LAISSE ») — avec la perche de conduite (9 + 2 + 2,6 m) la caméra ne dépasse donc jamais 15,6 m derrière la voiture
+// ============ UNE BRIDE DE VISEE SE REND (round 83) ============
+// UN PLAFOND BAS RABOTAIT `cam.pitch` POUR TOUJOURS. La loi « un plafond bas n'interdit que de
+// MONTER » ecrase l'inclinaison a `cam.pmax` — jusqu'a 0,04 rad, son minimum — et RIEN ne la
+// relevait ensuite : seul le stick droit de l'enfant pouvait le faire. Et un enfant ne sait pas
+// qu'il doit remonter le stick pour reparer le jeu : il sort de la cabane des arbres avec une
+// camera a plat, sans savoir pourquoi.
+// TROIS MESURES, monde 4, 150 images sur place, visee de depart 0,32 rad :
+//   · la cabane de l'arbre : 0,04 rad. A l'image ou l'on entre, `camPerche` tourne AVANT
+//     `interieurTick` : `cam.interieur` est encore nul et le toit est encore la, donc la bride
+//     joue (cam.plafond = 0,31 m) ; l'image suivante la piece est declaree, la bride ne joue
+//     plus — et la visee reste ecrasee.
+//   · la salle de classe et le petit appartement : 0,04 rad ; la petite boutique : 0,134 rad.
+//     Le meme piege, dans TOUTE piece de la ville.
+//   · le depot municipal (auvent a 1,91 m, AUCUNE piece declaree) : 0,178 rad sous l'auvent, et
+//     ENCORE 0,178 rad cinq secondes apres en etre sorti, `cam.pmax` revenu a 1,25 rad.
+// CE DERNIER CAS NE TIENT PAS A L'ORDRE DES DEUX APPELS : mesure en inversant l'ordre
+// (`interieurTick` puis `camPerche`), il rend 0,178 rad lui aussi. L'inversion repare les cinq
+// premiers releves et pas le sixieme ; c'est pourquoi la bride se REND ici, ce qui les repare
+// tous les six et ne depend d'aucun ordre d'appel.
+// COMMENT. On retient ce que l'enfant DEMANDAIT (`cam.pitchVoulu`) — et non la somme de ce qu'on
+// lui a pris : le stick tenu vers le bas sous un plafond bas ferait sinon grossir la dette de
+// 3,4 rad par seconde (CAM_VPITCH) et la camera basculerait en vue de dessus a la sortie. Des
+// que la bride se desserre, la visee remonte SEULE vers cette valeur.
+// LA VITESSE : 0,6 rad/s, soit 34 °/s. La bride ordinaire prend 0,28 rad (0,32 → 0,04), rendus
+// en 0,47 s. C'est 0,57° par image a 60 images/s, contre 2,1° par image pour le replacement
+// automatique derriere le joueur (CAM_RECENTRE = 2,2 rad/s) que le jeu tient deja pour « en
+// douceur », et 18 % de la vitesse du stick a fond. Le pire cas (0,04 → 1,25 rad) prend 2,0 s.
+// QUAND ELLE NE SE REND PAS : des que l'enfant LEVE les yeux lui-meme, sa visee decolle de la
+// bride ou nous l'avions posee (`cam.pitchPose`) — c'est lui qui commande, on oublie la dette.
+// S'il regarde plus BAS encore, la bride mord de nouveau et retient sa nouvelle demande.
+const CAM_PITCH_RETOUR = 0.6;   // rad/s : vitesse a laquelle la visee bridee revient quand la place se libere
+function camPitchBride(p, dt) {
+  const pose = cam.pitchPose;
+  if (cam.pitch > p + 1e-6) {
+    cam.pitchVoulu = Math.min(1.25, Math.max(cam.pitchVoulu == null ? -9 : cam.pitchVoulu, cam.pitch));
+    cam.pitch = p;
+  } else if (cam.pitchVoulu != null) {
+    if (pose != null && cam.pitch < pose - 1e-6) cam.pitchVoulu = null;   // l'enfant a leve les yeux : il commande
+    else {
+      const cible = Math.min(cam.pitchVoulu, p);
+      if (cam.pitch < cible) cam.pitch = Math.min(cible, cam.pitch + CAM_PITCH_RETOUR * clamp(dt, 0, 0.05));
+      if (cam.pitch >= cam.pitchVoulu - 0.001) cam.pitchVoulu = null;
+    }
+  }
+  cam.pitchPose = cam.pitch;
+}
 // CONTRAT AVEC LES AUTRES POSTES : poser `cam.fixe = true` suspend TOUTE l'adaptation de la
 // perche (montée, décalage de la visée, ouverture du champ) le temps d'un plan de caméra
 // écrit à la main — plan de combat, cinématique. Les filets anti-mur, eux, restent actifs.
@@ -21543,7 +21589,7 @@ function chooseWorld(i) {
   if (uiOpen) closeUI();
   $('worlds').classList.add('hidden'); $('menu').classList.add('hidden'); $('win').classList.add('hidden');
   loadWorld(i); paused = false; running = true; document.body.classList.remove('lobby');
-  P.facing = Math.PI; cam.yaw = 0; cam.pitch = 0.32; cam.dist = cam.base; cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);   // cam.dist : la camera de l'accueil etait a 9 m, on repart de la distance de jeu
+  P.facing = Math.PI; cam.yaw = 0; cam.pitch = 0.32; cam.pitchVoulu = null; cam.pitchPose = null; cam.dist = cam.base; cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);   // cam.dist : la camera de l'accueil etait a 9 m, on repart de la distance de jeu
   msg(`${WORLDS[i].emoji} ${WORLDS[i].name}`, 1600);
   if (net.host) netBroadcast({ t: 'world', world: i });
   showBotsOrNot();
@@ -31935,7 +31981,7 @@ function resetGame() {
   cp = checkpoints[0]; coinCount = 0; deaths = 0; elapsed = 0; timerOn = false; won = false; dead = false;
   P.grace = 0; P.aTerreT = 0;   // un monde neuf : ni invulnérabilité ni chute en cours qui traîne (n° 78)
   if (drive.car) exitCar(); city.goals = 0; city.tennis = 0; city.primesSport = {}; city.race.on = false; city.zone = null; P.racket = false; setRacket(me, false); if (city.on) updateAct();
-  cam.yaw = 0; cam.pitch = 0.32;
+  cam.yaw = 0; cam.pitch = 0.32; cam.pitchVoulu = null; cam.pitchPose = null;
   respawn(); updateHud(); updateTimer(); updateLeaderboard();
 }
 
@@ -32957,10 +33003,8 @@ function camPerche(dt, aiming) {
     // rien voir. La seule chose qu'un plafond bas interdit, c'est de MONTER : on plafonne
     // donc l'inclinaison, et rien d'autre.
     cam.pmax = 1.25;
-    if (!veh && !cam.interieur && cam.plafond != null && cam.plafond < 3) {
+    if (!veh && !cam.interieur && cam.plafond != null && cam.plafond < 3)
       cam.pmax = clamp((cam.plafond - 1.1) * 0.22, 0.04, 0.9);
-      if (cam.pitch > cam.pmax) cam.pitch = cam.pmax;
-    }
     if (!veh) want = Math.max(want, 2.2);
     // MAISON DE POUPEE : dans une piece, la camera recule a une distance confortable (elle
     // traverse les murs, qui s'effacent) et reste basse pour ne pas regarder par le toit.
@@ -32972,8 +33016,13 @@ function camPerche(dt, aiming) {
     // la visée à 0,42 rad — la carrosserie plein écran. Un véhicule a sa propre loi de distance.
     if (cam.interieur && !aiming && !veh) {
       want = clamp(want, 3.8, 4.8 + clamp(((cam.salle == null ? 4 : cam.salle) - 4.6) * 0.6, 0, 2.6));
-      if (cam.pitch > 0.42) cam.pitch = 0.42; cam.pmax = Math.min(cam.pmax, 0.42);
+      cam.pmax = Math.min(cam.pmax, 0.42);
     }
+    // UNE SEULE APPLICATION DE `cam.pmax` A LA VISEE, ET ELLE SE REND (voir camPitchBride).
+    // Les deux brides ci-dessus ecrasaient `cam.pitch` chacune de son cote, sans jamais le
+    // relever : c'est ce qui laissait l'enfant sortir de la cabane des arbres, d'une salle de
+    // classe ou de dessous un auvent avec une camera couchee a 0,04 rad.
+    if (!veh) camPitchBride(cam.pmax, dt);
     // ECOLE : assis a sa table, on recule au maximum pour que le TABLEAU tienne entier a
     // l'image par-dessus la tete de l'eleve (voir camTableau)
     if (P.sit && P.sit.ecole && !aiming) want = clamp(want, 4.4, 5.0);

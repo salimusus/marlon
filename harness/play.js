@@ -24039,8 +24039,16 @@ test('sur les plateformes du parcours dans les arbres, un tronc ne ferme plus la
     })();
     return { tours, passerelles, temoins, faille, poteau: G.CAM_POTEAU, poteauHaut: G.CAM_POTEAU_HAUT };
   });
-  const att = { 'rue degagee': 9.1, 'petite boutique': 4.9, 'salle de classe': 5.26,
-    'petit appartement': 5.23, 'etage de la banque': 7.54, 'dos au mur de l ecole': 2.96, 'sous le preau': 9.02 };
+  // LA TABLE A BOUGE UNE FOIS, ET POUR UNE BONNE RAISON (round 83, poste r83-f). Les quatre
+  // premieres valeurs avaient ete relevees sur une camera COUCHEE : une bride de plafond ecrasait
+  // `cam.pitch` a 0,04 rad en entrant dans une piece et rien ne le relevait (voir camPitchBride).
+  // Maintenant que la visee revient a 0,32 rad, la camera monte un peu et le cone ne rencontre
+  // plus les memes parois : petite boutique 4,90 -> 4,95 m · salle de classe 5,26 -> 5,34 m ·
+  // petit appartement 5,23 -> 4,12 m (la camera plus haute touche le plafond de la piece plus
+  // tot ; 3,00 m suffisent, voir le test 336) · sous le preau 9,02 -> 9,05 m. Les trois autres
+  // n'ont pas bouge d'un centimetre.
+  const att = { 'rue degagee': 9.1, 'petite boutique': 4.95, 'salle de classe': 5.34,
+    'petit appartement': 4.12, 'etage de la banque': 7.54, 'dos au mur de l ecole': 2.96, 'sous le preau': 9.05 };
   const bouges = r.temoins.filter(s => Math.abs(s.d - att[s.nom]) > 0.02);
   const f = r.faille;
   // la faille est fermee : mince ET bas ferme encore les rayons de cote ; mince ET haut les laisse
@@ -24370,4 +24378,92 @@ test('aucun trottoir ne mene dans un mur : le pave s\'arrete la ou le passage s\
   const ok = r.length === 2 && r.every(o => o.pct < 0.3 && o.longMorte < 20 && o.trottoirs > 350
     && o.recoupe && o.recoupe.pire >= 0.9 && o.recoupe.coupes > 20);
   return { ok, detail: `« refais les routes mieux organisees, plus fluides, plus larges » : un trottoir a 0,00 m de large jette l'enfant sur la chaussee · la bande de 1,80 m etait posee sans regarder les murs ; elle est maintenant RETRECIE (jamais sous 0,90 m) ou INTERROMPUE, bordure comprise, et aucune architecture n'a bouge · ${r.map(o => `graine ${o.graine} : ${o.recoupe.avant} trottoirs -> ${o.trottoirs} (${o.recoupe.gardes} intacts, ${o.recoupe.retrecis} retrecis, ${o.recoupe.coupes} coupes, ${o.recoupe.retires} retire, ${o.recoupe.marches} marches posees devant une estrade, ${o.recoupe.fermes} passages fermes recenses) ; le plus etroit pave fait ${o.recoupe.pire} m ; surface pavee ou l'enfant ne passe pas : ${o.morte} m2 sur ${o.aire} (${o.pct} %), soit ${o.longMorte} m de trottoir menteur ; ${o.sous} trottoir dont le minimum tombe sous 0,80 m${o.pires.length ? ' ' + JSON.stringify(o.pires) : ''}`).join(' \u00b7 ')}` };
+});
+
+// ============ UNE VISEE ECRASEE PAR UN PLAFOND SE RELEVE TOUTE SEULE (round 83) ============
+// « Un plafond bas n'interdit que de MONTER » : la loi est bonne, mais elle ECRASAIT `cam.pitch`
+// et RIEN ne le relevait ensuite. Seul le stick droit de l'enfant pouvait le faire — et un enfant
+// ne sait pas qu'il doit remonter le stick pour reparer le jeu.
+// MESURES AVANT (monde 4, 150 images sur place, visee de depart 0,32 rad) :
+//   cabane de l'arbre 0,04 rad · salle de classe 0,04 · petit appartement 0,04 · petite
+//   boutique 0,134 · depot municipal (auvent a 1,91 m) 0,178 — et ENCORE 0,178 rad cinq
+//   secondes APRES en etre sorti, `cam.pmax` revenu a 1,25 rad.
+// Dans une piece, la cause est un ORDRE : `camPerche` tourne avant `interieurTick`, donc a
+// l'image ou l'on entre `cam.interieur` est encore nul et le plafond est encore la. Sous un
+// AUVENT il n'y a aucune piece a declarer : inverser les deux appels ne change rien (mesure :
+// 0,178 rad dans les deux sens). C'est pourquoi la bride se REND (camPitchBride) : une seule
+// correction repare les six releves, et elle ne depend d'aucun ordre d'appel.
+test('une visee ecrasee par un plafond bas se releve toute seule des que la place se libere', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, cam = G.cam;
+    const img = (ou) => { if (ou) { P.pos.set(ou.x, ou.y, ou.z); P.vel.set(0, 0, 0); }
+      G.step(1 / 60, true); G.camPerche(1 / 60, false); G.interieurTick(); };
+    const perche = () => { const c = G.camera.position, q = P.pos;
+      return +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2); };
+    const etat = (nom) => ({ nom, pitch: +cam.pitch.toFixed(3), pmax: +(cam.pmax == null ? -1 : cam.pmax).toFixed(3),
+      perche: perche(), plafond: cam.plafond == null ? null : +cam.plafond.toFixed(2),
+      piece: cam.interieur ? (cam.interieur.nom || 'batiment') : null });
+    const pose = (x, y, z, yaw) => __SHOT.go({ world: 4, x, y, z, yaw, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+    // COMBIEN D'IMAGES POUR RETROUVER LA VISEE, ET LE PLUS GROS PAS D'UNE IMAGE A L'AUTRE :
+    // le retour ne doit pas se voir comme un mouvement de camera parasite.
+    const suit = (n, ou, seuil) => {
+      let images = -1, pire = 0, prec = cam.pitch;
+      for (let i = 0; i < n; i++) { img(ou);
+        pire = Math.max(pire, Math.abs(cam.pitch - prec)); prec = cam.pitch;
+        if (images < 0 && cam.pitch >= seuil) images = i + 1; }
+      return { images, pire: +pire.toFixed(4) };
+    };
+    // 1. LA CABANE DE L'ARBRE (le plancher est a 6,80 m, le toit a 9,25 m)
+    const CAB = { x: 128, y: 6.86, z: 300 }, PASS = { x: 135, y: 5.46, z: 300 };
+    pose(CAB.x, CAB.y, CAB.z, 0);
+    img(CAB);
+    const cabane1 = etat('cabane, 1re image');                 // la bride mord : c'est ici qu'on perdait tout
+    const cabaneR = suit(120, CAB, 0.3);
+    const cabane = etat('cabane, apres 2 s');
+    // 2. ON EN SORT, sur la passerelle T3-T4
+    const sortieR = suit(180, PASS, 0.3);
+    const sortie = etat('sorti sur la passerelle');
+    // 3. SOUS UN AUVENT, SANS AUCUNE PIECE DECLAREE (depot municipal, couvert a 1,91 m)
+    const DEP = { x: 27, y: 1, z: 122 }, RUE = { x: 27, y: 1, z: 112 };
+    pose(DEP.x, DEP.y, DEP.z, 3.14);
+    for (let i = 0; i < 150; i++) img(DEP);
+    const auvent = etat('sous l auvent du depot');              // la bride DOIT mordre : le toit est bas
+    const auventR = suit(180, RUE, 0.3);
+    const apresAuvent = etat('sorti dans la rue');
+    // 4. L'ENFANT GARDE LA MAIN. Sous l'auvent il LEVE les yeux au stick droit : sa visee decolle
+    //    de la bride, la dette est oubliee, et la camera ne redescend PAS toute seule en sortant.
+    pose(DEP.x, DEP.y, DEP.z, 3.14);
+    for (let i = 0; i < 150; i++) img(DEP);
+    cam.pitch = -0.2;                                          // coup de stick vers le haut
+    for (let i = 0; i < 60; i++) img(DEP);
+    const stick = etat('stick leve, sous l auvent');
+    for (let i = 0; i < 180; i++) img(RUE);
+    const stickSorti = etat('stick leve, sorti dans la rue');
+    // 5. LES LIEUX TEMOINS : la visee ne doit etre couchee nulle part, et la perche reste jouable
+    const temoins = [];
+    for (const [n, x, y, z, yaw, tenir] of [['rue degagee', 0, 1, 50, 0, false],
+      ['petite boutique', 60, 1, 40, 0, false], ['salle de classe', -79, 1, 213.2, 0, false],
+      ['petit appartement', -143, 1, 10, 0, false], ['etage de la banque', -52, 5.6, 70, 0, true],
+      ['hall de la banque', -52, 1, 70, 0, false], ['hopital', 16, 1, 208, 0, false],
+      ['garage', -45, 1, 90, 0, false], ['show-room', -140, 1, 103, 0, false],
+      ['halle du marche', -142.5, 1, 159, 0, false]]) {
+      pose(x, y, z, yaw);
+      for (let i = 0; i < 150; i++) img(tenir ? { x, y, z } : null);
+      temoins.push(etat(n));
+    }
+    return { cabane1, cabaneR, cabane, sortieR, sortie, auvent, auventR, apresAuvent,
+      stick, stickSorti, temoins, vitesse: G.CAM_PITCH_RETOUR };
+  });
+  const pasMax = r.vitesse / 60 + 0.0005;      // le pas d'une image a 60 images/s, plus l'arrondi
+  const ok = r.cabane.pitch >= 0.3 && r.cabane.perche >= 3.5          // dans la cabane, la visee est revenue
+    && r.cabaneR.images > 0 && r.cabaneR.images <= 40                  // en moins de 0,7 s
+    && r.cabaneR.pire <= pasMax && r.sortieR.pire <= pasMax            // sans a-coup visible
+    && r.sortie.pitch >= 0.3                                           // et en sortant, elle y est toujours
+    && r.auvent.pitch < 0.25 && r.auvent.pmax < 0.25                   // sous l auvent la bride mord TOUJOURS
+    && r.apresAuvent.pitch >= 0.3 && r.auventR.images > 0 && r.auventR.images <= 60
+    && r.stick.pitch <= -0.19 && r.stickSorti.pitch <= -0.19           // l enfant garde la main
+    && r.temoins.every(s => s.pitch >= 0.3 && s.perche >= 3.5)
+    && r.vitesse > 0 && r.vitesse <= 1;
+  const l = s => `${s.nom} : visee ${s.pitch} rad (plafond autorise ${s.pmax}), perche ${s.perche} m`;
+  return { ok, detail: `« un plafond bas n'interdit que de MONTER » ecrasait \`cam.pitch\` et RIEN ne le relevait : seul le stick droit de l'enfant pouvait le faire · AVANT, 150 images sur place, visee de depart 0,32 rad : cabane de l'arbre 0,04 rad, salle de classe 0,04, petit appartement 0,04, petite boutique 0,134, et sous l'auvent du depot 0,178 rad — puis ENCORE 0,178 rad cinq secondes APRES en etre sorti, le plafond autorise revenu a 1,25 rad · dans une piece la cause est un ORDRE (camPerche passe avant interieurTick, donc a l'image de l'entree le plafond est encore la) ; sous un auvent il n'y a aucune piece a declarer et inverser l'ordre ne change RIEN (mesure : 0,178 rad dans les deux sens) — c'est pourquoi la bride se REND · APRES : ${l(r.cabane1)} a la premiere image dans la cabane, puis la visee remonte a ${r.cabane.pitch} rad en ${r.cabaneR.images} images (${(r.cabaneR.images / 60).toFixed(2)} s) sans jamais bouger de plus de ${r.cabaneR.pire} rad d'une image a l'autre (${(r.cabaneR.pire * 180 / Math.PI).toFixed(2)}° par image, contre 2,1° pour le replacement automatique que le jeu tient deja pour « en douceur »), perche ${r.cabane.perche} m · ${l(r.sortie)} · ${l(r.auvent)} — la bride mord toujours quand il FAUT · ${l(r.apresAuvent)} apres ${r.auventR.images} images · et l'enfant garde la main : un coup de stick vers le haut sous l'auvent tient (${r.stick.pitch} rad) et tient encore en sortant (${r.stickSorti.pitch} rad), la camera ne redescend pas toute seule · vitesse de retour ${r.vitesse} rad/s (${(r.vitesse * 180 / Math.PI).toFixed(0)} °/s) · lieux temoins : ${r.temoins.map(l).join(' · ')}` };
 });

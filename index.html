@@ -11691,7 +11691,7 @@ const DEGAGE_QUAND_MEME = 22;    // s immobile MEME avec une bonne raison (file 
 // vient d'etre REFUSE par le garde-fou de collision. On s'en sert comme second declencheur.
 // Ce n'est pas un desserrage de seuil : c'est le meme degagement, arme par la mesure directe
 // au lieu de la mesure moyennee. Apres : pire arret sans raison 2,9 s au lieu de 5,5 s.
-const DEGAGE_BLOQUE = 1.6;       // s de pas REFUSES par une autre tole avant de se degager
+const DEGAGE_BLOQUE = 1.6;       // s de pas REFUSES par une autre tole avant de se degager (circulation de fond seulement)
 // LES BONNES RAISONS DE NE PAS AVANCER, en un seul endroit : un feu, un stop, un cedez, un
 // passage pieton, un pieton, une file. La liste etait ecrite deux fois (ici et dans le banc
 // d'essai) et une seule des deux copies a recu « demi-tour » : on la nomme.
@@ -11772,18 +11772,26 @@ function traficRoule(c, dt, opt) {
   // deplacement REEL depuis son depart. Un degagement qui ne bouge pas d'un centimetre n'a rien
   // a « se reposer » : le repos de 2,5 s existe pour qu'un vehicule ne recule pas sans arret,
   // pas pour faire attendre celui qui n'a pas recule du tout.
-  if (c.degageDepart && !c.degageJuge && simTime > (c.degageFin || 0)) {
+  // ON NE TOUCHE QU'A LA CIRCULATION DE FOND. Les vehicules PILOTES par un autre poste
+  // (depanneuse, pompier, travaux, police, facteur) ont leur propre soupape juste en bas
+  // (`figeT > 6` → on refait le trace, jamais de teleportation) et leur propre banc, le test
+  // 332. Mesure : arme chez eux aussi, le degagement rapide les faisait reculer si souvent que
+  // le fourgon des travaux ne depassait plus 6,3 m/s — le test 332 mesure justement la part du
+  // trajet faite AU-DESSUS de 6,5 m/s, et son diviseur devenait vide (« null % »). Le blocage
+  // que le test 450 a trouve, lui, est celui d'une voiture de la circulation : c'est la seule
+  // qu'on change.
+  if (!opt.pilote && c.degageDepart && !c.degageJuge && simTime > (c.degageFin || 0)) {
     c.degageJuge = true;
     if (Math.hypot(c.x - c.degageDepart[0], c.z - c.degageDepart[1]) < 0.35) { c.degageEchecs = (c.degageEchecs || 0) + 1; c.degageRepos = 0; }
     else c.degageEchecs = 0;
   }
   if (simTime > (c.degageFin || 0)
       && ((c.figeT || 0) > DEGAGE_SANS_RAISON || (c.attenteT || 0) > DEGAGE_QUAND_MEME
-          || ((c.bloqueT || 0) > DEGAGE_BLOQUE && !excuseLegale(c.raison)))
+          || (!opt.pilote && (c.bloqueT || 0) > DEGAGE_BLOQUE && !excuseLegale(c.raison)))
       && simTime > (c.degageRepos || 0)) {
     c.degageFin = simTime + DEGAGE_DUREE; c.degageSens = (c.degageSens === 1) ? -1 : 1;
     c.degageRepos = simTime + DEGAGE_DUREE + DEGAGE_REPOS;
-    c.degageDepart = [c.x, c.z]; c.degageJuge = false;
+    if (!opt.pilote) { c.degageDepart = [c.x, c.z]; c.degageJuge = false; }
     c.figeT = 0; c.attenteT = 0; c.bloqueT = 0;
     // le trace qu'on suivait nous a menes la : on en redemande un autre, et on renonce a la
     // voie de depart convoitee si c'est elle qui exigeait une manoeuvre impossible.

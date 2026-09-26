@@ -7111,7 +7111,7 @@ const WORLDS = [
     } },
 ];
 let worldIdx = 0, PATH = [];
-const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], zebras: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], parkings: [], marques: [], marquesN: 0, cages: [] };
+const city = { on: false, lifts: [], toits: [], voiles: [], batiments: [], interieurs: [], camPieces: [], feux: [], glace: [], neigeG: null, neigeVeh: [], aiCars: [], cars: [], balls: [], zones: [], wander: [], goals: 0, tennis: 0, race: { on: false, t: 0, next: 0, cps: [], inStart: false }, zone: null, near: null, launchT: 0, hitT: 0, targets: [], water: null, lights: [], shots: 0, tags: 0, splashT: 0, boosters: [], rings: [], swings: [], pets: [], boules: null, jetSpot: null, boulesPts: 0, vitrines: [], rides: [], office: null, mannequins: [], fleeing: [], trafficLights: [], benches: [], safes: [], guards: [], loots: [], buildings: [], crossings: [], panneaux: [], passages: [], zebras: [], etals: [], waters: [], shells: [], buoys: [], fish: [], shark: null, planques: [], planqueNear: null, classes: [], docs: [], medScreens: [], beds: [], burners: [], tvs: [], autoDoors: [], decorSlots: [], placed: [], parcels: [], accidents: [], ambulances: [], depanneuses: [], parkings: [], marques: [], marquesN: 0, cages: [] };
 const drive = { car: null, speed: 0, boostT: 0, gear: 1, downPrev: false, upPrev: false };
 const GEARS = [{ max: 0.26, acc: 1.9 }, { max: 0.46, acc: 1.5 }, { max: 0.66, acc: 1.2 }, { max: 0.85, acc: 0.95 }, { max: 1.0, acc: 0.75 }];
 // Les trois réglages des SENSATIONS DE CONDUITE (voir la grande section « conduire »).
@@ -9828,6 +9828,25 @@ function buildBois() {
   box(128, 9.7, 300, 5.4, 0.9, 5.4, 0xc23b5a, { deco: true, studs: false });     // le toit (a 9,25 m : on passe dessous)
   box(128, 8.3, 302.2, 2.8, 1, 0.12, 0, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🏕️ LA CABANE', 0x5cc453) }), deco: true, noEdges: true });
   checkpoint(128, 7.02, 300, 1);   // le drapeau du sommet : on a fini le parcours
+  // ============ LA CAMÉRA DANS LA CABANE (round 83) ============
+  // L'ENFANT NE VOYAIT QUE SON DOS. Mesure de la perche (distance objectif ↔ joueur) au milieu
+  // du plancher, les quatre orientations : 1,62 m au nord, 1,61 m à l'est, 1,27 m au sud,
+  // 1,61 m à l'ouest — pour 9 m demandés. DEUX CAUSES, mesurées toutes les deux :
+  //   1. LE TOIT. `box(128, 9.7, …)` est mince et large : estUnToit() le range dans camToits,
+  //      la liste des couvertures qui bouchent la vue. Son dessous est à 9,25 m, l'objectif
+  //      visait 8,64 m : `cam.plafond` valait 0,31 m, et la loi « un plafond bas n'interdit que
+  //      de MONTER » écrasait la visée à 0,04 rad (le minimum). La caméra ne pouvait donc plus
+  //      prendre de la hauteur pour contourner quoi que ce soit.
+  //   2. LES QUATRE TRONCS de la tour. Chacun fait 0,84 m de côté et monte à 10,20 m, aux
+  //      quatre coins du plancher de 4 × 4 m. Le cône de caméra (l'axe et deux rayons à
+  //      ±0,4 rad) touchait le tronc de droite à 2,00 m : place libre = 2,00 + 0,35 − 0,30 =
+  //      2,05 m, exactement la valeur relevée. Les parois (2,40 m) et le garde-corps (1,10 m)
+  //      finissaient le travail sur les autres axes.
+  // LA RÉPARATION, la plus étroite possible : la cabane reçoit SON PROPRE volume de caméra, avec
+  // ses deux altitudes (voir camPieceDe). Elle n'entre PAS dans city.interieurs, qui n'a aucune
+  // notion de hauteur et qui commande aussi le bruit des pas et la pose du mobilier : le
+  // sous-bois sept mètres plus bas sonnerait « carrelage » et ne pourrait plus rien recevoir.
+  city.camPieces.push({ x: 128, z: 300, w: 4.6, d: 4.6, y1: 6.7, y2: 10.3, tout: true, nom: 'cabane des arbres' });
   for (const [cx, cz, cy] of [[135, 288, 2.9], [142, 294, 4.3], [135, 300, 5.7], [128, 294, 0.5], [142, 306, 0.5]]) coin(cx, cy, cz);
   // LE GRAND TOBOGGAN qui ramene au sol depuis la cabane : quinze marches de 0,45 m.
   // IL ETAIT PLANTE SUR L'ESCALIER DE LA QUATRIEME TOUR (n° 102). Sa premiere marche, en
@@ -14909,6 +14928,20 @@ function liftTick(L, dt) {
       if (simTime - L.since > 1.2 && simTime > (L.cd || 0)) { L.cd = simTime + 2.5; L.since = 0;
         L.target = L.target === L.low ? L.high : L.low; msg(L.target === L.high ? '🛗 Montée…' : '🛗 Descente…', 1200); sfx.tone(700, 0, .12, 'sine', .05); }
     } else if (!onIt) L.since = 0;
+    // ============ ON NE « TOMBE » PAS DANS SON PROPRE ASCENSEUR (round 83) ============
+    // La cabine descend en exponentielle : 0,47 m dès la PREMIÈRE image sur une course de
+    // 12,9 m, soit 28 m/s, alors que la chute libre n'en fait que 0,008 m. Le plancher se
+    // dérobe donc sous le passager, qui reste EN L'AIR dans la cage et ne rattrape la cabine
+    // que bien plus bas. MESURE (descente du toit d'un immeuble, 13,2 m → 0,35 m) : le joueur
+    // retrouvait le plancher à 2,38 m après 10,9 m de chute libre réelle. Avant ce round la
+    // vitesse plafonnée à 30 m/s le cachait à moitié (−36 PV) ; la hauteur VRAIE l'a mis en
+    // pleine lumière (« Chute de 11 m · −62 PV » pour avoir pris l'ascenseur).
+    // Tant que le passager est dans la cage, AU-DESSUS de la cabine, et que la cabine descend,
+    // sa chute suit la cabine : elle ne compte pas (voir chuteSuivi / chuteOublie).
+    if (L.rider) L.passager = true;
+    const dansCage = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && P.pos.y > L.y - 0.3;
+    if (!dansCage) L.passager = false;
+    if (L.passager && L.target < L.y - 0.05) chuteOublie();
     const before = L.y; L.y += (L.target - L.y) * Math.min(1, dt * 2.2);
     L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
     if (onIt) {
@@ -16830,19 +16863,109 @@ function coupCouteau(av, duree) {
   return true;
 }
 // LA CHUTE. On pouvait sauter du toit d'un immeuble de vingt mètres et repartir en
-// sifflotant. Maintenant on s'écrase : au-delà de 21 m/s (une chute d'environ huit mètres)
-// ça fait mal, et de très haut ça tue. Le parachute, le deltaplane et le jetpack bornent la
-// vitesse de descente : sous une voile, on se pose toujours en douceur.
-const CHUTE_SEUIL = 21;
+// sifflotant. Maintenant on s'écrase : au-delà de 7,5 m ça fait mal, et de très haut ça tue.
+// Le parachute, le deltaplane et le jetpack bornent la vitesse de descente : sous une voile,
+// on se pose toujours en douceur.
+//
+// ===================== LA CHUTE MENTAIT (round 83) =====================
+// LA CAUSE. La vitesse de descente du joueur est bornée à −30 m/s (voir « P.vel.y < -30 »
+// dans step). La hauteur annoncée et les dégâts étaient DÉDUITS de cette vitesse bornée :
+// au-delà de 15 m la vitesse ne bougeait plus, donc plus rien ne bougeait non plus.
+// MESURE AVANT (chutes fabriquées pas à pas, joueur à 100 PV, sol plat) :
+//     3 m → « rien », 100 PV      6 m → « rien », 100 PV
+//    10 m → « Chute de 11 m », −36 PV, 64 PV
+//    15 m → « Chute de 15 m », −72 PV, 28 PV
+//    20 m → « Chute de 15 m », −72 PV, 28 PV        (chute réelle : 21 m)
+//    30 m → « Chute de 15 m », −72 PV, 28 PV        (chute réelle : 31 m)
+//    40 m → « Chute de 15 m », −72 PV, 28 PV        (chute réelle : 41 m)
+//    60 m → « Chute de 15 m », −72 PV, 28 PV        (chute réelle : 61 m)
+// Autrement dit : TOUTE chute de plus de 15 m annonçait 15 m, et un joueur en pleine forme
+// SURVIVAIT à 60 m avec 28 PV. Les dégâts plafonnaient à (30 − 21) × 8 = 72 PV.
+//
+// LA RÉPARATION. On ne déduit plus rien de la vitesse : on MESURE la hauteur réellement
+// parcourue (chuteSuivi, dans step) — point le plus haut atteint depuis le dernier appui,
+// moins l'altitude d'impact — et les dégâts en découlent directement.
+//
+// LA COURBE, et pourquoi ces deux hauteurs :
+//   — CHUTE_H_SEUIL = 7,5 m : en dessous, pas une égratignure. C'est exactement l'ancien
+//     seuil (21 m/s ⇔ 21² / 60 = 7,35 m) : une chute de 8 m qui ne tuait pas ne tue toujours
+//     pas, l'étage de la villa (5,3 m), un muret, un escalier, un toit de garage restent
+//     gratuits comme avant.
+//   — CHUTE_H_MORT = 13 m : à cette hauteur un joueur en pleine forme MEURT. Mesure qui la
+//     justifie : dans la ville, les toits accessibles sont entre 12 et 22 m, et l'ascenseur
+//     des immeubles de La Zone s'arrête à 13,2 m sur un toit qui annonce lui-même « prends un
+//     parachute ou un deltaplane ». Sauter de ce toit sans voile DOIT donc tuer — c'est la
+//     leçon que l'enfant doit comprendre. Les plus bas toits (12 m) laissent 8 PV : un
+//     avertissement, pas un pardon.
+// Entre les deux, les dégâts montent en ligne droite. Aux hauteurs basses les chiffres sont
+// à une poignée de PV de ceux d'avant (8 m : 9 PV contre 8 ; 10 m : 45 PV contre 36).
+const CHUTE_SEUIL = 21;        // m/s — gardé : porte d'entrée des appels qui ne connaissent QUE la vitesse
+const CHUTE_H_SEUIL = 7.5;     // m — en dessous de cette hauteur de chute, aucun dégât
+const CHUTE_H_MORT = 13;       // m — à cette hauteur, 100 PV de dégâts : un joueur intact y meurt
+// La hauteur de chute à retenir : celle qu'on a MESURÉE si on l'a, sinon celle qu'implique la
+// vitesse (chute libre : h = v² / 2g). Le second cas ne sert plus qu'aux appels directs.
+function chuteHauteur(vy, haut) {
+  if (haut != null && isFinite(haut)) return Math.max(0, haut);
+  const v = -vy;
+  return v > 0 ? v * v / (2 * (G || 30)) : 0;
+}
+function chuteDegats(haut) {
+  if (!(haut > CHUTE_H_SEUIL)) return 0;
+  return Math.round(100 * (haut - CHUTE_H_SEUIL) / (CHUTE_H_MORT - CHUTE_H_SEUIL));
+}
+// LE SOMMET DE LA CHUTE. Appelé à CHAQUE pas de simulation, juste avant de déplacer le
+// joueur. Il retient le point le plus HAUT atteint depuis le dernier appui franc et le rend ;
+// step en déduit la hauteur parcourue à l'atterrissage. Rend null quand ce qui se passe n'est
+// pas une chute libre — l'appelant ne mesure alors rien.
+//
+// CE QUI N'EST PAS UNE CHUTE, et remet donc la référence à l'altitude courante :
+//   — un appui au sol (auSol). Cela couvre à lui seul l'escalier, la pente, l'ascenseur
+//     (liftTick repose P.grounded à chaque image avant le déplacement), le tapis roulant et la
+//     plate-forme mobile (P.standing === o, la plate-forme emmène le joueur avec elle) : dans
+//     tous ces cas le joueur est « posé » à chaque image et rien ne s'accumule ;
+//   — l'eau (P.swimming : on n'arrive jamais « au sol » en nageant, et la baignade remet la
+//     référence à la surface) ;
+//   — une voile, le propulseur, un véhicule, une assise, une balançoire, un manège, une
+//     échelle ou un pylône (P.climbing), et la mort ;
+//   — le trampoline n'a besoin de rien : il ne repose jamais le joueur (P.grounded reste faux
+//     quand best.bounce le renvoie en l'air), donc aucun impact n'est jamais compté dessus.
+//
+// LA TÉLÉPORTATION NE COMPTE PAS. Réapparition, réveil à l'hôpital, sortie de prison,
+// cinématique, pose par le banc d'essai, éjection d'un solide : tous déplacent P.pos SANS
+// vitesse correspondante. Un déplacement qu'aucune vitesse ne justifie (plus de 2 m au-delà de
+// |vitesse| × dt) repart donc de zéro, sinon un joueur réapparu au sol après une chute de 40 m
+// aurait « chuté » de 40 m à son premier pas. La marge de 2 m laisse passer la plus grosse
+// éjection connue de desincarcere (1,00 m en une image, voir moveAxis).
+// ET ON JUGE DANS LES TROIS DIMENSIONS, pas seulement en hauteur. C'est le défaut que la
+// première écriture de ce correctif contenait, mesuré en fabriquant deux chutes d'affilée :
+// après une chute mortelle de 13 m, remiseEnJeu réveille le joueur à l'hôpital À LA MÊME
+// ALTITUDE (0,15 m contre 0 m) mais cent mètres plus loin. L'écart vertical était de 15 cm :
+// aucune téléportation détectée, le sommet de 13 m restait en mémoire, et le joueur mourait
+// une SECONDE fois au premier pas — deux morts pour une seule chute.
+function chuteSuivi(dt, auSol) {
+  const y = P.pos.y;
+  const libre = !auSol && !dead && !P.voile && !P.jet && !P.swimming && !drive.car
+    && !P.sit && !P.swing && !P.ride && !P.climbing;
+  const dx = P.pos.x - P.chuteP.x, dy = y - P.chuteP.y, dz = P.pos.z - P.chuteP.z;
+  const saut = P.chuteAncre ? Math.sqrt(dx * dx + dy * dy + dz * dz) : Infinity;
+  P.chuteP.set(P.pos.x, y, P.pos.z); P.chuteAncre = true;
+  if (!libre || saut > P.vel.length() * Math.max(0, dt) + 2) { P.chuteY = y; return null; }
+  if (P.chuteY == null || y > P.chuteY) P.chuteY = y;
+  return P.chuteY;
+}
+// ON OUBLIE LA CHUTE EN COURS. Appelé par tout ce qui téléporte le joueur de façon nommée :
+// la mort, le réveil à l'hôpital, le point de contrôle. La détection ci-dessus est un filet,
+// ceci est la ceinture : un point de réveil à moins de 2 m du point de chute ne serait pas vu.
+function chuteOublie() { P.chuteY = P.pos.y; P.chuteAncre = false; }
 function majVie() {
   $('hpBar').style.width = P.hp + '%';
   $('hpBar').style.background = P.hp > 50 ? '#3ddc5a' : P.hp > 25 ? '#ffd23f' : '#ff5c5c';
 }
-function chuteImpact(vy) {
+function chuteImpact(vy, hautMesuree) {
   if (dead || P.voile || P.jet || P.swimming || drive.car || P.sit || P.swing || P.ride) return 0;
-  const v = -vy;
-  if (!(v > CHUTE_SEUIL) || P.hp <= 0) return 0;
-  const deg = Math.round((v - CHUTE_SEUIL) * 8), haut = Math.round(v * v / (2 * (G || 30)));
+  if (P.hp <= 0) return 0;
+  const hReelle = chuteHauteur(vy, hautMesuree);
+  const deg = chuteDegats(hReelle), haut = Math.round(hReelle);
   if (deg <= 0) return 0;
   P.hp = Math.max(0, P.hp - deg); P.hurtT = simTime; majVie();
   P.stunT = simTime + 0.5; P.vel.x *= 0.15; P.vel.z *= 0.15;
@@ -17184,7 +17307,7 @@ function cityReset() {
   city.hoopNear = city.jetNear = city.medNear = city.meterNear = city.offNear = city.parcelNear = city.petNear =
   city.raceNear = city.rackNear = city.rideNear = city.safeNear = city.shopNear = city.slotNear = city.stoveNear =
   city.swingNear = city.trampNear = city.vitNear = city.jackNear = city.interact = city.decoNear = city.pose = city.botCarNear = null;
-  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.zebras = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.habitants = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => EPHEMERES.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
+  city.routes = []; city.graphe = null; city.trottoirs = []; city.decorPublic = null;  city.decorSlots = []; city.placed = []; city.parcels = []; city.delivery = null; P.deco = null; P.decoMesh = null; city.hoop = null; city.autoDoors = []; city.tramp = null; city.cinema = null; city.niche = null; chien.pet = null; chien.tag = null; chien.attaque = null; chien.couche = false; coup.etat = 'aucun'; coup.bot = null; coup.car = null; P.garde = false; P.accroupi = false; me.rig.garde = false; me.rig.accroupi = false; document.body.classList.remove('garde', 'accroupi'); city.rideBot = null; city.botCarNear = null; bots.forEach(b => { b.rdv = null; b.drive = null; b.enVoiture = null; b.sport = null; if (b.av) { try { tailleEnCabine(b.av, 1); teteEnCabine(b.av, 1); } catch (e41) {} if (b.av.racket) setRacket(b.av, false); } }); tm.on = false; tm.bot = null; tm.s = [0, 0]; tm.j = [0, 0]; fm.on = false; fm.bot = null; fm.s = [0, 0]; city.beds = []; city.burners = []; city.tvs = []; city.fridge = null; city.stove = null; city.gate = null; city.garageDoor = null; city.lift = null; city.lifts = []; city.toits = []; city.voiles = []; city.batiments = []; city.interieurs = []; city.camPieces = []; city.feux = []; city.glace = []; city.neigeG = null; city.neigeVeh = []; city.voileNear = null; P.voile = null; if (P.voileMesh) { worldGroup.remove(P.voileMesh); P.voileMesh = null; } city.villaPool = null; city.balloons = []; if (P.carryMesh) mainDroite().remove(P.carryMesh); P.carry = null; P.carryMesh = null; P.snack = null; document.body.classList.remove('carry'); city.docs = []; city.medScreens = []; city.medDesk = null; city.meter = null; city.classes = []; city.fish = []; city.shark = null; RALLY.mesh = null; RALLY.hills = []; RALLY.ramps = []; city.bankHands = null; city.seaMesh = null; city.sea = null; city.boat = null; city.foam = null; city.buoys = []; city.shells = []; city.crossings = []; city.panneaux = []; city.passages = []; city.zebras = []; city.etals = []; city.etalNear = null; day.glows = []; day.last = -1; $('clock').style.display = 'none'; city.benches = []; city.safes = []; city.guards.forEach(g => scene.remove(g.av.group)); city.guards = []; city.loots.forEach(l => worldGroup.remove(l.g)); city.loots = []; city.buildings = []; P.sit = null; P.secours = null; if (P.eat) stopEating(false); breakables.length = 0; city.trafficLights = []; debrisParts.forEach(d => worldGroup.remove(d.m)); debrisParts.length = 0; try { fxClear(); } catch (e6) {} city.vitrines = []; city.rides = []; city.office = null; P.ride = null; city.mannequins.forEach(m => scene.remove(m.group)); city.mannequins = []; city.habitants = []; city.fleeing = []; if (mission.cur) endMission(false, true); clearBeacon(); $('missionHud').classList.remove('on'); $('jailBtn').style.display = 'none'; police.cell = null; police.agents = []; police.sait = null; police.coffres = 0; police.villaT = 0; police.riposte = 0; armee.on = false; armee.heli = null; armee.faisceau = null; armee.tache = null; store.set('superobby.grenades', String(P.grenades || 0)); P.weapon = null; grenades.forEach(g => scene.remove(g.m)); grenades.length = 0; city.armory = null; city.armoryParc = null; police.cars = []; clearWanted(); city.hideouts = []; city.garage = null; city.zone2 = null; city.zoneImmeubles = []; city.errants = []; city.villaMine = null; gangs.length = 0; gang.membres = []; gang.mission = null; gang.missions = []; cambrio.on = false; cambrio.voleurs = []; cambrio.alerte = 0; document.body.classList.remove('alarme'); city.planques = []; city.planqueNear = null; gang.otages = []; gang.membresLibres = []; gang.capture = null; P.otage = null; guerre.reunion = null; guerre.territoires = guerre.territoires || {};  city.casino = null; city.slotNear = null; city.tableNear = null; casino.jeu = null; casino.machine = null; casino.table = null; bots.forEach(b => { b.casino = null; }); city.tuneDesk = null; city.tuneNear = false; city.concesDesk = null; city.concesNear = false; city.concession = null; city.concesLivraison = null; city.concesExpo = []; city.tatooDesk = null; city.tatooNear = false; city.coiffeurDesk = null; city.coiffeurNear = false; city.barbierRubans = []; city.plainteDesk = null; city.plainteNear = false; plainte.chasse = null; plainte.qui = null; bots.forEach(b => { b.prison = 0; b.recherche = null; });  document.body.classList.remove('city'); city.swings = []; city.pets = []; city.boules = null; city.jetSpot = null; city.boulesPts = 0; P.swing = null; P.jet = false; setJet(me, false); city.boosters = []; city.rings = []; city.cabin = city.snack = city.gym = null; gym.on = null; hrace.on = false; engine.stop(); race.state = 'idle'; race.results = []; race.ai = []; raceKarts = []; tm.on = false; tm.s = [0, 0]; document.body.classList.remove('racenear', 'racknear', 'gun'); city.targets = []; city.water = null; city.lights = []; city.shots = 0; city.tags = 0; P.gun = false; setWeapon(me, null); shots.forEach(s => EPHEMERES.remove(s.m)); shots.length = 0; city.on = false; city.aiCars = []; city.cars = []; city.balls = []; city.zones = []; city.wander = []; city.goals = 0; city.tennis = 0; city.race = { on: false, t: 0, next: 0, cps: [], inStart: false }; city.zone = null; city.near = null; city.launchT = 0; if (drive.car) exitCar(); drive.car = null; drive.speed = 0; me.group.visible = true; document.body.classList.remove('carnear'); } city.primesSport = {}; city.accidents = []; city.ambulances = []; city.depanneuses = []; if (marquesMesh) { worldGroup.remove(marquesMesh); marquesMesh.geometry.dispose(); marquesMesh.material.dispose(); marquesMesh = null; } city.marques = []; city.marquesN = 0; city.bonshommes = [];
 const progress = store.json('superobby.progress', {});
 // LA LUMIÈRE, PLUS CHAUDE. Tout était éclairé d'un blanc bleuté un peu clinique : ciel froid,
 // soleil blanc, ombres bleues. On réchauffe la lumière (soleil doré, ciel ambré, rebond du sol
@@ -19024,7 +19147,7 @@ const MUNITIONS = {
 // valaient `undefined`, et le moindre calcul dessus (simTime = P.holsterT + 0.05) rendait
 // NaN : l'horloge de simulation partait en vrille et tout le jeu se figeait. On les declare
 // donc a ZERO des la creation du joueur.
-const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, holsterT: 0, dernierCoupY: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, garde: false, accroupi: false, poing: 'G', esquiveT: 0, perf: +store.get('superobby.perf') || 10 };
+const P = { pos: new THREE.Vector3(0, 0, 3), vel: new THREE.Vector3(), hw: 0.4, h: 1.9, grounded: false, standing: null, coyote: 0, jumpBuf: 0, facing: 0, climbing: false, dance: 0, danceFace: null, racket: false, swingT: 0, gun: false, weapon: null, ride: null, aimPitch: 0, upHeld: false, downAim: false, grenades: +store.get('superobby.grenades') || 0, fireCd: 0, swimming: false, stunT: 0, boostT: 0, jet: false, fuel: 100, swing: null, ammo: 8, ammoMax: 8, reloadT: 0, punchT: 0, holsterT: 0, dernierCoupY: 0, hp: 100, combo: 0, run: false, court: false, energie: 100, essouffle: false, tapT: -9999, voile: null, voileMesh: null, voileSrc: null, munition: 'std', muniStock: {}, zoom: false, roulis: 0, garde: false, accroupi: false, poing: 'G', esquiveT: 0, perf: +store.get('superobby.perf') || 10, chuteY: null, chuteP: new THREE.Vector3(), chuteAncre: false };
 const cam = { yaw: 0, pitch: 0.32, dist: 9, base: 9, target: new THREE.Vector3(0, 1.5, 3), freeUntil: 0, dedans: false, dedansT: 0, shake: 0, shakeT: 0 };
 // Y a-t-il un plafond au-dessus du joueur ? Sert à la caméra (se rapprocher dans une pièce)
 // et à la météo (pas de pluie à l'intérieur). Recalculé 4 fois par seconde seulement.
@@ -19094,6 +19217,24 @@ function interieurDe(x, z) {
   for (const b of (city.batiments || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
   return null;
 }
+// ============ LES PIÈCES PERCHÉES : UN VOLUME DE CAMÉRA QUI A UNE HAUTEUR (round 83) ============
+// POURQUOI UNE SECONDE LISTE. `city.interieurs` (et `city.batiments`) sont des RECTANGLES AU SOL,
+// sans aucune notion de hauteur, et ils ne servent pas qu'à la caméra : `solSous` en tire le
+// bruit des pas (tout ce qui tombe dedans sonne « carrelage ») et la pose du mobilier urbain,
+// des routes et des trottoirs les évite. Y inscrire la cabane perchée dans l'arbre aurait donc
+// rendu le SOUS-BOIS, sept mètres plus bas, sonnant comme un carrelage et interdit d'y poser le
+// moindre banc — pour une pièce qui n'est même pas là. Cette liste-ci n'est lue QUE par la
+// caméra, et chaque volume porte ses deux altitudes : on n'est dans la pièce que si l'on est
+// dedans EN HAUTEUR aussi.
+//   x, z, w, d : l'emprise ;  y1, y2 : le plancher et le dessus du toit ;
+//   tout: true : la pièce est si petite que TOUT ce qui la ferme est transparent à la caméra —
+//   pas seulement ses murs (la règle ordinaire ne rend traversable que ce qui fait plus de
+//   2,20 m de haut), mais aussi son garde-corps, son toit décoratif et son feuillage.
+function camPieceDe(x, z, y) {
+  for (const b of (city.camPieces || [])) if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2
+    && y > b.y1 && y < b.y2) return b;
+  return null;
+}
 function interieurQuitte() {
   for (const m of interieur.masques) m.visible = true;
   for (const o of interieur.murs) { o.xray = false; const m = o.mesh; if (m && m.userData.matOpaque) { m.material = m.userData.matOpaque; m.userData.matOpaque = null; } }
@@ -19145,7 +19286,19 @@ function solsAccessibles(r, x0, z0, y0) {
 }
 function interieurEntre(r) {
   interieurQuitte(); interieur.rect = r; cam.interieur = r;
+  // LE SEUIL DE MASQUAGE. D'ordinaire c'est la tête du joueur : tout ce qui la dépasse s'efface.
+  // Dans une pièce PERCHÉE déclarée « tout » (la cabane de l'arbre), le toit n'est qu'à 2,45 m
+  // du plancher et son dessous (9,25 m) passait SOUS la tête (9,39 m) : il ne s'effaçait donc
+  // pas, restait dans camToits, et c'est lui qui écrasait la visée à 0,04 rad (cam.plafond
+  // mesuré : 0,31 m au-dessus de l'objectif). On coupe alors 1,00 m au-dessus du PLANCHER : le
+  // toit et le feuillage s'en vont, les parois (dessous à 7,00 m), le garde-corps (6,80 m) et
+  // le plancher restent.
+  // POURQUOI 1,00 m ET PAS 1,20 : l'enseigne « LA CABANE » est vissée DEHORS, sur la face sud
+  // (z = 302,20 ; dessous à 7,80 m), et la caméra reculée de 4,87 m passe juste derrière elle.
+  // Capture à l'appui : à 1,20 m l'enfant disparaissait derrière son propre panneau ; à 1,00 m
+  // l'enseigne s'efface avec le toit, et l'on voit l'enfant entier dans sa cabane.
   const yTete = P.pos.y + 2.25, marge = 0.6;
+  const yMasque = r.tout ? r.y1 + 1 : yTete;
   interieur.yTete = yTete;   // hauteur de reference : si le joueur change d'etage, il faudra refaire le tri
   // les sols praticables depuis les pieds du joueur : leurs maillages sont intouchables, et le
   // premier qui dépasse la tête pose le PLAFOND DE COUPE (au-dessus, on n'efface plus rien).
@@ -19168,12 +19321,31 @@ function interieurEntre(r) {
     _bb.setFromObject(o); if (!isFinite(_bb.min.y)) return;
     const cx = (_bb.min.x + _bb.max.x) / 2, cz = (_bb.min.z + _bb.max.z) / 2;
     if (Math.abs(cx - r.x) > r.w / 2 + marge || Math.abs(cz - r.z) > r.d / 2 + marge) return;
-    if (_bb.min.y > yTete && _bb.min.y < yCoupe) { o.visible = false; interieur.masques.push(o); }
+    if (_bb.min.y > yMasque && _bb.min.y < yCoupe) { o.visible = false; interieur.masques.push(o); }
   });
   for (const o of solids) {
-    if (!o.mesh || o.h < 2.2 || o.h > 30 || o.veh) continue;
+    if (!o.mesh || o.h > 30 || o.veh) continue;
     if (Math.abs(o.x - r.x) > r.w / 2 + marge || Math.abs(o.z - r.z) > r.d / 2 + marge) continue;
     if (o.y - o.h / 2 > yTete) continue;
+    // CE QUI DEVIENT TRAVERSABLE PAR LA CAMÉRA. Règle ordinaire : les MURS, c'est-à-dire ce qui
+    // fait plus de 2,20 m de haut. Un garde-corps de 1,10 m ne compte pas — et c'est juste,
+    // partout ailleurs ce sont justement les petits meubles qui posent la caméra à bonne
+    // distance. Mais dans une pièce PERCHÉE déclarée « tout », le garde-corps est une des
+    // parois : il court sur les quatre bords du plancher, à 2 m de l'enfant, et son dessus
+    // (7,90 m) passe 31 cm au-dessus du seuil de camLibres (ceinture du joueur + 0). On rend
+    // donc traversable tout ce qui est POSÉ SUR LE PLANCHER de cette pièce — jamais le plancher
+    // lui-même (son dessous est plus bas que y1), sinon la caméra passerait dessous.
+    if (o.h < 2.2 && !(r.tout && o.y - o.h / 2 >= r.y1 - 0.05)) continue;
+    o.xray = true; interieur.murs.push(o);
+  }
+  // LE TOIT DÉCORATIF D'UNE PIÈCE PERCHÉE. camToits est une liste à part (auvents, halles,
+  // préaux) que camLibres consulte en plus des solides : le toit de la cabane y est, et il
+  // barrait la perche à 1,0 m dès que la visée piquait. Son maillage vient d'être effacé
+  // ci-dessus, ce qui suffirait ; on pose `xray` en plus pour que la mesure ne dépende pas de
+  // l'ordre des deux tris.
+  if (r.tout) for (const o of camToits) {
+    if (!o.mesh || Math.abs(o.x - r.x) > r.w / 2 + marge || Math.abs(o.z - r.z) > r.d / 2 + marge) continue;
+    if (o.y - o.h / 2 < r.y1) continue;
     o.xray = true; interieur.murs.push(o);
   }
 }
@@ -19195,7 +19367,11 @@ function murCoupeSegment(o, ax, ay, az, bx, by, bz) {
   return true;
 }
 function interieurTick() {
-  const r = city.on && running && !drive.car && !P.voile ? interieurDe(P.pos.x, P.pos.z) : null;
+  // LES PIÈCES PERCHÉES PASSENT D'ABORD (voir camPieceDe) : elles seules savent à quelle
+  // ALTITUDE elles se trouvent, et la cabane de l'arbre est plantée au-dessus d'un sous-bois
+  // qui, lui, n'est l'intérieur de rien.
+  const r = city.on && running && !drive.car && !P.voile
+    ? camPieceDe(P.pos.x, P.pos.z, P.pos.y) || interieurDe(P.pos.x, P.pos.z) : null;
   if (r !== interieur.rect) { if (r) interieurEntre(r); else interieurQuitte(); }
   // LE TRI EST FAIT A LA HAUTEUR DE LA TETE, une seule fois, en entrant. Si l'on entrait en
   // sautant (ou si l'on change d'etage), le plafond du rez-de-chaussee restait donc en place :
@@ -25652,12 +25828,20 @@ function step(dt, active) {
   if (P.stunT > simTime) { P.vel.x *= 0.5; P.vel.z *= 0.5; }
   const wasGrounded = P.grounded;
   const vyChute = P.vel.y;   // vitesse de descente AVANT que le sol ne la remette à zéro
+  const sommetChute = chuteSuivi(dt, wasGrounded);   // altitude du point le plus haut d'où l'on tombe (voir chuteImpact)
   P.grounded = false; P.standing = null;
   moveAxis('x', P.vel.x * dt, wasGrounded || P.swimming); moveAxis('z', P.vel.z * dt, wasGrounded || P.swimming); moveAxis('y', P.vel.y * dt, false);
   desincarcere(dt);   // enfermé dans un solide : on le pousse dehors au lieu de le laisser vibrer contre les parois
   // relief du rallye : posé APRÈS la remise à zéro ci-dessus, qui l'effaçait aussitôt et laissait le joueur « en l'air » sur toute la zone
   if (RALLY.mesh && !drive.car) { const th = terrainH(P.pos.x, P.pos.z); if (th != null && P.pos.y < th) { P.pos.y = th; if (P.vel.y < 0) P.vel.y = 0; P.grounded = true; P.coyote = 0.12; } }
-  if (!wasGrounded && P.grounded) chuteImpact(vyChute);   // on s'écrase en tombant d'un immeuble
+  // ON S'ÉCRASE EN TOMBANT D'UN IMMEUBLE, et la hauteur annoncée est celle qu'on a VRAIMENT
+  // parcourue : sommet de la chute moins altitude d'impact, et non plus une déduction faite
+  // sur une vitesse plafonnée à 30 m/s (voir chuteImpact).
+  // ZÉRO QUAND LE SUIVI NE SAIT PAS, JAMAIS LA VITESSE. chuteSuivi rend null quand l'image
+  // n'était pas une chute libre (ascenseur, voile, téléportation…) ; retomber dans ce cas sur
+  // la vitesse ferait revenir le mensonge par la petite porte — c'est exactement ce qui
+  // redonnait « −62 PV » au passager de l'ascenseur alors que sa chute suivait la cabine.
+  if (!wasGrounded && P.grounded) chuteImpact(vyChute, sommetChute == null ? 0 : Math.max(0, sommetChute - P.pos.y));
 
   for (const s of spinners) {
     const dx = P.pos.x - s.x, dz = P.pos.z - s.z, c = Math.cos(s.angle), sn = Math.sin(s.angle);
@@ -30726,6 +30910,7 @@ function updateAct() {
 function die(silent) {
   if (dead) return;
   dead = true; deaths++; updateHud(); sfx.die();
+  chuteOublie();   // la chute est soldée : le sommet retenu ne doit pas resservir au réveil (voir chuteSuivi)
   $('hpBar').style.width = '0%';
   explode(me);
   if (!silent) { const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on'))); msg('Oups !', 900); }
@@ -30788,6 +30973,7 @@ function remiseEnJeu(cause) {
   let y = (p.y != null ? p.y : 0);
   try { y = groundUnder(p.x, p.z, null, y + 2.4); } catch (e) {}
   P.pos.set(p.x, y + 0.15, p.z); P.vel.set(0, 0, 0); P.standing = null; P.grounded = false; P.dance = 0;
+  chuteOublie();   // on se réveille à l'hôpital à la MÊME altitude : sans ceci le sommet d'avant tuait une seconde fois (voir chuteSuivi)
   if (!city.on) P.facing = running ? Math.PI : 0;   // dans un parcours, on repart FACE à la suite, comme respawn()
   try { cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z); } catch (e) {}
   me.group.visible = true; me.group.rotation.order = 'XYZ'; me.group.rotation.set(0, P.facing, 0);
@@ -30825,6 +31011,7 @@ function relevageTick() {
 }
 function respawn() {
   P.pos.set(cp.x, cp.y + 0.15, cp.z + 0.5); P.vel.set(0, 0, 0); P.standing = null; P.grounded = false; P.dance = 0;
+  chuteOublie();   // on ne retombe pas de la hauteur d'où l'on vient de tomber (voir chuteSuivi)
   P.facing = running ? Math.PI : 0;
   cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);
   me.group.visible = true; P.hp = 100; $('hpBar').style.width = '100%'; $('hpBar').style.background = '#3ddc5a';

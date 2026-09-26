@@ -2492,6 +2492,7 @@ window.__G = {
   murEntreVue: typeof murEntreVue === 'function' ? murEntreVue : null,
   estUnToit: typeof estUnToit === 'function' ? estUnToit : null,
   get camToits() { return typeof camToits !== 'undefined' ? camToits : null; },
+  camPieceDe: typeof camPieceDe === 'function' ? camPieceDe : null,
   attack: typeof attack === 'function' ? attack : null,
   nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
   gpsRoute: typeof gpsRoute !== 'undefined' ? gpsRoute : null,

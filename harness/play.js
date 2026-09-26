@@ -23493,3 +23493,76 @@ test('la chute annonce la hauteur vraiment parcourue, et de tres haut elle tue',
   const l = c => `${c.demande} m -> reelle ${c.reelle} m, annoncee ${c.annoncee} m, ${c.deg == null ? (c.mort ? 'MORT' : '0') : '−' + c.deg + ' PV'}, il reste ${c.hp} PV${c.mort ? ' (MORT)' : ''}`;
   return { ok, detail: `la vitesse de descente est bornee a −30 m/s et la hauteur en etait DEDUITE : toute chute de plus de 15 m annoncait « Chute de 15 m · −72 PV » et laissait 28 PV, meme a 60 m · la hauteur est maintenant MESUREE (sommet de la chute moins altitude d'impact) et les degats montent en ligne droite de ${r.seuil} m (rien) a ${r.mortA} m (100 PV) : ${[r.c8, r.c10, r.c20, r.c40, r.c60].map(l).join(' · ')} · ascenseur du toit (${r.asc && r.asc.toit} m) au rez-de-chaussee : ${r.asc && r.asc.hpHaut} PV en haut, ${r.asc && r.asc.hpBas} PV en bas (la cabine descend a 28 m/s, le passager restait « en l'air » 10,9 m et payait −62 PV)` };
 });
+
+// ================= LA CAMERA DANS LA CABANE DE L'ARBRE (round 83) =================
+// L'enfant ne voyait QUE SON PROPRE DOS. Mesure de la perche (distance objectif <-> joueur) au
+// milieu du plancher de la cabane, les quatre orientations : 1,62 / 1,61 / 1,27 / 1,61 m pour
+// 9 m demandes. Deux causes, mesurees toutes les deux :
+//   1. LE TOIT (box(128 ; 9,70 ; 300) de 5,4 x 0,9 x 5,4 m) est mince et large : estUnToit() le
+//      range dans camToits, la liste des couvertures qui bouchent la vue. Son dessous est a
+//      9,25 m, l'objectif visait 8,64 m : cam.plafond valait 0,31 m et la loi « un plafond bas
+//      n'interdit que de MONTER » ecrasait la visee a 0,04 rad, son minimum. La camera ne pouvait
+//      donc plus prendre de hauteur pour contourner quoi que ce soit.
+//   2. LES QUATRE TRONCS de la tour (0,84 m de cote, 10,20 m de haut, aux quatre coins du
+//      plancher de 4 x 4 m). Le cone de camera (l'axe et deux rayons a +/-0,4 rad) touchait le
+//      tronc de droite a 2,00 m : place libre = 2,00 + 0,35 - 0,30 = 2,05 m, exactement la
+//      valeur relevee. Les parois (2,40 m) et le garde-corps (1,10 m) finissaient le travail.
+// La cabane a maintenant SON PROPRE volume de camera, avec ses deux altitudes (city.camPieces,
+// camPieceDe). Elle n'est PAS entree dans city.interieurs, qui n'a aucune notion de hauteur et
+// qui commande aussi le bruit des pas (solSous -> carrelage) et la pose du mobilier urbain : le
+// sous-bois sept metres plus bas aurait sonne comme un carrelage et n'aurait plus rien pu
+// recevoir. Ce test verifie les deux moities : la perche dans la cabane, ET que rien n'a bouge
+// au sol sous l'arbre.
+test('dans la cabane de l\'arbre, la camera recule assez pour qu\'on voie devant soi', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, cam = G.cam;
+    const tourne = (n, ou) => { for (let i = 0; i < n; i++) {
+      if (ou) { P.pos.set(ou.x, ou.y, ou.z); P.vel.set(0, 0, 0); }
+      G.step(1 / 60, true); G.camPerche(1 / 60, false); G.interieurTick();
+    } };
+    const dansUnSolide = (c) => {
+      for (const o of G.solids) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    const mesure = (nom, x, y, z, yaw, tenir) => {
+      __SHOT.go({ world: 4, x, y, z, yaw, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+      tourne(150, tenir ? { x, y, z } : null);
+      const c = G.camera.position, t = cam.target, q = P.pos;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15, null);
+      // EST-CE QUE L'ENFANT VOIT DEVANT LUI ? La camera est derriere lui : ce qu'il a devant,
+      // c'est la place libre dans la direction OPPOSEE a la perche, mesuree a hauteur de
+      // poitrine. On la prend dans la ligne de vue, du joueur vers l'avant.
+      const devant = G.murEntreVue(q.x, q.y + 1.2, q.z, -dx / L, 0, -dz / L, 12, null);
+      return { nom, y: +q.y.toFixed(2), dJoueur: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+        reel: +(cam.reel || 0).toFixed(2), piece: cam.interieur ? (cam.interieur.nom || 'batiment') : null,
+        pitch: +cam.pitch.toFixed(2), plafond: cam.plafond == null ? null : +cam.plafond.toFixed(2),
+        coupe: mur >= 0, dans: dansUnSolide(c), devant: devant < 0 ? 12 : +devant.toFixed(2) };
+    };
+    const cabane = [['nord', 0], ['est', 1.57], ['sud', 3.14], ['ouest', -1.57]]
+      .map(([n, a]) => mesure('cabane vers le ' + n, 128, 6.86, 300, a, true));
+    // ET RIEN N'A BOUGE AILLEURS : trois lieux temoins, et le sol SOUS l'arbre.
+    const temoins = [mesure('rue degagee', 0, 1, 50, 0, false),
+      mesure('petite boutique', 60, 1, 40, 0, false),
+      mesure('salle de classe', -79, 1, 213.2, 0, false)];
+    __SHOT.go({ world: 4, x: 128, y: 6.86, z: 300, hour: 12, frais: true });
+    tourne(60, { x: 128, y: 6.86, z: 300 });
+    const dansCabane = !!G.camPieceDe(128, 300, 6.9);
+    const sousArbre = !G.camPieceDe(128, 300, 0.2);          // sept metres plus bas : ce n'est PAS la cabane
+    const pasInterieur = !(G.city.interieurs || []).some(b => Math.abs(b.x - 128) < b.w / 2 && Math.abs(b.z - 300) < b.d / 2);
+    const solCabane = G.solSous(128, 6.9, 300), solSousArbre = G.solSous(128, 0.2, 300);
+    return { cabane, temoins, dansCabane, sousArbre, pasInterieur, solCabane, solSousArbre,
+      nbPieces: (G.city.camPieces || []).length };
+  });
+  const c = r.cabane;
+  const ok = c.length === 4 && c.every(s => s.dJoueur >= 3.5 && !s.coupe && !s.dans && s.devant >= 1.5)
+    && c.every(s => s.piece === 'cabane des arbres')
+    && r.dansCabane && r.sousArbre && r.pasInterieur
+    && r.solSousArbre !== 'carrelage'                                  // le sous-bois n'est l'interieur de rien
+    && r.temoins[0].dJoueur > 8.5 && r.temoins[1].dJoueur > 4.5 && r.temoins[2].dJoueur > 5;
+  return { ok, detail: `avant : 1,62 / 1,61 / 1,27 / 1,61 m de perche dans la cabane (pour 9 m demandes) — l'enfant ne voyait que son dos · en cause le TOIT, range dans camToits, qui ecrasait la visee a 0,04 rad (cam.plafond = 0,31 m), et les QUATRE TRONCS de la tour (0,84 m de cote, 10,20 m de haut, aux coins du plancher de 4 x 4 m) que le cone de camera touchait a 2,00 m · la cabane a son propre volume de camera avec ses deux altitudes : ${c.map(s => `${s.nom} ${s.dJoueur} m (piece « ${s.piece} », plafond ${s.plafond}, ${s.devant} m de degage devant)`).join(' · ')} · aucun mur entre la camera et le joueur, jamais dans un solide · et rien n'a bouge au sol : la cabane n'est PAS dans city.interieurs (${r.pasInterieur}), le volume ne repond qu'en hauteur (dedans a 6,9 m = ${r.dansCabane}, a 0,2 m = ${!r.sousArbre ? 'OUI (DEFAUT)' : 'non'}), le sol sous l'arbre sonne « ${r.solSousArbre} » et non « carrelage » · temoins inchanges : ${r.temoins.map(s => `${s.nom} ${s.dJoueur} m`).join(', ')} · ${r.nbPieces} piece(s) perchee(s) declaree(s)` };
+});

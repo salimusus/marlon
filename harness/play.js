@@ -14195,6 +14195,25 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // L'analyseur, lui, tourne sur le fil AUDIO et garde une memoire glissante de 32 768
     // echantillons (0,74 s) : on la relit toutes les 60 ms, et meme un blocage d'une
     // demi-seconde du fil principal ne fait plus rien perdre.
+    // ================= LE MOUCHARD : QUI A FABRIQUE UN SON PENDANT LA FENETRE ? =================
+    // Trois rounds de suite, ce test a echoue en suite complete sur un bruit de 0,12 que rien
+    // ne declarait : `SON.joues` ne bougeait pas (donc « 0 fenetre salie »), et on ne pouvait
+    // qu'ELIMINER des suspects un par un — la cinematique, le curseur a 80 %, la bille de la
+    // roulette, le tonnerre, la rumeur de la ville, les pas des bots, le rotor. A chaque fois
+    // le suspect etait un appel DIRECT a `sfx`, invisible du registre. On arrete de deviner :
+    // TOUT ce qui fabrique une source audio dans le contexte du jeu est trace avec sa pile
+    // d'appel, et le test PUBLIE ce qu'il a entendu dans la fenetre la plus bruyante. Le
+    // pollueur se nomme lui-meme, quel que soit le poste qui l'a ecrit.
+    const journal = [];
+    const espionne = nom => { const orig = c[nom].bind(c);
+      c[nom] = function () {
+        let pile = '';
+        try { pile = (new Error()).stack.split('\n').slice(1, 10)
+          .map(l => (l.match(/at ([A-Za-z0-9_$.<> ]+)/) || [0, l.trim()])[1].trim())
+          .filter(x => x && !/^espionne|^Object\.|^c\.|^eval|^async|^<anonymous>/.test(x)).slice(0, 4).join(' < '); } catch (e) {}
+        journal.push(pile || '?');
+        return orig.apply(c, arguments); }; };
+    espionne('createOscillator'); espionne('createBufferSource');
     let crete = 0, somme = 0, ech = 0;
     const an = c.createAnalyser(); an.fftSize = 32768; an.smoothingTimeConstant = 0;
     const tampon = new Float32Array(an.fftSize);
@@ -14282,17 +14301,37 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     let nPluie = 0, nPas = 0, nCoup = 0;
     // UNE FENETRE NE COMPTE QUE SI ELLE EST PROPRE. On compare le nombre de sons REELLEMENT
     // sortis (SON.joues) a celui qu'on a demande : si le monde en a glisse un de plus, la
-    // fenetre est jetee et refaite (huit essais au plus). Et on garde la MEDIANE de trois
+    // fenetre est jetee et refaite (treize essais au plus, voir `mesure`). Et on garde la MEDIANE de trois
     // fenetres propres — une mesure audio isolee n'est pas reproductible, une mediane l'est.
     // Au passage : le compteur d'echantillons s'appelait `nn` et n'existait pas (variable
     // jamais incrementee), donc le niveau « efficace » valait sqrt(somme) et sortait a 13,66 —
     // impossible sur une sortie audio, qui ne depasse pas 1. Il s'appelle maintenant `ech`.
     const median = L => L.slice().sort((a, b) => a - b)[(L.length - 1) >> 1];
+    // LA MEMOIRE DE L'ANALYSEUR DEBORDAIT D'UNE FENETRE SUR L'AUTRE, et c'est ce qui faisait
+    // lire CINQ fenetres a 0,10 pour un ou deux evenements. L'analyseur garde 32 768
+    // echantillons, soit 0,74 s de son : le premier releve d'une fenetre neuve contient encore
+    // la fin de la precedente. Mesure (sonde, huit fenetres) : une bulle de dialogue a 0,0929
+    // dans la fenetre 2, et la fenetre 3 relevait 0,0929 elle aussi — au centieme pres — sans
+    // qu'AUCUNE source n'ait ete fabriquee pendant sa duree. On attend donc, apres le silence,
+    // que la memoire se soit entierement renouvelee, et on compte le temps sur l'horloge AUDIO
+    // (la seule qui gouverne ce tampon).
+    const memoire = an.fftSize / c.sampleRate;
+    const videLaMemoire = async () => { const t0 = c.currentTime;
+      for (let i = 0; i < 60 && c.currentTime - t0 < memoire + 0.06; i++) await dodo(60); };
     const fenetre = async (n, espace, quoi) => {
-      calme(); crete = 0; somme = 0; ech = 0;
+      calme(); await videLaMemoire();
+      crete = 0; somme = 0; ech = 0;
       const j0 = G.SON.joues; let voulus = 0;
+      journal.length = 0;
+      const gain0 = { master: +ch.master.gain.value.toFixed(3), amb: +ch.bus.ambiance.gain.value.toFixed(3), eff: +ch.bus.effets.gain.value.toFixed(3) };
       for (let i = 0; i < n; i++) { G.SON.vivants.length = 0; voulus += (quoi ? quoi() : 0); await ecoute(espace); }
-      return { pic: crete, rms: Math.sqrt(somme / Math.max(1, ech)), sale: G.SON.joues - j0 === voulus ? 0 : 1 };
+      // qui a fabrique une source, et combien de fois ?
+      const par = {}; for (const pp of journal) par[pp] = (par[pp] || 0) + 1;
+      const ecoute0 = Object.entries(par).sort((a, b) => b[1] - a[1]).map(([pp, nn]) => nn + '× ' + pp);
+      return { pic: crete, rms: Math.sqrt(somme / Math.max(1, ech)), sale: G.SON.joues - j0 === voulus ? 0 : 1,
+        sources: journal.length, qui: ecoute0.slice(0, 6),
+        gains: gain0, gainsFin: { master: +ch.master.gain.value.toFixed(3), amb: +ch.bus.ambiance.gain.value.toFixed(3), eff: +ch.bus.effets.gain.value.toFixed(3) },
+        ambiance: G.ambiance.etat() };
     };
     // CINQ FENETRES ET LA MEDIANE, PLUS UNE FENETRE DE CHAUFFE JETEE.
     // Tous les bruits du monde ne passent pas par sonEn : une nappe d'ambiance qui finit de
@@ -14302,9 +14341,23 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
     // brèves : la premiere fenetre les attrape presque toujours (on la jette), et la mediane
     // de cinq ne bouge que si trois fenetres sur cinq sont touchees. On publie l'ecart
     // max-min pour qu'un futur banc voie tout de suite si la mesure a tremble.
+    // UNE FENETRE SALIE EST REFAITE, ET CE N'EST QU'ICI QUE CA DEVIENT VRAI. Le commentaire
+    // d'a cote l'annoncait depuis deux rounds (« la fenetre est jetee et refaite, huit essais au
+    // plus ») mais le code, lui, gardait les cinq premieres telles quelles. Or `sale` fonctionne
+    // parfaitement pour tout ce qui passe par le registre : la bulle de dialogue d'un habitant
+    // (`sonBulle` → `sonBlabla` → `sonEn`, 14 oscillateurs, crete 0,0929 mesuree) est comptee.
+    // Elle vient du bavardage de fond de `frame()` (minuterie `nextChat`, toutes les 16 a 32 s),
+    // que `calme()` ne peut pas repousser puisqu'elle ne vit pas dans SONV. On la jette donc.
+    // On NE TRUQUE RIEN : si au bout de treize essais il n'y a pas cinq fenetres propres, on
+    // reprend les salies et le bilan le dit (`jetees` / `salies`).
     const mesure = async (n, espace, quoi) => {
       await fenetre(n, espace, quoi);                    // fenetre de chauffe : jetee
-      const F = []; for (let k2 = 0; k2 < 5; k2++) F.push(await fenetre(n, espace, quoi));
+      const F = [], sales = []; let essais = 0;
+      while (F.length < 5 && essais < 13) { essais++;
+        const f = await fenetre(n, espace, quoi);
+        if (f.sale) sales.push(f); else F.push(f); }
+      const jetees = sales.length;
+      while (F.length < 5 && sales.length) F.push(sales.shift());
       const pics = F.map(f => f.pic);
       // DEUX ECARTS. `ecart` est l'amplitude brute des cinq fenetres : elle bondit des qu'une
       // seule est salie (un habitant qui dit bonjour a deux metres), et c'est justement ce que
@@ -14325,10 +14378,14 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
       // comme le tonnerre l'etait — il reste a le nommer. L'amplitude complete des cinq
       // fenetres (`ecart`) reste publiee a cote : rien n'est cache.
       const tri = pics.slice().sort((a, b) => a - b);
+      // LA FENETRE LA PLUS BRUYANTE SE RACONTE : ce qu'elle a entendu, et l'etat de la chaine.
+      const pire = F.reduce((a, f) => f.pic > a.pic ? f : a, F[0]);
       return { pic: +median(pics).toFixed(4), rms: +median(F.map(f => f.rms)).toFixed(4),
         ecart: +(tri[tri.length - 1] - tri[0]).toFixed(4), ecartQ: +(tri[2] - tri[0]).toFixed(4),
         tri: tri.map(v => +v.toFixed(4)).join(' / '),
-        sale: F.reduce((a, f) => a + f.sale, 0) };
+        sale: F.reduce((a, f) => a + f.sale, 0), jetees, essais,
+        pirePic: +pire.pic.toFixed(4), pireQui: pire.qui, pireSources: pire.sources,
+        pireGains: pire.gains, pireGainsFin: pire.gainsFin, pireAmbiance: pire.ambiance };
     };
     // LE SILENCE DE REFERENCE : exactement la meme fenetre, sans rien declencher. S'il n'est
     // pas silencieux, aucune des mesures qui suivent ne veut rien dire — et c'est justement ce
@@ -14375,7 +14432,7 @@ test('la pluie ne couvre plus les pas ni les coups, et les changements de temps 
   const ressortent = r.melange.pic > r.pluieSeule.pic * 2 && r.coups.pic > r.pluieSeule.pic * 5
     && r.pas.pic > r.pluieSeule.pic * 0.8;
   const ok = lente && longue && discrete && joues && ressortent && r.reculActif && banc;
-  return { ok, detail: `la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres les plus basses, celles d'ou sort la mediane, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}, ${r.pluieSeule.sale} fenetre(s) salies, les cinq cretes : ${r.pluieSeule.tri}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse, ${r.pas.sale} salies) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×, ${r.coups.sale} salies) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
+  return { ok, detail: `L'AVERSE CLAQUAIT, ET CE N'ETAIT PAS UN POLLUEUR EXTERIEUR : trois rounds ont cherche qui faisait 0,12 pendant l'ecoute (cinematique, curseur a 80 %, bille de roulette, tonnerre, rumeur de la ville, pas des bots, rotor — tous elimines) alors que la forme d'onde le disait : UN SEUL echantillon a 0,1536 au milieu d'une averse qui vaut 0,0086, facteur de crete 136 pour un vrai son qui vaut 6 a 12, et TOUJOURS la meme valeur — le premier echantillon du tampon de bruit partage. Un gain neuf vaut 1 et \`bruitVers\` ne programmait \`setValueAtTime(.0001, at)\` qu'a une date FUTURE : \`src.start(at)\` etant precis a l'echantillon et l'automation calculee par blocs, les premiers echantillons du souffle passaient A GAIN 1, en bruit blanc pleine echelle. Corrige dans les cinq generateurs (tone, toneVers, bruitVers, noise, la note de musique) : le robinet part FERME. Un clic a 0,15 sur une sortie qui plafonne a 1 s'ENTEND — chaque pas sur le gravier, chaque goutte, chaque flamme en claquait un de temps en temps · et second pollueur NOMME, celui-la bien reel : la bulle de dialogue d'un habitant (sonBulle, 14 oscillateurs, crete 0,0929), tiree par le bavardage de fond de frame() toutes les 16 a 32 s — la fenetre qui l'entend est desormais jetee et refaite, et la memoire de 0,74 s de l'analyseur est videe entre deux fenetres (sans quoi UN evenement salissait DEUX fenetres, et c'est ainsi que les cinq se lisaient a 0,10) · la pluie sortait DEUX FOIS : un souffle du bus « effets » a 0,05 de volume toutes les 0,55 s (dans meteoTick) plus la nappe spatialisee de sonPluie — elle couvrait les pas, les coups et les voix, exactement comme le lit de bruit de la ville avant qu'on ne le divise par trois · meme remede : la source du bus effets est supprimee, il ne reste que sonPluie sur le bus ambiance, niveaux divises par huit (0,05/0,03 → 0,006/0,0035 : divises par trois, l'averse atteignait encore une crete de 0,17 et un pas n'en sortait qu'a 1,3 fois) et RECUL automatique a ${r.recul} des qu'un son de jeu arrive (${r.reculActif}) · mesure au bout de la chaine audio, MEDIANE DE CINQ FENETRES (la meme averse se mesurait a 0,0226 puis 0,2617 d'un essai a l'autre : la ville parlait pendant l'ecoute) — chaine remise au niveau d'usine avant la mesure (gain general trouve a ${r.audio0 ? r.audio0.master : '?'}, remis a ${r.master} ; melange trouve : ${r.audio0 ? r.audio0.mix : '?'}) — silence de reference ${r.fond.pic} (ecart ${r.fond.ecart}, ${r.fond.sale} fenetre(s) salies) ; averse seule (${r.nPluie} nappes), crete ${r.pluieSeule.pic} (ecart ${r.pluieSeule.ecartQ} sur les trois fenetres les plus basses, celles d'ou sort la mediane, ${r.pluieSeule.ecart} sur les cinq, efficace ${r.pluieSeule.rms}, ${r.pluieSeule.sale} fenetre(s) salies gardees, ${r.pluieSeule.jetees} jetee(s) sur ${r.pluieSeule.essais} essais, les cinq cretes : ${r.pluieSeule.tri}) ; ${r.nPas} pas seuls, crete ${r.pas.pic} (${r.gainPas}× l'averse, ${r.pas.sale} salies) ; ${r.nCoup} coups seuls, crete ${r.coups.pic} (${r.gainCoup}×, ${r.coups.sale} salies) ; averse ET pas ensemble, comme en jeu : ${r.melange.pic}, soit ${+(r.melange.pic / Math.max(1e-6, r.pluieSeule.pic)).toFixed(1)}× l'averse seule — le pas ressort au lieu d'etre avale · CE QUE LA FENETRE LA PLUS BRUYANTE DE L'AVERSE A ENTENDU (crete ${r.pluieSeule.pirePic}, ${r.pluieSeule.pireSources} source(s) fabriquees) : ${(r.pluieSeule.pireQui || []).join(' | ') || 'rien'} — chaine : gain general ${r.pluieSeule.pireGains.master}→${r.pluieSeule.pireGainsFin.master}, bus ambiance ${r.pluieSeule.pireGains.amb}, bus effets ${r.pluieSeule.pireGains.eff}, nappe de quartier ${JSON.stringify(r.pluieSeule.pireAmbiance)} · et celle du silence de reference (crete ${r.fond.pirePic}) : ${(r.fond.pireQui || []).join(' | ') || 'rien'} · LES CHANGEMENTS DE TEMPS PRENNENT LEUR TEMPS : le fondu passe de 0,35 a ${r.fondu}, une averse met maintenant ${r.apresFondu} s a s'installer au lieu de ${r.avantFondu} s, et un episode dure de ${r.dureeMin} a ${r.dureeMax} s au lieu de 70 a 150` };
 });
 
 
@@ -19920,10 +19977,43 @@ test('un véhicule posé à contresens de sa destination repart aussitôt et ARR
 // GARÉES, qui ne vont nulle part. On ne compte donc que ce qui a une DESTINATION (une mission,
 // un itinéraire en cours, un conducteur bot, un constat), et on laisse à la ville une minute
 // de vie avant de mesurer, épave et incendie compris, pour qu'elle soit déjà jouée.
+// POURQUOI CE TEST NE MESURAIT RIEN (round 82). Il annoncait « 1 vehicule AVEC une destination
+// suivi » puis « 0 bloque » : deux chiffres faux, et pour la MEME raison. Son registre etait un
+// Map dont il SUPPRIMAIT la fiche (`etats.delete(c)`) des qu'un vehicule perdait son but.
+//   a) `suivis` ne comptait donc pas les vehicules suivis mais LES SURVIVANTS DU DERNIER RELEVE.
+//      Son autre chiffre le disait deja : 8 082 relevés pour 900 echantillons, soit 8,98
+//      vehicules a chaque fois. La ville n'a jamais manque de vehicules qui ont un but — mesure
+//      refaite ici, 9 a chaque releve pendant 90 s : les 8 voitures et camions de la circulation
+//      de fond, plus la depanneuse partie chercher l'epave.
+//   b) Et surtout, la fiche supprimee emportait LE COMPTEUR D'ARRET. Or le jeu retire son
+//      itineraire (`c.ia = null`) a tout vehicule de la circulation bloque 2,5 s (`bloqueT`) ou
+//      fige 8 s (`figeT`) : le test oubliait donc, par construction, exactement les vehicules en
+//      train de se bloquer. Son « plus long arret sans raison 2,8 s » n'etait pas une propriete
+//      de la ville, c'etait SON PROPRE PLAFOND.
+// MESURE COTE A COTE, meme ville, meme graine, meme horloge (sonde) : ancienne metrique
+// 9 suivis / pire 4,0 s ; nouvelle metrique, fiche gardee, 9 suivis / pire 5,3 s — un blocage
+// de plus de cinq secondes que l'ancienne ne POUVAIT PAS voir. Il etait reel : voiture de la
+// circulation immobile 5,5 s en (-171,5 ; 129), raison « - », `bloqueVeh`=true et
+// `bloqueSol`=false (aucun mur : une tole a 4,08 m), et la soupape de degagement n'agissait
+// qu'au bout de 5,5 s parce qu'elle est armee par `figeT`, qui est une moyenne glissante.
+// Corrige dans le jeu (DEGAGE_BLOQUE) : pire arret sans raison 1,6 s au lieu de 5,5 s.
+// LA CONTRE-EPREUVE FAIT PARTIE DU TEST. Un test qui ne peut plus echouer ne garantit rien :
+// apres la mesure, on CLOUE un vehicule de la circulation sur place pendant dix secondes et on
+// rejoue LA MEME fonction de mesure. Si elle ne le signale pas, le test est rouge.
 test('dans une ville déjà jouée, aucun véhicule qui a une destination ne reste bloqué sans raison', async p => {
   const r = await p.evaluate(() => {
     const G = __G;
+    const vrai = Math.random;
+    const semer = g => { let x = g; Math.random = () => ((x = (x * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); };
+    try {
+    // RECETTE DU BANC. L'horloge est posee a une valeur FIXE avant la reconstruction (le cycle
+    // des feux vaut 28 s, la journee 360 s = 12 x 28 + 24 : sans ca la phase des feux avance de
+    // 24 s a chaque test et le carrefour est vert ou rouge selon le RANG du test dans la suite),
+    // et la graine est re-semee APRES (la construction consomme un nombre de tirages qui depend
+    // de l'etat trouve : palier de reputation, nombre de gangs, nombre d'habitants).
+    semer(20240607); G.simTime = 3000;
     __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    semer(20240607);
     const dt = 1 / 60;
     const garage = G.city.garage || { x: -22, z: -30 };
     const cands = (G.city.cars || []).filter(c => G.voitureEmpruntable(c) && !c.rider)
@@ -19937,35 +20027,96 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
     // service dont la mission est finie garde son tracé en mémoire alors que PLUS PERSONNE ne
     // le conduit — mesuré, le camion de pompiers reste 67 s à l'arrêt en (4, 25) avec 81 points
     // de passage et un incendie déjà éteint. Ce n'est pas un blocage, c'est un camion garé avec
-    // une vieille feuille de route. On compte donc : la circulation de fond (elle est conduite à
-    // chaque image), et tout véhicule qui a une mission, un constat ou un conducteur bot.
+    // une vieille feuille de route. On compte donc : la circulation de fond, et tout véhicule
+    // qui a une mission, un constat ou un conducteur bot.
+    // MAIS ON NE DEMANDE PLUS `c.ia` A LA CIRCULATION DE FOND. Un vehicule de `city.aiCars` qui
+    // a un `spd` est de la circulation : il est TOUJOURS cense rouler, et le jeu lui redonne un
+    // itineraire des qu'il en perd un. Lui demander son `ia` revenait a fermer les yeux pendant
+    // le recalcul — c'est-a-dire pendant le blocage, puisque c'est le blocage qui fait jeter
+    // l'itineraire. Mesure du trou : 1,4 s au pire sur 90 s (les huit vehicules, `ia` absent),
+    // tres loin des 5 s de seuil : la periode de recalcul ne peut pas, a elle seule, sonner.
     const fond = new Set(G.city.aiCars || []);
-    const aUnBut = (c, pil) => !!(c.mission || c.constat || c.srvBut || pil.has(c) || (fond.has(c) && c.ia && c.ia.route));
-    const etats = new Map(); let ech = 0;
-    for (let k = 0; k < 60 * 90; k++) {
-      G.step(dt, true);
-      if (k % 6) continue;
-      const pil = pilotes();
-      for (const c of (G.city.cars || []).concat(G.city.aiCars || [], (G.police && G.police.cars) || [])) {
-        if (c.heli || c === G.drive.car) continue;
-        if (!aUnBut(c, pil)) { etats.delete(c); continue; }
-        ech++;
-        let e = etats.get(c); if (!e) { e = { x: c.x, z: c.z, planteT: 0, pire: 0, ou: null, kind: c.kind || 'voiture' }; etats.set(c, e); }
-        const bouge = Math.hypot(c.x - e.x, c.z - e.z); e.x = c.x; e.z = c.z;
-        if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
-          e.planteT += dt * 6;
-          if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-']; }
-        } else e.planteT = 0;
+    const aUnBut = (c, pil) => !!(c.mission || c.constat || c.srvBut || pil.has(c) || (fond.has(c) && c.spd));
+    // LA MESURE, EN UNE FONCTION : c'est elle qu'on rejouera sur la ville sabotee.
+    // ON NE SUPPRIME PLUS JAMAIS UNE FICHE. Un vehicule qui perd son but (service qui rentre au
+    // depot) voit seulement son chronometre en cours remis a zero : sa fiche, son identite et
+    // son PIRE ARRET restent au registre.
+    // POURQUOI CE VEHICULE NE BOUGE PAS ? On le NOMME, comme le test des habitacles nomme le
+    // morceau qui depasse. Sans ca, un blocage releve en suite complete (etat laisse par les
+    // voisins) n'est pas reproductible seul et on ne peut rien en faire.
+    const pourquoi = c => {
+      let sol = null, bd = 99;
+      try { for (const sd of G.solids) { if (!sd || !sd.box) continue; const b = sd.box;
+        const dx = Math.max(b.min.x - c.x, 0, c.x - b.max.x), dz = Math.max(b.min.z - c.z, 0, c.z - b.max.z);
+        const d = Math.hypot(dx, dz); if (d < bd) { bd = d; sol = { d: +d.toFixed(2), haut: +b.max.y.toFixed(2) }; } } } catch (e) {}
+      let veh = null, vd = 99;
+      try { for (const l of [G.city.cars, G.city.aiCars, G.police && G.police.cars]) for (const v of (l || [])) {
+        if (v === c || v.heli) continue; const d = Math.hypot(v.x - c.x, v.z - c.z);
+        if (d < vd) { vd = d; veh = { d: +d.toFixed(2), kind: v.kind || 'voiture', busy: !!v.busy, roule: +(v.speed || 0).toFixed(1), fond: !!v.spd }; } } } catch (e) {}
+      const rt = (G.city.routes || []).find(r => Math.abs(c.x - r.x) < r.w / 2 && Math.abs(c.z - r.z) < r.d / 2);
+      return { raison: c.raison || '-', figeT: +(c.figeT || 0).toFixed(1), bloqueT: +(c.bloqueT || 0).toFixed(1),
+        attenteT: +(c.attenteT || 0).toFixed(1), recule: !!c.recule, degage: +((c.degageFin || 0) - G.simTime).toFixed(1),
+        repos: +((c.degageRepos || 0) - G.simTime).toFixed(1),
+        parTole: G.vehBloque ? !!G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true }) : null,
+        parMur: G.vehBloque ? !!G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false }) : null,
+        sol, veh, largeurRue: rt ? rt.w : null };
+    };
+    const mesure = (images, saboter) => {
+      const etats = new Map(); let ech = 0, relevs = 0;
+      for (let k = 0; k < images; k++) {
+        G.step(dt, true);
+        if (saboter) saboter();
+        if (k % 6) continue;
+        relevs++;
+        const pil = pilotes();
+        for (const c of (G.city.cars || []).concat(G.city.aiCars || [], (G.police && G.police.cars) || [])) {
+          if (c.heli || c === G.drive.car) continue;
+          const but = aUnBut(c, pil);
+          let e = etats.get(c);
+          if (!but) { if (e) { e.planteT = 0; e.x = c.x; e.z = c.z; } continue; }
+          ech++;
+          if (!e) { e = { x: c.x, z: c.z, planteT: 0, pire: 0, ou: null, kind: c.kind || 'voiture', vu: 0 }; etats.set(c, e); }
+          e.vu++;
+          const bouge = Math.hypot(c.x - e.x, c.z - e.z); e.x = c.x; e.z = c.z;
+          if (bouge < 0.01 && excuses.indexOf(c.raison || '-') < 0) {
+            e.planteT += dt * 6;
+            if (e.planteT > e.pire) { e.pire = e.planteT; e.ou = [+c.x.toFixed(0), +c.z.toFixed(0), c.raison || '-'];
+              if (e.planteT > 3) e.cause = pourquoi(c); }
+          } else e.planteT = 0;
+        }
       }
+      const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null, pireCause = null;
+      etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; pireCause = e.cause || null; }
+        if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou, cause: e.cause || null }); });
+      return { suivis: etats.size, relevs, echantillons: ech, bloques: bloques.length, liste: bloques.slice(0, 5),
+        pire: +pireGlobal.toFixed(1), pireOu, pireKind, pireCause, parReleve: +(ech / Math.max(1, relevs)).toFixed(2) };
+    };
+    const bilan = mesure(60 * 90, null);
+    // ===================== LA CONTRE-EPREUVE =====================
+    // On CLOUE un vehicule de la circulation : a chaque image on le remet a sa place, vitesse
+    // nulle, sans raison legale. Rien d'autre ne change — meme ville, meme fonction de mesure,
+    // meme seuil de 5 s. Si elle ne le signale pas, c'est qu'elle ne mesure rien.
+    const cobaye = (G.city.aiCars || []).filter(c => c.spd && !c.busy).sort((a, b) => (b.speed || 0) - (a.speed || 0))[0];
+    let contre = null;
+    if (cobaye) {
+      const piege = { x: cobaye.x, z: cobaye.z, h: cobaye.h, y: cobaye.y };
+      contre = mesure(60 * 10, () => {
+        cobaye.x = piege.x; cobaye.z = piege.z; cobaye.h = piege.h; cobaye.y = piege.y;
+        cobaye.g.position.set(piege.x, piege.y, piege.z); cobaye.g.rotation.y = piege.h;
+        cobaye.speed = 0; cobaye.stopped = true; cobaye.raison = null;
+        if (G.vehicleSolid) G.vehicleSolid(cobaye);
+      });
+      contre.cobaye = { kind: cobaye.kind || 'voiture', x: +piege.x.toFixed(0), z: +piege.z.toFixed(0) };
     }
-    const bloques = []; let pireGlobal = 0, pireOu = null, pireKind = null;
-    etats.forEach(e => { if (e.pire > pireGlobal) { pireGlobal = e.pire; pireOu = e.ou; pireKind = e.kind; }
-      if (e.pire > 5) bloques.push({ kind: e.kind, pire: +e.pire.toFixed(1), ou: e.ou }); });
-    return { suivis: etats.size, echantillons: ech, bloques: bloques.length, liste: bloques.slice(0, 5),
-      pire: +pireGlobal.toFixed(1), pireOu, pireKind };
+    return { bilan, contre };
+    } finally { Math.random = vrai; }   // la graine est rendue : les tests suivants retrouvent le vrai hasard
   });
-  const ok = r.bloques === 0 && r.suivis >= 4 && r.pire < 5;
-  return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées · maintenant, 90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${r.suivis} véhicules AVEC une destination suivis sur ${r.echantillons} relevés, ${r.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${r.pire} s${r.pireOu ? ` (${r.pireKind} en ${r.pireOu[0]}, ${r.pireOu[1]})` : ''}` };
+  const b = r.bilan, k = r.contre;
+  // le test n'est vert que s'il est AUSSI capable d'etre rouge : la contre-epreuve doit sonner
+  const ok = b.bloques === 0 && b.suivis >= 4 && b.pire < 5 && !!k && k.bloques >= 1 && k.pire > 5;
+  return { ok, detail: `avant, avec la mauvaise métrique : 41 « bloqués » sur 42 véhicules — c'étaient les voitures garées ; puis, la métrique corrigée mais AMNÉSIQUE (la fiche du véhicule était supprimée dès qu'il perdait son itinéraire — c'est-à-dire dès qu'il se bloquait) : « 1 véhicule suivi, plus long arrêt 2,8 s », alors que ses propres 8 082 relevés sur 900 échantillons en annonçaient 8,98 · maintenant, fiche gardée : `
+    + `90 s mesurées après 45 s de ville déjà jouée (épave à ramasser et incendie en cours) : ${b.suivis} véhicules AVEC un but suivis sur ${b.echantillons} relevés (${b.parReleve} par échantillon), ${b.bloques} bloqué(s) plus de 5 s sans raison légale, le plus long arrêt sans raison durant ${b.pire} s${b.pireOu ? ` (${b.pireKind} en ${b.pireOu[0]} ; ${b.pireOu[1]})` : ''} — il durait 5,5 s avant DEGAGE_BLOQUE${b.pireCause ? ` · POURQUOI : ${JSON.stringify(b.pireCause)}` : ''}`
+    + ` · CONTRE-ÉPREUVE, même ville, même fonction de mesure, un seul véhicule cloué sur place 10 s (${k ? k.cobaye.kind + ' en ' + k.cobaye.x + ' ; ' + k.cobaye.z : 'aucun cobaye'}) : ${k ? k.bloques : 0} bloqué(s) signalé(s), plus long arrêt ${k ? k.pire : 0} s — le test SAIT donc encore devenir rouge` };
 });
 
 test('les toits sont restés à leur hauteur, et l\'occupant tient tout entier dans son habitacle', async p => {

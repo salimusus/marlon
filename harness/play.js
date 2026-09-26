@@ -22089,9 +22089,21 @@ test('les impasses sont triées : plus aucun cul-de-sac accidentel, et les fins 
 // de la police, de l'hélicoptère ou de l'ami armé traversait les gens sans rien leur faire. On
 // l'a sorti de la parenthèse en laissant les gardes `s.mine` sur les déclarations d'infraction
 // (défaut 85). Ce test tient les DEUX bouts dans la même mesure.
+// LE PALMIER DE LA PLAGE MENACAIT AUSSI CE TEST-CI (round 82). Il tire dans la meme voie que le
+// test 17, x = 110 de z = 60 a z = 72, et la rangee de palmiers de la plage est plantee a
+// z = -50 + i × 38 — donc un tronc a z = 64, entre le canon et les DEUX cibles (l'habitant a
+// z = 66 pour la balle de police, le second a z = 72 pour celle de l'enfant) — avec une abscisse
+// tiree au sort par `rnd(105, 110)`. RELEVE, deux lancements du meme code a la suite : « 3 balles
+// de police = 66 points de degats » puis « = 0 point de degat », et le sous-controle de
+// non-regression a 12 m tombe de 6 touches a 0 en meme temps. Ce n'est pas la regle du defaut 85
+// qui lache — la balle de la police touche toujours — c'est un tronc d'arbre qui l'arrete avant.
+// Meme remede qu'au test 17 : graine figee AVANT la reconstruction, voie de tir degagee et
+// NOMMEE dans le bilan.
 test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rechercher', async p => {
   const r = await p.evaluate(() => {
     const G = __G, P = G.P, THREE = G.THREE;
+    const vraiRnd488 = Math.random; let graine488 = 20260926;
+    Math.random = () => ((graine488 = (graine488 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     __SHOT.go({ world: 4, x: 110, y: 1, z: 60, hour: 12 });
     G.jail.on = false; if (G.uiOpen) G.closeUI();
     const log = document.getElementById('chatLog');
@@ -22106,6 +22118,23 @@ test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rech
     G.police.agents.slice().forEach(a => { a.x += 600; a.z += 600; });
     const v = G.bots[0]; v.pos.set(110, 0.4, 66); v.av.group.position.copy(v.pos); v.av.group.visible = true;
     P.pos.set(90, 0.4, 40); P.vel.set(0, 0, 0);   // l'enfant est AILLEURS : la balle ne le vise pas
+    // ON DEGAGE LA VOIE DE TIR (voir le palmier de la plage, en tete de ce test) : les trois
+    // rayons du test — la balle de police, les yeux du tireur et la bouche de son canon — vers la
+    // plus lointaine des deux cibles. Tout solide qui en coupe un est ecarte, et on le nomme.
+    const voie = [];
+    const rayons = [[110, 1.4, 60], [110, 1.75, 60], [110.34, 1.68, 60.62]];
+    for (let k = 0; k < 12; k++) {
+      let bloque = null;
+      for (const o0 of rayons) {
+        const dx = 110 - o0[0], dy = 1.5 - o0[1], dz = 72 - o0[2], L = Math.hypot(dx, dy, dz) || 1;
+        const h = G.castSolids(o0[0], o0[1], o0[2], dx / L, dy / L, dz / L, L - 0.4, false);
+        if (h.o) { bloque = h.o; break; }
+      }
+      if (!bloque) break;
+      const i = G.solids.indexOf(bloque); if (i < 0) break;
+      voie.push(`${(bloque.mesh && bloque.mesh.name) || 'solide'} ${bloque.w.toFixed(1)}×${bloque.h.toFixed(1)}×${bloque.d.toFixed(1)} m en ${bloque.x.toFixed(1)}/${bloque.z.toFixed(1)}`);
+      G.solids.splice(i, 1); G.sgridSale();   // la grille spatiale doit oublier le solide retiré
+    }
     raz();
     // ---- A) TROIS BALLES DE POLICE sur l'habitant, tirées de 6 m
     const hp0 = v.hp;
@@ -22137,13 +22166,14 @@ test('la balle d\'un autre que l\'enfant touche vraiment, et ne le fait pas rech
     }
     const moi = { partis, degats: h0 - c.hp, touches: Math.round((h0 - c.hp) / 24) };
     G.drawWeapon(false); G.equipWeapon(null); G.clearWanted(); raz();
-    return { flic, mort, moi };
+    Math.random = vraiRnd488;   // la graine est rendue : les tests suivants retrouvent le vrai hasard
+    return { flic, mort, moi, voie };
   });
   const dit = (t, mot) => (t || '').toLowerCase().includes(mot);
   const ok = r.flic.degats === 66 && r.flic.wanted === 0 && !dit(r.flic.texte, 'la police recherche')
     && r.mort.mort && r.mort.wanted === 0 && !dit(r.mort.texte, 'la police recherche')
     && r.moi.partis === 6 && r.moi.touches === 6;
-  return { ok, detail: `avant : tout le test de collision de shotsTick était enfermé dans « if (s.mine) », 3 balles de police tirées à bout portant sur un habitant lui faisaient 0 point de dégât et la traversaient · maintenant (a) 3 balles de police = ${r.flic.degats} points de dégâts, ★ de l'enfant ${r.flic.wanted}, « ${r.flic.texte} » · (b) la balle suivante l'abat (mort=${r.mort.mort}) : ★ ${r.mort.wanted}, « ${r.mort.texte} » — l'enfant n'est pas l'auteur · (c) non-régression, l'enfant tire 6 balles visées à 12 m : ${r.moi.partis} parties du canon, ${r.moi.touches} touches, ${r.moi.degats} points de dégâts` };
+  return { ok, detail: `avant : tout le test de collision de shotsTick était enfermé dans « if (s.mine) », 3 balles de police tirées à bout portant sur un habitant lui faisaient 0 point de dégât et la traversaient · maintenant (a) 3 balles de police = ${r.flic.degats} points de dégâts, ★ de l'enfant ${r.flic.wanted}, « ${r.flic.texte} » · (b) la balle suivante l'abat (mort=${r.mort.mort}) : ★ ${r.mort.wanted}, « ${r.mort.texte} » — l'enfant n'est pas l'auteur · (c) non-régression, l'enfant tire 6 balles visées à 12 m : ${r.moi.partis} parties du canon, ${r.moi.touches} touches, ${r.moi.degats} points de dégâts · voie de tir : ${r.voie.length ? r.voie.length + ' solide(s) écarté(s) (' + r.voie.join(' ; ') + ')' : 'libre, rien à écarter'}` };
 });
 
 // ================= POSTE FIABILITE (round 76) : LA SCENE NE DOIT PLUS GROSSIR ==============

@@ -23690,3 +23690,68 @@ test('le plus large véhicule de service traverse la rue étroite bordée de voi
   const d = (r.alternance && r.alternance.deplaces[0]) || {};
   return { ok, detail: `sortie du commissariat, ${r.larg} m de bitume (x ${r.x1} à ${r.x2}) · AVANT, les deux voitures de patrouille en (-49 ; 9) et (-44 ; 9) ne laissaient que ${a.libre} m entre elles : ${fmt(a)} · ÉLARGIR N'Y CHANGEAIT RIEN (abscisses fixes, le bitume s'ajoute AUTOUR d'elles) : \`stationnementAlterne()\` range l'une des deux DU MÊME CÔTÉ que l'autre, ${d.recul} m plus loin, de (${(d.de || []).join(' ; ')}) à (${(d.vers || []).join(' ; ')}), sur sa place déclarée — aucune géométrie n'est touchée · APRÈS : plus aucun vis-à-vis (largeur libre ${d.apres} m pour un passage exigé de ${r.alternance ? r.alternance.passe : '?'} m), ${fmt(b)} · ${r.alternance ? r.alternance.bouchons.length : '?'} bouchon recensé dans toute la ville, ${r.alternance ? r.alternance.restants.length : '?'} non résolu` };
 });
+
+// ============ LE PARCOURS DANS LES ARBRES : UN TRONC N'EST PAS UN MUR (round 83) ============
+// Les quatre plateformes sont portees par quatre troncs de 0,84 m plantes aux coins d'un
+// plancher de 4 x 4 m. Le cone de camera du pieton est fait de TROIS rayons : l'axe et deux
+// rayons ouverts a +/-0,4 rad, ces derniers etant la pour empecher la camera de RASER une
+// cloison fine. Sur un tronc isole ils ne protegeaient de rien et fermaient la perche.
+// MESURE AVANT, milieu du plancher, les quatre orientations, sur T1 / T2 / T3 :
+//   perche 1,80 m pour 9 m demandes, DOUZE releves sur douze.
+//   rayon d'AXE : rien dans les onze metres mesures — la vue est parfaitement degagee ;
+//   rayons de COTE : un tronc a 2,10 m, systematiquement.
+//   place libre = min(axe, cotes + 0,35) - 0,30 = 2,15 m, exactement cam.libre releve.
+// Les passerelles payaient le meme prix : 4,48 m et 5,62 m au lieu de 9 m.
+// Les rayons de COTE contournent maintenant un poteau (moins de CAM_POTEAU = 0,90 m dans les
+// deux sens au sol) ; l'axe, lui, bute toujours dessus, donc la camera ne peut pas se loger
+// DANS un tronc, et murEntreVue garde le dernier mot si un poteau cache vraiment l'enfant.
+test('sur les plateformes du parcours dans les arbres, un tronc ne ferme plus la camera', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, cam = G.cam;
+    const tourne = (n, ou) => { for (let i = 0; i < n; i++) {
+      if (ou) { P.pos.set(ou.x, ou.y, ou.z); P.vel.set(0, 0, 0); }
+      G.step(1 / 60, true); G.camPerche(1 / 60, false); G.interieurTick();
+    } };
+    const dansUnSolide = (c) => {
+      for (const o of G.solids) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    const mesure = (nom, x, y, z, yaw, tenir) => {
+      __SHOT.go({ world: 4, x, y, z, yaw, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+      tourne(150, tenir ? { x, y, z } : null);
+      const c = G.camera.position, t = cam.target, q = P.pos;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      return { nom, d: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+        coupe: G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15, null) >= 0,
+        dans: dansUnSolide(c) };
+    };
+    const tours = [];
+    for (const [n, x, y, z] of [['T1', 128, 2.66, 288], ['T2', 142, 4.06, 288], ['T3', 142, 5.46, 300]])
+      for (const [d, a] of [['nord', 0], ['est', 1.57], ['sud', 3.14], ['ouest', -1.57]])
+        tours.push(mesure(n + ' ' + d, x, y, z, a, true));
+    // les passerelles, dans le sens ou un tronc se trouvait de cote
+    const passerelles = [mesure('passerelle T1-T2', 135, 2.66, 288, 1.57, true),
+      mesure('passerelle T2-T3', 142, 4.06, 294, 0, true),
+      mesure('passerelle T3-T4', 135, 5.46, 300, 1.57, true)];
+    // TEMOINS : rien ne doit bouger ailleurs (un meuble DEVANT l'objectif pose toujours la perche)
+    const temoins = [mesure('rue degagee', 0, 1, 50, 0, false),
+      mesure('petite boutique', 60, 1, 40, 0, false),
+      mesure('salle de classe', -79, 1, 213.2, 0, false),
+      mesure('petit appartement', -143, 1, 10, 0, false),
+      mesure('etage de la banque', -52, 5.6, 70, 0, true),
+      mesure('dos au mur de l ecole', -64, 1, 215.6, 3.14, false),
+      mesure('sous le preau', -78, 1, 225, 1.57, false)];
+    return { tours, passerelles, temoins, poteau: G.CAM_POTEAU };
+  });
+  const att = { 'rue degagee': 9.1, 'petite boutique': 4.9, 'salle de classe': 5.26,
+    'petit appartement': 5.23, 'etage de la banque': 7.54, 'dos au mur de l ecole': 2.96, 'sous le preau': 9.02 };
+  const bouges = r.temoins.filter(s => Math.abs(s.d - att[s.nom]) > 0.02);
+  const ok = r.tours.length === 12 && r.tours.every(s => s.d >= 8 && !s.coupe && !s.dans)
+    && r.passerelles.every(s => s.d >= 8 && !s.coupe && !s.dans)
+    && bouges.length === 0;
+  return { ok, detail: `les quatre troncs de 0,84 m qui portent chaque plateforme etaient attrapes par les rayons de COTE du cone de camera a 2,10 m, alors que le rayon d'AXE ne rencontrait RIEN dans les onze metres : la perche tombait a 1,80 m pour 9 m demandes, douze releves sur douze · un poteau (moins de ${r.poteau} m dans les deux sens au sol) ne ferme plus que le rayon d'axe · plateformes : ${r.tours.map(s => s.nom + ' ' + s.d + ' m').join(', ')} · passerelles : ${r.passerelles.map(s => s.nom + ' ' + s.d + ' m').join(', ')} (4,48 et 5,62 m avant) · aucun mur entre la camera et le joueur, aucune camera dans un solide · TEMOINS inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}${bouges.length ? ' · ONT BOUGE : ' + bouges.map(s => s.nom + ' ' + s.d + ' au lieu de ' + att[s.nom]).join(', ') : ''}` };
+});

@@ -30184,10 +30184,17 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 // Distances libres depuis un point, dans plusieurs directions, en un seul passage sur les
 // solides. La caméra est une bille de 0,3 m : elle s'arrête AVANT le mur au lieu de s'y
 // enfoncer. Sert à la caméra adaptative (proximité des murs et des plafonds).
-function camLibres(ox, oy, oz, dirs, maxD, skip) {
+// UN POTEAU, C'EST FIN DANS LES DEUX SENS AU SOL. Lampadaire et feu : 0,36 m. Tronc d'arbre
+// du parcours dans les arbres : 0,84 m. Un mur, lui, est long dans un sens au moins. 0,90 m est
+// donc la frontière mesurée entre « on le contourne » et « il ferme le passage ».
+const CAM_POTEAU = 0.9;
+// `axeSeul` : SEUL LE RAYON D'AXE (celui qui pointe vraiment vers l'objectif, index 0) est
+// arrêté par un poteau ; les rayons de CÔTÉ le traversent. Voir « LES RAYONS DE CÔTÉ
+// CONTOURNENT UN POTEAU » plus bas.
+function camLibres(ox, oy, oz, dirs, maxD, skip, axeSeul) {
   const R = 0.3, out = dirs.map(() => maxD);
   const enVehicule = !!vehiculeAssis();   // au volant OU passager : voir « UN POTEAU NE CALE PAS LA CAMÉRA »
-  const essaie = (o) => {
+  const essaie = (o, poteau) => {
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
     // LE SOL SUR LEQUEL ON MARCHE N'EST PAS UN MUR. On comparait le sommet de la boîte GARDE
     // COMPRISE (les 30 cm de R) à « oy - 1,4 », c'est-à-dire aux pieds moins 20 cm : le PLANCHER
@@ -30207,6 +30214,7 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // tomberaient à zéro dès qu'on frôle un mur
     if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) return;
     for (let i = 0; i < dirs.length; i++) {
+      if (poteau && i > 0) continue;   // un poteau n'arrête que le rayon d'axe (voir `axeSeul`)
       const t = rayBox(ox, oy, oz, dirs[i][0], dirs[i][1], dirs[i][2], o.x, o.y, o.z, hx, hy, hz, out[i]);
       if (t >= 0 && t < out[i]) out[i] = t;
     }
@@ -30228,12 +30236,32 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // carrosserie, puis repartait — « la caméra est ivre ». `enVehicule` est calculé UNE fois
     // par appel (vehiculeDuJoueur remonte city.rideBot, ce n'est pas gratuit dans une boucle).
     if (enVehicule && o.w < 0.7 && o.d < 0.7) continue;
+    // ============ LES RAYONS DE CÔTÉ CONTOURNENT UN POTEAU (round 83) ============
+    // Le cône de caméra du piéton est fait de TROIS rayons : l'axe, et deux rayons ouverts à
+    // ±0,4 rad. Les deux rayons de côté sont là pour empêcher la caméra de RASER une cloison
+    // fine et d'entrer dans la pièce d'à côté — ils protègent des MURS. Sur un poteau isolé ils
+    // ne protègent de rien : la vue passe à côté, il suffit de le contourner.
+    // MESURE (parcours dans les arbres : quatre plateformes de 4 × 4 m portées par quatre troncs
+    // de 0,84 m plantés aux coins). Au milieu du plancher, dans les QUATRE orientations :
+    //   T1 (2,60 m), T2 (4,00 m), T3 (5,40 m) : perche 1,80 m pour 9 m demandés.
+    //   Rayon d'AXE : RIEN dans les onze mètres mesurés — la vue est parfaitement dégagée.
+    //   Rayons de CÔTÉ : un tronc à 2,10 m, systématiquement, dans les douze relevés.
+    //   Place libre = min(axe, côtés + 0,35) − 0,30 = 2,10 + 0,35 − 0,30 = 2,15 m. Exactement
+    //   la valeur relevée (cam.libre = 2,15 à 2,16 m).
+    // Les trois passerelles payaient le même prix : 4,48 m et 5,62 m au lieu de 9 m.
+    // La règle est celle qui existait déjà EN VÉHICULE (« un poteau ne cale pas la caméra »,
+    // n° 32), restreinte ici aux rayons de côté : l'axe, lui, continue de buter sur le poteau,
+    // donc la caméra ne peut jamais se loger DANS un tronc, et murEntreVue garde le dernier mot
+    // si un poteau cache vraiment l'enfant. On ne l'ouvre PAS à l'axe : à pied, en intérieur,
+    // ce sont justement les agrès et les petits meubles qui posent la caméra à bonne distance
+    // (maison de poupée, test 219) — et ceux-là sont DEVANT l'objectif, pas de côté.
+    const poteau = !!axeSeul && o.w < CAM_POTEAU && o.d < CAM_POTEAU;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.
     // La regle deja appliquee aux toits decoratifs vaut pour tous les solides.
     if (o.mesh && !o.mesh.visible) continue;
-    essaie(o);
+    essaie(o, poteau);
   }
   // LES TOITS DÉCORATIFS (auvent, halle, préau, couverture du dépôt) : invisibles pour la
   // collision du joueur, mais ils BOUCHENT LA VUE. Sans eux, la caméra montait par-dessus et
@@ -32418,7 +32446,11 @@ function camPerche(dt, aiming) {
       // carrosserie. Au volant comme en passager, on resserre à ±0,12 rad : la caméra reste
       // protégée des murs qu'elle aborde de face, et la rue cesse de la faire plonger.
       const ouv = veh2 ? 0.12 : 0.4;
-      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(ouv), g(-ouv)], cam.dist + 0.6, skip);
+      // Le dernier argument : les deux rayons de CÔTÉ contournent un poteau, l'axe non
+      // (voir « LES RAYONS DE CÔTÉ CONTOURNENT UN POTEAU » dans camLibres). Les autres appels
+      // de camLibres ne le passent pas : la mesure de la pièce (cam.salle / cam.plafond) doit
+      // continuer de compter les poteaux, c'est de l'ENCOMBREMENT qu'elle parle, pas de vue.
+      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(ouv), g(-ouv)], cam.dist + 0.6, skip, true);
       // 12 cm de garde ne suffisaient pas : la camera mordait encore le coin d'un meuble.
       // Et le plancher de 1,05 m l'empechait de reculer assez dans une cuisine encombree :
       // elle finissait DANS le placard. On s'arrete 30 cm avant l'obstacle, quitte a se

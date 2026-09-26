@@ -364,6 +364,9 @@ window.__SHOT = {
       if (typeof me !== 'undefined' && me.rig) { me.rig.accroupi = false; me.rig.agenou = false; me.rig.garde = false; }
       document.body.classList.remove('accroupi', 'garde');
       P.stunT = 0; P.boostT = 0; P.climbing = false; P.swimming = false; P.secours = null;
+      // LA CHUTE EN COURS NE SURVIT PAS D'UN TEST A L'AUTRE : go() TELEPORTE le joueur, et le
+      // sommet retenu par chuteSuivi ferait mourir le test suivant d'une chute qu'il n'a pas faite.
+      if (typeof chuteOublie === 'function') chuteOublie();
       P.demiTour = 0; P.capVoulu = null; P.yVu = null;   // cap demande et hauteur affichee : recalcules seuls
       if (P.jet) { P.jet = false; P.fuel = 100; if (typeof setJet === 'function') setJet(me, false); }
     } catch (e) {}
@@ -2147,6 +2150,12 @@ window.__G = {
   journalHtml: typeof journalHtml === 'function' ? journalHtml : null,
   puceEtat: typeof puceEtat === 'function' ? puceEtat : null,
   CHUTE_SEUIL: typeof CHUTE_SEUIL !== 'undefined' ? CHUTE_SEUIL : 0,
+  CHUTE_H_SEUIL: typeof CHUTE_H_SEUIL !== 'undefined' ? CHUTE_H_SEUIL : 0,
+  CHUTE_H_MORT: typeof CHUTE_H_MORT !== 'undefined' ? CHUTE_H_MORT : 0,
+  chuteDegats: typeof chuteDegats === 'function' ? chuteDegats : null,
+  chuteHauteur: typeof chuteHauteur === 'function' ? chuteHauteur : null,
+  chuteSuivi: typeof chuteSuivi === 'function' ? chuteSuivi : null,
+  chuteOublie: typeof chuteOublie === 'function' ? chuteOublie : null,
   enseigneTexture: typeof enseigneTexture === 'function' ? enseigneTexture : null,
   plaqueTexture: typeof plaqueTexture === 'function' ? plaqueTexture : null,
   RACE_GATES: typeof RACE_GATES !== 'undefined' ? RACE_GATES : null,

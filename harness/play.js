@@ -23430,3 +23430,66 @@ test('apres un KO en ville, on se reveille les pieds sur le carrelage de l\'hopi
     && o.banc > 1.8 && !o.benchNear && !/🪑/.test(o.pastille));
   return { ok, detail: `defaut 105 : \`pointDeReveil()\` rendait medDesk + (1,6 ; 2,4) = (22 ; 207,9), or \`city.benches\` a un banc en (22 ; 208) — boite de 2,30 × 0,85 m, assise 0,66 m, donc de z = 207,575 a 208,425. \`groundUnder()\` trouvait ce banc, et apres CHAQUE KO en ville l'enfant se reveillait DEBOUT SUR LES LATTES, 30 cm au-dessus du carrelage (0,36 m), avec « 🪑 △ : s'asseoir » sur le banc ou il etait deja debout · le point est passe a medDesk + (1,6 ; 0,4), devant le comptoir : sur ${k.length} KO, le sol trouve est ${k.map(o => o.sol).join(' / ')} m (le carrelage de l'accueil est a ${r.carrelage} m), les pieds sont a y = ${k.map(o => o.y).join(' / ')} (30 cm plus bas qu'avant), le banc le plus proche est a ${k.map(o => o.banc).join(' / ')} m (au-dela des 1,8 m de \`benchNear\`), et la pastille dit « ${[...new Set(k.map(o => o.pastille))].join(' | ')} » · bancs de l'hopital : ${JSON.stringify(r.bancsHopital)}` };
 });
+
+// ===================== LA CHUTE ANNONCE LA VRAIE HAUTEUR (round 83) =====================
+// La vitesse de descente du joueur est bornee a -30 m/s. La hauteur affichee et les degats
+// etaient DEDUITS de cette vitesse bornee : au-dela de 15 m plus rien ne bougeait.
+// MESURE AVANT (chutes fabriquees pas a pas sur sol plat, joueur a 100 PV) :
+//   10 m -> « Chute de 10 m », -28 PV     15 m -> « Chute de 15 m », -72 PV, il reste 28 PV
+//   20 m -> « Chute de 15 m », -72 PV     30 m -> « Chute de 15 m », -72 PV
+//   40 m -> « Chute de 15 m », -72 PV     60 m -> « Chute de 15 m », -72 PV, il reste 28 PV
+// Autrement dit : TOUTE chute de plus de 15 m annoncait 15 m, et un joueur intact SURVIVAIT
+// a 60 m. Ce test fabrique de vraies chutes (on hisse le joueur, on avance la simulation pas
+// a pas jusqu'a l'atterrissage) et exige que la hauteur ANNONCEE soit la hauteur PARCOURUE.
+test('la chute annonce la hauteur vraiment parcourue, et de tres haut elle tue', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    // on se releve d'un KO precedent sans attendre, et on laisse expirer les messages
+    // prioritaires (celui de l'hopital est prioritaire et masquerait celui de la chute)
+    const releve = () => { let n = 0; while (G.mort && n++ < 120) { P.hp = 100; P.aTerreT = G.simTime - 1000; G.step(1 / 60, true); }
+      G.simTime = G.simTime + 30; G.step(1 / 60, true); };
+    const chute = (h) => {
+      releve();
+      __SHOT.go({ world: 4, x: 60, y: 1, z: -40, hour: 12 });
+      releve();
+      P.hp = 100; P.aTerreT = 0; P.vel.set(0, 0, 0); P.grounded = false; P.standing = null;
+      for (let i = 0; i < 400 && !P.grounded; i++) G.step(1 / 60, true);   // on trouve le vrai sol
+      const sol = P.pos.y;
+      P.hp = 100; P.aTerreT = 0; P.vel.set(0, 0, 0); P.grounded = false; P.standing = null; P.coyote = 0;
+      P.pos.y = sol + h;
+      const depart = P.pos.y;
+      let pas = 0, v = 0;
+      while (!P.grounded && pas < 4000) { G.step(1 / 60, true); pas++; if (P.vel.y < v) v = P.vel.y; if (G.mort) break; }
+      const txt = G.msgTexte() || '';
+      const m = /Chute(?: mortelle !)? (?:de )?(\d+) m/.exec(txt), d = /−(\d+) PV/.exec(txt);
+      return { demande: h, reelle: +(depart - P.pos.y).toFixed(2), v: +v.toFixed(1),
+        annoncee: m ? +m[1] : null, deg: d ? +d[1] : null, hp: P.hp, mort: !!G.mort, txt };
+    };
+    const c8 = chute(8), c10 = chute(10), c20 = chute(20), c40 = chute(40), c60 = chute(60);
+    // et prendre l'ascenseur du toit au rez-de-chaussee n'est pas une chute : la cabine
+    // descend en exponentielle (0,47 m des la premiere image, soit 28 m/s) et le plancher se
+    // derobe sous le passager, qui restait « en l'air » dans la cage sur 10,9 m.
+    releve(); __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    let asc = null;
+    const L = (G.city.lifts || []).filter(l => l.toit)[0];
+    if (L) {
+      P.pos.set(L.x, L.y + 0.2, L.z); P.vel.set(0, 0, 0); P.hp = 100;
+      let n = 0; while (n++ < 3000 && Math.abs(L.y - L.high) > 0.1) G.step(1 / 60, true);
+      const hpHaut = P.hp, yHaut = P.pos.y;
+      n = 0; while (n++ < 3000 && Math.abs(L.y - L.low) > 0.1) G.step(1 / 60, true);
+      for (let i = 0; i < 120; i++) G.step(1 / 60, true);
+      asc = { toit: +yHaut.toFixed(2), hpHaut, hpBas: P.hp };
+    }
+    releve();
+    return { c8, c10, c20, c40, c60, asc, seuil: G.CHUTE_H_SEUIL, mortA: G.CHUTE_H_MORT };
+  });
+  const juste = c => c.annoncee != null && Math.abs(c.annoncee - c.reelle) <= 0.15 * c.reelle;
+  const ok = juste(r.c20) && juste(r.c40) && juste(r.c60)          // la hauteur annoncee est la vraie, a 15 % pres
+    && r.c40.mort && r.c40.hp === 0 && r.c60.mort                  // de tres haut, un joueur intact meurt
+    && r.c20.mort                                                  // 20 m aussi
+    && !r.c8.mort && r.c8.hp > 80                                  // 8 m ne tue toujours pas (c'etait -8 PV avant)
+    && !r.c10.mort && r.c10.annoncee === 10                        // 10 m : blesse, n'acheve pas
+    && r.asc && r.asc.hpBas === 100;                               // prendre l'ascenseur ne coute rien
+  const l = c => `${c.demande} m -> reelle ${c.reelle} m, annoncee ${c.annoncee} m, ${c.deg == null ? (c.mort ? 'MORT' : '0') : '−' + c.deg + ' PV'}, il reste ${c.hp} PV${c.mort ? ' (MORT)' : ''}`;
+  return { ok, detail: `la vitesse de descente est bornee a −30 m/s et la hauteur en etait DEDUITE : toute chute de plus de 15 m annoncait « Chute de 15 m · −72 PV » et laissait 28 PV, meme a 60 m · la hauteur est maintenant MESUREE (sommet de la chute moins altitude d'impact) et les degats montent en ligne droite de ${r.seuil} m (rien) a ${r.mortA} m (100 PV) : ${[r.c8, r.c10, r.c20, r.c40, r.c60].map(l).join(' · ')} · ascenseur du toit (${r.asc && r.asc.toit} m) au rez-de-chaussee : ${r.asc && r.asc.hpHaut} PV en haut, ${r.asc && r.asc.hpBas} PV en bas (la cabine descend a 28 m/s, le passager restait « en l'air » 10,9 m et payait −62 PV)` };
+});

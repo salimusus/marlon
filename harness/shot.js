@@ -2528,6 +2528,7 @@ window.__G = {
   camPieceDe: typeof camPieceDe === 'function' ? camPieceDe : null,
   LIFT_VMAX: typeof LIFT_VMAX !== 'undefined' ? LIFT_VMAX : null,
   CAM_POTEAU: typeof CAM_POTEAU !== 'undefined' ? CAM_POTEAU : null,
+  CAM_POTEAU_HAUT: typeof CAM_POTEAU_HAUT !== 'undefined' ? CAM_POTEAU_HAUT : null,
   attack: typeof attack === 'function' ? attack : null,
   nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
   gpsRoute: typeof gpsRoute !== 'undefined' ? gpsRoute : null,

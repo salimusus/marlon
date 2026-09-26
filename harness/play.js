@@ -24002,15 +24002,58 @@ test('sur les plateformes du parcours dans les arbres, un tronc ne ferme plus la
       mesure('etage de la banque', -52, 5.6, 70, 0, true),
       mesure('dos au mur de l ecole', -64, 1, 215.6, 3.14, false),
       mesure('sous le preau', -78, 1, 225, 1.57, false)];
-    return { tours, passerelles, temoins, poteau: G.CAM_POTEAU };
+    // ============ LA FAILLE DU SEUIL : MINCE NE SUFFIT PAS, IL FAUT AUSSI ETRE HAUT ============
+    // `CAM_POTEAU` ne regardait que la LARGEUR au sol : un objet de moins de 90 cm dans les deux
+    // sens, meme BAS, etait donc contourne par les rayons lateraux — alors qu'en interieur ce sont
+    // justement les petits meubles qui posent la camera a bonne distance (maison de poupee,
+    // test 219). Rien de connu ne tombait dans la faille ; ce releve-ci est la pour qu'elle ne
+    // puisse plus se rouvrir en silence. On pose un objet de 0,60 x 0,60 m PILE sur le rayon
+    // lateral +0,4 rad, a 2,50 m, en pleine rue degagee (les trois rayons y sont libres a 9 m),
+    // et on fait varier sa seule HAUTEUR de part et d'autre du seuil.
+    const faille = (() => {
+      __SHOT.go({ world: 4, x: 0, y: 1, z: 50, yaw: 0, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+      tourne(150, null);
+      const t0 = cam.target, yaw = 0, pv = 0.32, cp = Math.cos(pv), sp = Math.sin(pv);
+      const g = a => [Math.sin(yaw + a) * cp, sp, Math.cos(yaw + a) * cp];
+      const DIRS = [g(0), g(0.4), g(-0.4)];
+      const T = 2.5;
+      // LA GRILLE DES SOLIDES NE SE REBATIT QUE SI LA LONGUEUR DU TABLEAU A CHANGE (solidsAutour) :
+      // on pose donc un nombre DIFFERENT de figurants lointains a chaque essai, sinon le deuxieme
+      // essai relit la grille du premier. Piege mesure : un poteau de 3,00 m rendait 1,81 m parce
+      // que la grille contenait encore le meuble de 1,20 m de l'essai precedent.
+      const essai = (h, pad, iDir) => {
+        const av = G.solids.length, dd = DIRS[iDir];
+        G.solids.push({ x: t0.x + dd[0] * T, y: t0.y + dd[1] * T, z: t0.z + dd[2] * T, w: 0.6, d: 0.6, h });
+        for (let i = 0; i < pad; i++) G.solids.push({ x: 9000 + i, y: 0, z: 9000, w: 0.2, d: 0.2, h: 0.2 });
+        const r = G.camLibres(t0.x, t0.y, t0.z, DIRS, 9, null, true).map(v => +v.toFixed(2));
+        G.solids.length = av;
+        return { h, axe: r[0], cote1: r[1], cote2: r[2] };
+      };
+      const nu = G.camLibres(t0.x, t0.y, t0.z, DIRS, 9, null, true).map(v => +v.toFixed(2));
+      return { nu, seuil: G.CAM_POTEAU_HAUT,
+        bas: essai(1.2, 1, 1),          // un meuble : il DOIT fermer le rayon de cote
+        justeBas: essai(2.19, 2, 1),    // 1 cm sous le seuil : il ferme encore
+        pileHaut: essai(2.2, 3, 1),     // au seuil : c'est un poteau, le rayon de cote passe
+        haut: essai(3, 4, 1),           // un mat : le rayon de cote passe
+        surLAxe: essai(3, 5, 0) };      // le meme mat DANS L'AXE : l'axe, lui, bute toujours dessus
+    })();
+    return { tours, passerelles, temoins, faille, poteau: G.CAM_POTEAU, poteauHaut: G.CAM_POTEAU_HAUT };
   });
   const att = { 'rue degagee': 9.1, 'petite boutique': 4.9, 'salle de classe': 5.26,
     'petit appartement': 5.23, 'etage de la banque': 7.54, 'dos au mur de l ecole': 2.96, 'sous le preau': 9.02 };
   const bouges = r.temoins.filter(s => Math.abs(s.d - att[s.nom]) > 0.02);
+  const f = r.faille;
+  // la faille est fermee : mince ET bas ferme encore les rayons de cote ; mince ET haut les laisse
+  // passer, mais jamais l'axe.
+  const failleOk = !!f && f.nu.every(v => v === 9) && r.poteauHaut === 2.2
+    && f.bas.cote1 < 3 && f.justeBas.cote1 < 3               // 1,20 m et 2,19 m : ca ferme
+    && f.pileHaut.cote1 === 9 && f.haut.cote1 === 9          // 2,20 m et 3,00 m : ca se contourne
+    && f.bas.axe === 9 && f.haut.axe === 9                   // l'objet est bien DE COTE, pas dans l'axe
+    && f.surLAxe.axe < 3 && f.surLAxe.cote1 === 9;           // dans l'axe, un mat arrete toujours la perche
   const ok = r.tours.length === 12 && r.tours.every(s => s.d >= 8 && !s.coupe && !s.dans)
     && r.passerelles.every(s => s.d >= 8 && !s.coupe && !s.dans)
-    && bouges.length === 0;
-  return { ok, detail: `les quatre troncs de 0,84 m qui portent chaque plateforme etaient attrapes par les rayons de COTE du cone de camera a 2,10 m, alors que le rayon d'AXE ne rencontrait RIEN dans les onze metres : la perche tombait a 1,80 m pour 9 m demandes, douze releves sur douze · un poteau (moins de ${r.poteau} m dans les deux sens au sol) ne ferme plus que le rayon d'axe · plateformes : ${r.tours.map(s => s.nom + ' ' + s.d + ' m').join(', ')} · passerelles : ${r.passerelles.map(s => s.nom + ' ' + s.d + ' m').join(', ')} (4,48 et 5,62 m avant) · aucun mur entre la camera et le joueur, aucune camera dans un solide · TEMOINS inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}${bouges.length ? ' · ONT BOUGE : ' + bouges.map(s => s.nom + ' ' + s.d + ' au lieu de ' + att[s.nom]).join(', ') : ''}` };
+    && bouges.length === 0 && failleOk;
+  return { ok, detail: `les quatre troncs de 0,84 m qui portent chaque plateforme etaient attrapes par les rayons de COTE du cone de camera a 2,10 m, alors que le rayon d'AXE ne rencontrait RIEN dans les onze metres : la perche tombait a 1,80 m pour 9 m demandes, douze releves sur douze · un poteau (moins de ${r.poteau} m dans les deux sens au sol) ne ferme plus que le rayon d'axe · plateformes : ${r.tours.map(s => s.nom + ' ' + s.d + ' m').join(', ')} · passerelles : ${r.passerelles.map(s => s.nom + ' ' + s.d + ' m').join(', ')} (4,48 et 5,62 m avant) · aucun mur entre la camera et le joueur, aucune camera dans un solide · TEMOINS inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}${bouges.length ? ' · ONT BOUGE : ' + bouges.map(s => s.nom + ' ' + s.d + ' au lieu de ' + att[s.nom]).join(', ') : ''} · ET LE SEUIL A MAINTENANT UNE CONDITION DE HAUTEUR (${r.poteauHaut} m) : « mince » tout seul laissait passer un MEUBLE pose de cote, alors qu'en interieur ce sont justement les petits meubles qui posent la camera a bonne distance · releve des hauteurs reelles du monde 4 sur les 1 678 solides fins dans les deux sens : ce qui doit se contourner descend au plus bas a 2,40 m (226 poteaux de panneau ; puis 209 mats de 3,20 m, 197 lampadaires de 4,40 m, 16 troncs du parcours de 6,00 a 10,20 m), ce qui doit fermer la vue monte au plus haut a 2,11 m (289 solides sous 1,00 m, 306 de 1,00 a 1,50 m, 83 de 1,50 a 2,00 m) — la frontiere tombe dans ce creux, et 2,20 m est deja celle du jeu entre un mur et un meuble (interieurEntre) · contre-epreuve, objet de 0,60 x 0,60 m pose PILE sur le rayon lateral +0,4 rad a 2,50 m en rue degagee (les trois rayons y sont libres a ${f.nu[0]} m) : haut de 1,20 m -> cote ferme a ${f.bas.cote1} m, 2,19 m -> ${f.justeBas.cote1} m, 2,20 m -> ${f.pileHaut.cote1} m (contourne), 3,00 m -> ${f.haut.cote1} m (contourne), et le meme mat de 3,00 m place DANS L'AXE arrete toujours la perche a ${f.surLAxe.axe} m` };
 });
 
 // ============ L'ASCENSEUR NE SE DEROBE PLUS SOUS SON PASSAGER (round 83) ============

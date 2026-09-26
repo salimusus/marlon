@@ -30821,6 +30821,25 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 // du parcours dans les arbres : 0,84 m. Un mur, lui, est long dans un sens au moins. 0,90 m est
 // donc la frontière mesurée entre « on le contourne » et « il ferme le passage ».
 const CAM_POTEAU = 0.9;
+// ... ET IL EST HAUT (round 83). La largeur seule ne suffit pas a distinguer un poteau d'un
+// MEUBLE : une caisse de 80 cm posee de cote dans une piece est « fine dans les deux sens » elle
+// aussi, et les rayons lateraux la traversaient donc comme un tronc d'arbre — alors qu'elle est
+// exactement ce qui doit poser la camera a bonne distance en interieur (maison de poupee,
+// test 219). Rien de connu ne tombait dans la faille aujourd'hui, et c'est pour cela qu'il
+// fallait la fermer tout de suite : le jour ou un poste ajoute un decor de 60 cm de cote et
+// 1,20 m de haut, personne ne relierait le symptome a ce seuil-ci.
+// RELEVE DES HAUTEURS REELLES, monde 4, sur les 1 678 solides fins dans les deux sens (< 0,90 m) :
+//   ce qu'il FAUT contourner (les rayons de cote doivent passer) : 16 troncs du parcours dans
+//   les arbres (0,84 m de cote) hauts de 6,00 / 7,40 / 8,80 / 10,20 m ; 197 lampadaires de
+//   4,40 m ; 209 mats de 3,20 m ; 226 poteaux de panneau de 2,40 m — le plus BAS de tout ce
+//   qui doit se contourner mesure 2,40 m.
+//   ce qui doit CONTINUER DE FERMER la vue (mobilier, bornes, poubelles, bancs) : 289 solides
+//   sous 1,00 m, 306 entre 1,00 et 1,50 m, 83 entre 1,50 et 2,00 m — le plus HAUT du mobilier
+//   mesure 2,11 m.
+// La frontiere tombe donc dans le creux 2,11 → 2,40 m. On prend 2,20 m, qui est DEJA la
+// frontiere du jeu entre « un mur » et « un meuble » (voir interieurEntre : la maison de poupee
+// ne rend traversable que ce qui depasse 2,20 m de haut) : un seul chiffre pour une seule idee.
+const CAM_POTEAU_HAUT = 2.2;
 // `axeSeul` : SEUL LE RAYON D'AXE (celui qui pointe vraiment vers l'objectif, index 0) est
 // arrêté par un poteau ; les rayons de CÔTÉ le traversent. Voir « LES RAYONS DE CÔTÉ
 // CONTOURNENT UN POTEAU » plus bas.
@@ -30873,7 +30892,9 @@ function camLibres(ox, oy, oz, dirs, maxD, skip, axeSeul) {
     // Le cône de caméra du piéton est fait de TROIS rayons : l'axe, et deux rayons ouverts à
     // ±0,4 rad. Les deux rayons de côté sont là pour empêcher la caméra de RASER une cloison
     // fine et d'entrer dans la pièce d'à côté — ils protègent des MURS. Sur un poteau isolé ils
-    // ne protègent de rien : la vue passe à côté, il suffit de le contourner.
+    // ne protègent de rien : la vue passe à côté, il suffit de le contourner. Encore faut-il que
+    // ce soit vraiment un poteau : MINCE **ET HAUT** (CAM_POTEAU et CAM_POTEAU_HAUT) — un meuble
+    // bas, même fin dans les deux sens au sol, continue de fermer les TROIS rayons.
     // MESURE (parcours dans les arbres : quatre plateformes de 4 × 4 m portées par quatre troncs
     // de 0,84 m plantés aux coins). Au milieu du plancher, dans les QUATRE orientations :
     //   T1 (2,60 m), T2 (4,00 m), T3 (5,40 m) : perche 1,80 m pour 9 m demandés.
@@ -30888,7 +30909,7 @@ function camLibres(ox, oy, oz, dirs, maxD, skip, axeSeul) {
     // si un poteau cache vraiment l'enfant. On ne l'ouvre PAS à l'axe : à pied, en intérieur,
     // ce sont justement les agrès et les petits meubles qui posent la caméra à bonne distance
     // (maison de poupée, test 219) — et ceux-là sont DEVANT l'objectif, pas de côté.
-    const poteau = !!axeSeul && o.w < CAM_POTEAU && o.d < CAM_POTEAU;
+    const poteau = !!axeSeul && o.w < CAM_POTEAU && o.d < CAM_POTEAU && o.h >= CAM_POTEAU_HAUT;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.

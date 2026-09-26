@@ -274,7 +274,16 @@ test('les libellés de commandes suivent le mode tactile', async p => {
 //   · x = 109,85 → verrou = AUCUN, ecart de cap 0,113 rad, 2 pas de vol, 0 degat, reticule
 //                  pose a z = 63,70 (le tronc) au lieu de z = 72 (la cible).
 // C'est mot pour mot la signature du releve r81 (verrou=AUCUN, 0,114 rad, 2 pas, 0 degat) : UNE
-// cause, TROIS symptomes. Le tronc arrete la balle (c'est son travail), il coupe la ligne de vue
+// cause, TROIS symptomes.
+// CE N'EST PAS LA DUREE DE VIE DE LA BALLE, et c'est mesure : une balle envoyee droit vers le
+// ciel, rien sur son chemin, vit 97 pas de simulation, soit 1,617 s — exactement les 1,6 s de
+// `shotsTick` — et le chiffre est LE MEME avec `shotsTick` seul et avec `step()` complet, qui
+// fait tourner `ephemeresTick` par-dessus. Les changements des rounds 78 (les ephemeres
+// vieillissent dans la simulation) et 80 (les balles en vol rejoignent leur groupe) ne
+// raccourcissent donc rien : `ephemeresTick` ne touche ni `shots` ni les maillages des balles,
+// et la seule remise a zero du tableau, dans `videEphemeres`, n'est appelee que par `clearWorld`
+// — donc a la reconstruction du monde, jamais pendant une rafale.
+// Le tronc arrete la balle (c'est son travail), il coupe la ligne de vue
 // de `ciblesVerrouillables` (donc plus de verrou) et il ramene le point de visee a 3,70 m — d'ou
 // les 0,11 rad d'ecart, qui ne sont PAS de la dispersion (celle du pistolet plafonne a 0,009 rad).
 // DEUX REMEDES, parce qu'un seul ne suffit pas :
@@ -283,6 +292,9 @@ test('les libellés de commandes suivent le mode tactile', async p => {
 //   2. on DEGAGE LA VOIE DE TIR comme on degageait deja les habitants : tout solide qui coupe le
 //      rayon tireur → cible est ecarte de la liste des solides, et le bilan le NOMME. Ainsi le
 //      test mesure la balistique a 12 m quel que soit ce que l'urbanisme plantera demain a z = 64.
+//      LE FILET EST MESURE DANS LE PIRE CAS, palmier remis de force a x = 109,85 : il l'ecarte
+//      (« solide 0.6x5.0x0.6 m en 109.8/64.0 ») et la rafale repasse a 6 sur 6, 144 degats,
+//      verrou « Lucas_2014 », ecart de cap 0,027 rad, reticule a z 72, 7 pas de vol.
 test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
   const degagement = await p.evaluate(() => {
     // GRAINE FIGEE AVANT LA RECONSTRUCTION : c'est elle qui place le palmier de la plage.

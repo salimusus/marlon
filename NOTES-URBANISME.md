@@ -590,10 +590,21 @@ pour **les deux** véhicules.
 
 ## 3. Ce qui n'a PAS bougé (vérifié, pas supposé)
 
-`harness/audit.js` rend **mot pour mot** le même relevé qu'avant ces travaux : 14 poteaux dans un
-bâtiment (tous à La Zone, tous antérieurs), 1 seul chevauchement significatif, aucune région
-piétonne nouvelle. Les six chaussées sous 7,60 m du §7 du round 75 restent comme décrites : on n'a
-élargi aucune rue.
+**Attention en lisant `harness/audit.js` : il n'est PAS semé.** Deux lancements du MÊME fichier
+donnent des noms de villas différents et 14 ou 15 poteaux dans un bâtiment — la comparaison
+avant/après y est sans valeur. Le relevé qui tranche est semé : liste complète des poteaux plantés
+dans un bâtiment, graines 6174, 987654321 et 42, ancien index.html contre le neuf →
+**43 poteaux, liste IDENTIQUE au caractère près**, sur les trois graines.
+
+*(Une première version de `placeHorsBitume` ne regardait que le bitume et poussait deux arbres DANS
+un mur — la maison de (-40 ; 264) et le bloc du Techno-Parc. Le garde-fou « un emplacement dans un
+bâtiment n'en est pas un » ferme ce défaut ; c'est ce relevé semé qui le prouve.)*
+
+Les autres bancs Node comparés avec `JEU=` sur l'ancien index.html : `garage.js` **identique**,
+`layout.js` identique sauf le nombre de solides (**5288 → 5303**, soit les 15 plantations qu'on ne
+jette plus), `zones.js` identique hors tirages non semés (noms de villas, barrière aléatoire).
+Les six chaussées sous 7,60 m du §7 du round 75 restent comme décrites : **on n'a élargi aucune
+rue, on n'a déplacé aucun mur.**
 
 Bancs : `traffic.js` **14/14**, `vehicle-contact.js` **6/6**, `city-detail.js` **10/10**,
 `strategy.js` 7/0, `empire.js` 15/0, `save-strategy.js` 4/0, `cosmetic-performance.js` vert.

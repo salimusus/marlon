@@ -15126,6 +15126,8 @@ function voileTick(dt, wantX, wantZ) {
   }
   if (simTime > (P.voileSnd || 0)) { P.voileSnd = simTime + 1.2; sfx.noise(.25, 700, .015); }
 }
+// m/s : la vitesse maximale d'une cabine d'ascenseur. Voir le calcul dans liftTick.
+const LIFT_VMAX = 4;
 function liftTick(L, dt) {
   {
     const onIt = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && Math.abs(P.pos.y - L.y) < 1.4 && !drive.car && !P.sit && !P.ride;
@@ -15151,11 +15153,42 @@ function liftTick(L, dt) {
     const dansCage = Math.abs(P.pos.x - L.x) < 1.5 && Math.abs(P.pos.z - L.z) < 1.5 && P.pos.y > L.y - 0.3;
     if (!dansCage) L.passager = false;
     if (L.passager && L.target < L.y - 0.05) chuteOublie();
-    const before = L.y; L.y += (L.target - L.y) * Math.min(1, dt * 2.2);
+    // ============ LA CABINE NE DÉPASSE PLUS 4 m/s (round 83, cause du défaut ci-dessus) ============
+    // L'approche exponentielle `(cible − y) × 2,2` n'a AUCUNE borne de vitesse : sur la course
+    // de 12,85 m des immeubles elle déplace la cabine de 0,47 m DÈS LA PREMIÈRE IMAGE, soit
+    // 28,3 m/s — 102 km/h (mesuré : vitesse de pointe 28,3 m/s). C'est la cause de tout : le
+    // plancher se dérobait sous le passager. On garde l'exponentielle — c'est elle qui donne le
+    // départ et l'arrivée en douceur, et le plafond ne touche QUE le milieu de la course — mais
+    // on borne le pas. MESURES en pas de simulation, descente complète 13,20 → 0,35 m :
+    //   sans plafond : 2,48 s (pointe 28,3 m/s)      8 m/s : 3,07 s      6 m/s : 3,48 s
+    //   4 m/s        : 4,37 s                        3 m/s : 5,32 s      2 m/s : 7,27 s
+    // La montée donne exactement les mêmes durées. Course de la villa (4,75 m) : 2,03 → 2,35 s.
+    // 4 m/s (14 km/h) est la vitesse d'un ascenseur de gratte-ciel réel ; elle coûte 1,9 s de
+    // plus qu'avant sur la plus longue course du jeu et 0,3 s sur celle de la villa, ce qu'un
+    // enfant ne remarque pas, et elle fait disparaître l'absurdité des 102 km/h.
+    // (Les cabines n'ont que DEUX arrêts, `low` et `high` — aucun étage intermédiaire.)
+    const avance = (L.target - L.y) * Math.min(1, dt * 2.2), bond = LIFT_VMAX * dt;
+    const before = L.y; L.y += clamp(avance, -bond, bond);
     L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
     if (onIt) {
       // pendant le trajet la cabine retient le joueur ; à l'arrivée elle le relâche, sinon on ne pourrait jamais sortir
       if (moving) { P.pos.x = clamp(P.pos.x, L.x - 1.3, L.x + 1.3); P.pos.z = clamp(P.pos.z, L.z - 1.3, L.z + 1.3); }
+      // ============ LA CABINE EMMÈNE SON PASSAGER (round 83) ============
+      // LE PLAFOND DE VITESSE NE SUFFIT PAS À LUI SEUL, et c'est mesuré. Quand la cabine
+      // descend à v, le joueur est reposé sur le plancher avec une vitesse verticale NULLE :
+      // relativement à la cabine il repart donc vers le haut à v et retombe en v² / 2g.
+      // ÉCART MAXIMAL AU PLANCHER, plafond seul, sans ce qui suit (descente de 12,85 m) :
+      //   4 m/s → 23,3 cm (4,37 s)    2 m/s → 5,0 cm (7,27 s)    1,7 m/s → 3,5 cm (8,33 s)
+      // Tenir les 5 cm par la seule vitesse coûte donc 7,3 s de trajet au lieu de 2,5 — presque
+      // trois fois plus long, pour un ascenseur qu'un enfant prend dix fois par partie.
+      // On fait donc ce que fait déjà une plate-forme mobile (voir `movers` dans step) : le
+      // plancher EMMÈNE ce qui est posé dessus. Mesuré avec les deux : écart 0,000 m à la
+      // descente comme à la montée, sur les deux ascenseurs, et 4,37 s de trajet.
+      // Seulement en DESCENTE (en montée le plancher pousse déjà : écart déjà nul avant ce
+      // round), seulement si le joueur était POSÉ sur le plancher (à moins de 4 cm au-dessus)
+      // et ne monte pas : un saut dans la cabine reste un saut.
+      const chute = L.y - before;
+      if (chute < 0 && P.vel.y <= 0.01 && P.pos.y <= before + 0.14) P.pos.y += chute;
       if (P.pos.y < L.y + 0.1) { P.pos.y = L.y + 0.1; P.vel.y = 0; P.grounded = true; P.coyote = 0.12; P.standing = L.solid; }
       if (Math.abs(L.y - before) > 0.001 && simTime > (L.sndT || 0)) { L.sndT = simTime + 0.6; sonNote(L.x, L.y + 1, L.z, 220, .2, 'sine', .02, null, { portee: 20 }); }
       if (!moving && L.target === L.high && simTime > (L.msgT || 0)) { L.msgT = simTime + 6; msg(L.toit ? '🛗 Sur le toit ! Prends un parachute ou un deltaplane (E)' : '🛗 Étage : sors vers la gauche', 2200); }
@@ -30304,10 +30337,17 @@ function castSolids(ox, oy, oz, dx, dy, dz, maxD, ignoreVitres) {
 // Distances libres depuis un point, dans plusieurs directions, en un seul passage sur les
 // solides. La caméra est une bille de 0,3 m : elle s'arrête AVANT le mur au lieu de s'y
 // enfoncer. Sert à la caméra adaptative (proximité des murs et des plafonds).
-function camLibres(ox, oy, oz, dirs, maxD, skip) {
+// UN POTEAU, C'EST FIN DANS LES DEUX SENS AU SOL. Lampadaire et feu : 0,36 m. Tronc d'arbre
+// du parcours dans les arbres : 0,84 m. Un mur, lui, est long dans un sens au moins. 0,90 m est
+// donc la frontière mesurée entre « on le contourne » et « il ferme le passage ».
+const CAM_POTEAU = 0.9;
+// `axeSeul` : SEUL LE RAYON D'AXE (celui qui pointe vraiment vers l'objectif, index 0) est
+// arrêté par un poteau ; les rayons de CÔTÉ le traversent. Voir « LES RAYONS DE CÔTÉ
+// CONTOURNENT UN POTEAU » plus bas.
+function camLibres(ox, oy, oz, dirs, maxD, skip, axeSeul) {
   const R = 0.3, out = dirs.map(() => maxD);
   const enVehicule = !!vehiculeAssis();   // au volant OU passager : voir « UN POTEAU NE CALE PAS LA CAMÉRA »
-  const essaie = (o) => {
+  const essaie = (o, poteau) => {
     const hx = Math.max(o.w, 0.36) / 2 + R, hy = o.h / 2 + R, hz = Math.max(o.d, 0.36) / 2 + R;
     // LE SOL SUR LEQUEL ON MARCHE N'EST PAS UN MUR. On comparait le sommet de la boîte GARDE
     // COMPRISE (les 30 cm de R) à « oy - 1,4 », c'est-à-dire aux pieds moins 20 cm : le PLANCHER
@@ -30327,6 +30367,7 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // tomberaient à zéro dès qu'on frôle un mur
     if (Math.abs(ox - o.x) < hx && Math.abs(oy - o.y) < hy && Math.abs(oz - o.z) < hz) return;
     for (let i = 0; i < dirs.length; i++) {
+      if (poteau && i > 0) continue;   // un poteau n'arrête que le rayon d'axe (voir `axeSeul`)
       const t = rayBox(ox, oy, oz, dirs[i][0], dirs[i][1], dirs[i][2], o.x, o.y, o.z, hx, hy, hz, out[i]);
       if (t >= 0 && t < out[i]) out[i] = t;
     }
@@ -30348,12 +30389,32 @@ function camLibres(ox, oy, oz, dirs, maxD, skip) {
     // carrosserie, puis repartait — « la caméra est ivre ». `enVehicule` est calculé UNE fois
     // par appel (vehiculeDuJoueur remonte city.rideBot, ce n'est pas gratuit dans une boucle).
     if (enVehicule && o.w < 0.7 && o.d < 0.7) continue;
+    // ============ LES RAYONS DE CÔTÉ CONTOURNENT UN POTEAU (round 83) ============
+    // Le cône de caméra du piéton est fait de TROIS rayons : l'axe, et deux rayons ouverts à
+    // ±0,4 rad. Les deux rayons de côté sont là pour empêcher la caméra de RASER une cloison
+    // fine et d'entrer dans la pièce d'à côté — ils protègent des MURS. Sur un poteau isolé ils
+    // ne protègent de rien : la vue passe à côté, il suffit de le contourner.
+    // MESURE (parcours dans les arbres : quatre plateformes de 4 × 4 m portées par quatre troncs
+    // de 0,84 m plantés aux coins). Au milieu du plancher, dans les QUATRE orientations :
+    //   T1 (2,60 m), T2 (4,00 m), T3 (5,40 m) : perche 1,80 m pour 9 m demandés.
+    //   Rayon d'AXE : RIEN dans les onze mètres mesurés — la vue est parfaitement dégagée.
+    //   Rayons de CÔTÉ : un tronc à 2,10 m, systématiquement, dans les douze relevés.
+    //   Place libre = min(axe, côtés + 0,35) − 0,30 = 2,10 + 0,35 − 0,30 = 2,15 m. Exactement
+    //   la valeur relevée (cam.libre = 2,15 à 2,16 m).
+    // Les trois passerelles payaient le même prix : 4,48 m et 5,62 m au lieu de 9 m.
+    // La règle est celle qui existait déjà EN VÉHICULE (« un poteau ne cale pas la caméra »,
+    // n° 32), restreinte ici aux rayons de côté : l'axe, lui, continue de buter sur le poteau,
+    // donc la caméra ne peut jamais se loger DANS un tronc, et murEntreVue garde le dernier mot
+    // si un poteau cache vraiment l'enfant. On ne l'ouvre PAS à l'axe : à pied, en intérieur,
+    // ce sont justement les agrès et les petits meubles qui posent la caméra à bonne distance
+    // (maison de poupée, test 219) — et ceux-là sont DEVANT l'objectif, pas de côté.
+    const poteau = !!axeSeul && o.w < CAM_POTEAU && o.d < CAM_POTEAU;
     // CE QU'ON NE VOIT PAS NE BOUCHE PAS LA VUE. En maison de poupee, le PLAFOND de la piece
     // est efface (mesh.visible = false) mais il restait un solide : la camera butait dessus,
     // se retrouvait a 2,9 m du joueur dans un petit appartement et l'image etait un dos.
     // La regle deja appliquee aux toits decoratifs vaut pour tous les solides.
     if (o.mesh && !o.mesh.visible) continue;
-    essaie(o);
+    essaie(o, poteau);
   }
   // LES TOITS DÉCORATIFS (auvent, halle, préau, couverture du dépôt) : invisibles pour la
   // collision du joueur, mais ils BOUCHENT LA VUE. Sans eux, la caméra montait par-dessus et
@@ -32538,7 +32599,11 @@ function camPerche(dt, aiming) {
       // carrosserie. Au volant comme en passager, on resserre à ±0,12 rad : la caméra reste
       // protégée des murs qu'elle aborde de face, et la rue cesse de la faire plonger.
       const ouv = veh2 ? 0.12 : 0.4;
-      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(ouv), g(-ouv)], cam.dist + 0.6, skip);
+      // Le dernier argument : les deux rayons de CÔTÉ contournent un poteau, l'axe non
+      // (voir « LES RAYONS DE CÔTÉ CONTOURNENT UN POTEAU » dans camLibres). Les autres appels
+      // de camLibres ne le passent pas : la mesure de la pièce (cam.salle / cam.plafond) doit
+      // continuer de compter les poteaux, c'est de l'ENCOMBREMENT qu'elle parle, pas de vue.
+      const r = camLibres(cam.target.x, cam.target.y, cam.target.z, [[dir.x, dir.y, dir.z], g(ouv), g(-ouv)], cam.dist + 0.6, skip, true);
       // 12 cm de garde ne suffisaient pas : la camera mordait encore le coin d'un meuble.
       // Et le plancher de 1,05 m l'empechait de reculer assez dans une cuisine encombree :
       // elle finissait DANS le placard. On s'arrete 30 cm avant l'obstacle, quitte a se

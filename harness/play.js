@@ -23865,3 +23865,125 @@ test('la purge des sources sonores tourne depuis la boucle de jeu, plus seulemen
     && r.pleines === r.max && r.us < 5;
   return { ok, detail: `\`sonPurge()\` n'etait appele qu'au debut de \`sonEn()\` : tant que le jeu cree des sons tout va bien, mais des qu'il CESSE d'en creer (on s'arrete dans une piece calme, on coupe le son dans les reglages, une cinematique prend la main, le jeu est en pause) les sources terminees restaient inscrites POUR TOUJOURS — gains et panoramiques branches sur le bus, et les seize places du budget tenues par des morts · MESURE AVANT : 40 sons de 0,1 s puis 600 s de simulation sans un seul son neuf laissaient 16 sources inscrites, 16 MORTES, la plus vieille morte depuis 395,7 s d'horloge audio · MESURE APRES : la rafale remplit ${r.remplis} places sur ${r.max}, puis 2,5 s de calme complet (son coupe, aucun sonEn) et il reste ${r.apresCalme.vivants} source inscrite dont ${r.apresCalme.morts} morte · le cout ne justifiait rien : ${r.us} µs par balayage sur un registre plein de ${r.pleines}, et elle ne tourne qu'a 5 Hz sur l'horloge AUDIO (la seule qui compte pour des sons : le banc rend une image par seconde, la carte son tourne au temps reel) — trois millioniemes du budget d'une image` };
 });
+
+// ============ LE PARCOURS DANS LES ARBRES : UN TRONC N'EST PAS UN MUR (round 83) ============
+// Les quatre plateformes sont portees par quatre troncs de 0,84 m plantes aux coins d'un
+// plancher de 4 x 4 m. Le cone de camera du pieton est fait de TROIS rayons : l'axe et deux
+// rayons ouverts a +/-0,4 rad, ces derniers etant la pour empecher la camera de RASER une
+// cloison fine. Sur un tronc isole ils ne protegeaient de rien et fermaient la perche.
+// MESURE AVANT, milieu du plancher, les quatre orientations, sur T1 / T2 / T3 :
+//   perche 1,80 m pour 9 m demandes, DOUZE releves sur douze.
+//   rayon d'AXE : rien dans les onze metres mesures — la vue est parfaitement degagee ;
+//   rayons de COTE : un tronc a 2,10 m, systematiquement.
+//   place libre = min(axe, cotes + 0,35) - 0,30 = 2,15 m, exactement cam.libre releve.
+// Les passerelles payaient le meme prix : 4,48 m et 5,62 m au lieu de 9 m.
+// Les rayons de COTE contournent maintenant un poteau (moins de CAM_POTEAU = 0,90 m dans les
+// deux sens au sol) ; l'axe, lui, bute toujours dessus, donc la camera ne peut pas se loger
+// DANS un tronc, et murEntreVue garde le dernier mot si un poteau cache vraiment l'enfant.
+test('sur les plateformes du parcours dans les arbres, un tronc ne ferme plus la camera', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, cam = G.cam;
+    const tourne = (n, ou) => { for (let i = 0; i < n; i++) {
+      if (ou) { P.pos.set(ou.x, ou.y, ou.z); P.vel.set(0, 0, 0); }
+      G.step(1 / 60, true); G.camPerche(1 / 60, false); G.interieurTick();
+    } };
+    const dansUnSolide = (c) => {
+      for (const o of G.solids) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    const mesure = (nom, x, y, z, yaw, tenir) => {
+      __SHOT.go({ world: 4, x, y, z, yaw, pitch: 0.32, dist: 9, hour: 12, hideHud: true });
+      tourne(150, tenir ? { x, y, z } : null);
+      const c = G.camera.position, t = cam.target, q = P.pos;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      return { nom, d: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+        coupe: G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15, null) >= 0,
+        dans: dansUnSolide(c) };
+    };
+    const tours = [];
+    for (const [n, x, y, z] of [['T1', 128, 2.66, 288], ['T2', 142, 4.06, 288], ['T3', 142, 5.46, 300]])
+      for (const [d, a] of [['nord', 0], ['est', 1.57], ['sud', 3.14], ['ouest', -1.57]])
+        tours.push(mesure(n + ' ' + d, x, y, z, a, true));
+    // les passerelles, dans le sens ou un tronc se trouvait de cote
+    const passerelles = [mesure('passerelle T1-T2', 135, 2.66, 288, 1.57, true),
+      mesure('passerelle T2-T3', 142, 4.06, 294, 0, true),
+      mesure('passerelle T3-T4', 135, 5.46, 300, 1.57, true)];
+    // TEMOINS : rien ne doit bouger ailleurs (un meuble DEVANT l'objectif pose toujours la perche)
+    const temoins = [mesure('rue degagee', 0, 1, 50, 0, false),
+      mesure('petite boutique', 60, 1, 40, 0, false),
+      mesure('salle de classe', -79, 1, 213.2, 0, false),
+      mesure('petit appartement', -143, 1, 10, 0, false),
+      mesure('etage de la banque', -52, 5.6, 70, 0, true),
+      mesure('dos au mur de l ecole', -64, 1, 215.6, 3.14, false),
+      mesure('sous le preau', -78, 1, 225, 1.57, false)];
+    return { tours, passerelles, temoins, poteau: G.CAM_POTEAU };
+  });
+  const att = { 'rue degagee': 9.1, 'petite boutique': 4.9, 'salle de classe': 5.26,
+    'petit appartement': 5.23, 'etage de la banque': 7.54, 'dos au mur de l ecole': 2.96, 'sous le preau': 9.02 };
+  const bouges = r.temoins.filter(s => Math.abs(s.d - att[s.nom]) > 0.02);
+  const ok = r.tours.length === 12 && r.tours.every(s => s.d >= 8 && !s.coupe && !s.dans)
+    && r.passerelles.every(s => s.d >= 8 && !s.coupe && !s.dans)
+    && bouges.length === 0;
+  return { ok, detail: `les quatre troncs de 0,84 m qui portent chaque plateforme etaient attrapes par les rayons de COTE du cone de camera a 2,10 m, alors que le rayon d'AXE ne rencontrait RIEN dans les onze metres : la perche tombait a 1,80 m pour 9 m demandes, douze releves sur douze · un poteau (moins de ${r.poteau} m dans les deux sens au sol) ne ferme plus que le rayon d'axe · plateformes : ${r.tours.map(s => s.nom + ' ' + s.d + ' m').join(', ')} · passerelles : ${r.passerelles.map(s => s.nom + ' ' + s.d + ' m').join(', ')} (4,48 et 5,62 m avant) · aucun mur entre la camera et le joueur, aucune camera dans un solide · TEMOINS inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}${bouges.length ? ' · ONT BOUGE : ' + bouges.map(s => s.nom + ' ' + s.d + ' au lieu de ' + att[s.nom]).join(', ') : ''}` };
+});
+
+// ============ L'ASCENSEUR NE SE DEROBE PLUS SOUS SON PASSAGER (round 83) ============
+// `L.y += (L.target - L.y) * min(1, dt * 2.2)` n'a aucune borne de vitesse : sur la course de
+// 12,85 m des immeubles, 0,47 m des la PREMIERE image, soit 28,3 m/s (102 km/h). Le plancher
+// se derobait sous le passager, qui restait en l'air dans la cage.
+// MESURE AVANT (descente complete, ecart mesure entre les pieds et le dessus du plancher) :
+//   immeuble 12,85 m : 2,48 s, pointe 28,3 m/s, ecart maximal 5,108 m
+//   villa     4,75 m : 2,03 s, pointe 10,4 m/s, ecart maximal 1,069 m
+// (a la MONTEE l'ecart etait deja nul : le plancher pousse le joueur.)
+// Deux corrections : la vitesse est plafonnee a LIFT_VMAX, et la cabine EMMENE son passager
+// comme une plate-forme mobile — le plafond seul ne suffit pas, il faudrait descendre a
+// 2 m/s (7,27 s au lieu de 2,48) pour tenir 5 cm d'ecart.
+test('l\'ascenseur ne se derobe plus sous son passager, et le trajet reste court', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    const releve = () => { let n = 0; while (G.mort && n++ < 60) { P.hp = 100; P.aTerreT = G.simTime - 1000; G.step(1 / 60, true); } };
+    // une course complete, comptee en PAS DE SIMULATION (le banc ne rend qu'une image par seconde)
+    const course = (L, versLeHaut) => {
+      L.target = versLeHaut ? L.high : L.low;
+      L.y = versLeHaut ? L.low : L.high;
+      L.g.position.y = L.y; L.solid.mesh.position.y = L.y - 0.05; L.solid.y = L.y - 0.05;
+      L.cd = G.simTime + 1e6;                        // la cabine ne repart pas d'elle-meme
+      P.pos.set(L.x, L.y + 0.1, L.z); P.vel.set(0, 0, 0); P.hp = 100;
+      let pas = 0, ecart = 0, vMax = 0, yPrec = L.y;
+      while (pas < 4000 && Math.abs(L.y - L.target) > 0.05) {
+        G.step(1 / 60, true); pas++;
+        const v = Math.abs(L.y - yPrec) * 60; if (v > vMax) vMax = v; yPrec = L.y;
+        const e = P.pos.y - (L.y + 0.10);            // le dessus du plancher est a L.y + 0,10
+        if (e > ecart) ecart = e;
+      }
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      return { sens: versLeHaut ? 'montee' : 'descente', course: +(L.high - L.low).toFixed(2),
+        secondes: +(pas / 60).toFixed(2), pointe: +vMax.toFixed(1), ecart: +ecart.toFixed(3), hp: P.hp };
+    };
+    releve(); __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const lifts = G.city.lifts || [];
+    const immeuble = lifts.filter(l => l.toit)[0], villa = lifts.filter(l => !l.toit)[0];
+    const essais = [];
+    for (const [nom, L] of [['immeuble', immeuble], ['villa', villa]]) {
+      if (!L) continue;
+      releve(); essais.push(Object.assign({ nom }, course(L, false)));
+      releve(); essais.push(Object.assign({ nom }, course(L, true)));
+    }
+    releve();
+    // combien d'arrets par cabine ? (aucun etage intermediaire dans ce jeu : low et high)
+    const paliers = lifts.map(L => 2);
+    return { essais, vmax: G.LIFT_VMAX, nb: lifts.length, paliers: Math.max(...paliers) };
+  });
+  const e = r.essais;
+  const ok = e.length === 4
+    && e.every(s => s.ecart <= 0.05)                       // le passager reste sur le plancher
+    && e.every(s => s.pointe <= r.vmax + 0.2)              // la cabine ne depasse pas son plafond
+    && e.every(s => s.hp === 100)                          // et le trajet ne coute pas un point de vie
+    && e.filter(s => s.nom === 'immeuble').every(s => s.secondes <= 5.5)   // le trajet reste court
+    && e.filter(s => s.nom === 'villa').every(s => s.secondes <= 3.5);
+  return { ok, detail: `la cabine partait a 28,3 m/s (0,47 m des la premiere image sur une course de 12,85 m) : son plancher se derobait sous le passager, qui se retrouvait jusqu'a 5,108 m au-dessus dans la cage (1,069 m a la villa) · la vitesse est plafonnee a ${r.vmax} m/s et la cabine EMMENE son passager comme une plate-forme mobile · ${e.map(s => `${s.nom} ${s.sens} (${s.course} m) : ${s.secondes} s, pointe ${s.pointe} m/s, ecart max au plancher ${s.ecart} m, ${s.hp} PV`).join(' · ')} · avant : 2,48 s et 2,03 s, donc +1,89 s sur la plus longue course et +0,32 s a la villa · ${r.nb} ascenseurs, ${r.paliers} arrets chacun (pas d'etage intermediaire) · le plafond SEUL ne suffisait pas : a 4 m/s sans le portage l'ecart reste de 23,3 cm, et il faudrait 2 m/s (7,27 s) pour tenir 5 cm` };
+});

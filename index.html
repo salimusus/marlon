@@ -3049,17 +3049,7 @@ function refusMeuble(m, nx, nz) {
   if (e.roule) for (const r of (city.routes || []))
     if (Math.min(r.w / 2 + (e.x2 - e.x1) / 2 - Math.abs((e.x1 + e.x2) / 2 - r.x),
                  r.d / 2 + (e.z2 - e.z1) / 2 - Math.abs((e.z1 + e.z2) / 2 - r.z)) > -MOB_GARDE_RUE) return 'chaussee';
-  // 2. les bâtiments
-  for (const b of [...(city.batiments || []), ...(city.interieurs || [])])
-    if (e.x1 < b.x + b.w / 2 + 0.2 && e.x2 > b.x - b.w / 2 - 0.2 && e.z1 < b.z + b.d / 2 + 0.2 && e.z2 > b.z - b.d / 2 - 0.2) return 'batiment';
-  // 3. les voisins (on ne se pose pas dans un autre solide, ni dans un véhicule garé)
-  const miens = new Set(m.solides);
-  for (const o of solidsAutour((e.x1 + e.x2) / 2, (e.z1 + e.z2) / 2, Math.max(e.x2 - e.x1, e.z2 - e.z1) / 2 + 2.2, true)) {
-    if (miens.has(o) || o.sol || o.trottoir || o.porte || o.h <= 0.3) continue;
-    if (o.y - o.h / 2 > 1.9) continue;
-    if (e.x1 < o.x + o.w / 2 + 0.15 && e.x2 > o.x - o.w / 2 - 0.15 && e.z1 < o.z + o.d / 2 + 0.15 && e.z2 > o.z - o.d / 2 - 0.15) return 'voisin';
-  }
-  if (!e.pied) return '';
+  if (!e.pied) return refusMeubleReste(m, e);
   // 4. le trottoir : il doit rester de quoi marcher à côté
   for (const t of (MOB_TROT ? (MOB_TROT.get(caseMob(nx, nz)) || []) : (city.trottoirs || []))) {
     const tx1 = t.x - t.w / 2, tx2 = t.x + t.w / 2, tz1 = t.z - t.d / 2, tz2 = t.z + t.d / 2;
@@ -3079,6 +3069,26 @@ function refusMeuble(m, nx, nz) {
     if (eb <= px - L || ea >= px + L) continue;
     if (Math.max(ea - (px - L), (px + L) - eb) < MOB_PASSE_PORTE) return 'porte';
   }
+  return refusMeubleReste(m, e);
+}
+// L'ÉTAT PRÉALABLE, jugé APRÈS les trois questions du poste. Un meuble déjà planté dans un mur
+// ou dans un autre objet n'est PAS un défaut de voirie : c'est du décor posé à la main (une
+// poubelle contre la cabane du Bois, un panneau dans une haie). On ne le dérange pas — mais on
+// n'a pas le droit d'y ENVOYER un meuble qu'on range, donc ces contrôles restent des refus.
+function refusMeubleReste(m, e) {
+  for (const b of [...(city.batiments || []), ...(city.interieurs || [])])
+    if (e.x1 < b.x + b.w / 2 + 0.2 && e.x2 > b.x - b.w / 2 - 0.2 && e.z1 < b.z + b.d / 2 + 0.2 && e.z2 > b.z - b.d / 2 - 0.2) return 'batiment';
+  // UNE PLACE DE STATIONNEMENT MARQUÉE N'EST PAS UN TROTTOIR. Un lampadaire range sur une place
+  // du Parking du Sud, et le test des places n'en comptait plus que 15 libres sur 16.
+  for (const q of (city.parkings || [])) for (const pl of (q.places || []))
+    if (e.x1 < pl[0] + PARK_PLACE_L / 2 && e.x2 > pl[0] - PARK_PLACE_L / 2
+     && e.z1 < pl[1] + PARK_PLACE_P / 2 && e.z2 > pl[1] - PARK_PLACE_P / 2) return 'place';
+  const miens = new Set(m.solides);
+  for (const o of solidsAutour((e.x1 + e.x2) / 2, (e.z1 + e.z2) / 2, Math.max(e.x2 - e.x1, e.z2 - e.z1) / 2 + 2.2, true)) {
+    if (miens.has(o) || o.sol || o.trottoir || o.porte || o.h <= 0.3) continue;
+    if (o.y - o.h / 2 > 1.9) continue;
+    if (e.x1 < o.x + o.w / 2 + 0.15 && e.x2 > o.x - o.w / 2 - 0.15 && e.z1 < o.z + o.d / 2 + 0.15 && e.z2 > o.z - o.d / 2 - 0.15) return 'voisin';
+  }
   return '';
 }
 function rangeLeMobilier() {
@@ -3091,7 +3101,10 @@ function rangeLeMobilier() {
   essais.sort((u, v) => u[2] - v[2]);
   for (const m of (city.meubles || [])) {
     const pourquoi = refusMeuble(m, m.x, m.z);
-    if (!pourquoi) continue;
+    // ON NE RANGE QUE LES TROIS QUESTIONS DU POSTE : chaussee, trottoir, porte. Un meuble deja
+    // pose dans un mur, dans un autre objet ou hors carte est du decor ancien pose a la main :
+    // le deplacer casse la scene (mesure : la poubelle du camp du Bois, controle 485).
+    if (pourquoi !== 'chaussee' && pourquoi !== 'trottoir' && pourquoi !== 'porte') continue;
     // la rue la plus proche donne l'axe : on s'écarte EN TRAVERS d'elle, jamais le long du seul hasard
     let rue = null, dd = 1e9;
     for (const r of (city.routes || [])) {
@@ -5966,6 +5979,15 @@ function declareMeuble(fam, g, x, z, solides, reg) {
   city.meubles.push(m);
   return m;
 }
+// LE REGISTRE DOIT RESTER VRAI. Le jeu retire deliberement deux sortes de meubles : les feux
+// qui n'ont aucune file a arreter (`elagueLesFeux`) et ceux qui tombent dans une parcelle de
+// villa. Sans cet oubli, `city.meubles` garderait des fiches dont les solides n'existent plus
+// et le controle « aucun meuble n'a disparu » crierait au loup.
+function oublieMeuble(o) {
+  const m = o && o.meuble; if (!m || !city.meubles) return;
+  const i = city.meubles.indexOf(m); if (i >= 0) city.meubles.splice(i, 1);
+  for (const so of m.solides) so.meuble = null;
+}
 function bougeMeuble(m, nx, nz) {
   const dx = nx - m.x, dz = nz - m.z;
   if (!dx && !dz) return;
@@ -6071,6 +6093,11 @@ function degageLesRoutes() {
   for (let i = solids.length - 1; i >= 0; i--) {
     const o = solids[i];
     if (vus.has(o) || garde(o) || !o.mesh) continue;
+    // UN MEUBLE DECLARE N'EST PLUS JAMAIS RAMASSE. Il attend `rangeLeMobilier()`, qui tourne
+    // tout a la fin et le DEPLACE. Avant, ce nettoyage jetait 2 lampadaires et les 4 pieds d'un
+    // abribus a chaque chargement (releve a graine figee) — on ne repare pas un decor en le
+    // supprimant.
+    if (o.meuble) continue;
     if (o.feu || o.lampe) continue;
     // LA VÉGÉTATION SE REPLANTE (arbres et palmiers). Elle est jugée plus sévèrement que le reste
     // du mobilier — 30 cm de garde, pas 60 cm de chevauchement toléré — et, si un trottoir voisin
@@ -6147,7 +6174,11 @@ function degageLesRoutes() {
         && Math.abs(x - o.x) < o.w / 2 + 0.25 && Math.abs(z - o.z) < o.d / 2 + 0.25);
     const ok = essais.find(([x, z]) => libre(x, z));
     if (ok) { br.x = ok[0]; br.z = ok[1]; if (br.g) br.g.position.set(br.x, br.g.position.y, br.z); if (br.solid) { br.solid.x = br.x; br.solid.z = br.z; } }
-    else {   // en plein carrefour : aucun trottoir n'est libre, on retire le lampadaire
+    // EN PLEIN CARREFOUR, ON NE LE JETTE PLUS. Aucun des deux trottoirs n'est libre : le
+    // lampadaire reste ou il est et attend `rangeLeMobilier()`, qui essaie quatre-vingt-dix
+    // places a la fin de la construction, quand tout le monde est pose. Mesure a graine figee :
+    // 2 lampadaires partaient a la benne a chaque chargement.
+    else if (!br.solid || !br.solid.meuble) {
       if (br.g) worldGroup.remove(br.g);
       const si = solids.indexOf(br.solid); if (si >= 0) solids.splice(si, 1);
       br.retire = true;
@@ -6178,6 +6209,7 @@ function degageDecorSurRoutes() {
     if (breakables.some(b => b.solid === o)) continue;       // le mobilier cassable a son propre traitement
     // UN ARBRE N'EST PAS UN PIED DE GRANDE ROUE : lui retirer sa collision le laisse planté au
     // milieu de la rue, bien visible, et l'enfant le traverse. On le REPLANTE sur le trottoir.
+    if (o.meuble) continue;   // un meuble declare attend `rangeLeMobilier()` : on ne lui retire pas sa collision
     if (o.vegetal && vegetalMordLaVoie(o) && replanteHorsChaussee(o)) { n++; continue; }
     if (!surChaussee(o.x, o.z)) continue;
     solids.splice(i, 1); n++;
@@ -7297,7 +7329,7 @@ const WORLDS = [
       B('routes de l\'ouest', routesOuest); B('gangs', buildGangs);
       B('quartier', buildResidential);
       // sécurité : aucun feu tricolore ne doit se retrouver dans un jardin ou une maison
-      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } } sgridSale();
+      for (let i = city.trafficLights.length - 1; i >= 0; i--) { const t = city.trafficLights[i]; if (VILLAS.some(v => Math.abs(t.x - v.x) < VILLA_HALF + 2 && Math.abs(t.z - v.z) < VILLA_HALF + 2)) { worldGroup.remove(t.g); oublieMeuble(t.solid); const k = solids.indexOf(t.solid); if (k >= 0) solids.splice(k, 1); const bk = breakables.indexOf(t); if (bk >= 0) breakables.splice(bk, 1); city.trafficLights.splice(i, 1); } } sgridSale();
       // routes : anneau + croix
       road(26, 0, 6, 58); road(-26, 0, 6, 58); road(0, 26, 58, 6); road(0, -26, 58, 6); road(0, -4, 6, 38); road(0, 0, 46, 6);   // l'axe nord-sud s'arrete devant la salle de sport au lieu de la traverser
       // quartiers (trottoirs / pelouses)
@@ -9087,7 +9119,7 @@ function elagueLesFeux() {
     const tl = city.trafficLights[i];
     const l = ligneFeu(tl);
     if (l) { tl.ligne = l; continue; }
-    worldGroup.remove(tl.g);
+    worldGroup.remove(tl.g); oublieMeuble(tl.solid);
     const si = solids.indexOf(tl.solid); if (si >= 0) solids.splice(si, 1);
     const bi = breakables.indexOf(tl); if (bi >= 0) breakables.splice(bi, 1);
     city.trafficLights.splice(i, 1); n++;

@@ -23612,11 +23612,11 @@ test('aucun mobilier urbain ne mord la chaussee, et le trottoir reste marchable'
     } finally { Math.random = vrai; }
     return sorties;
   });
-  const att = { banc: 196, panneau: 210, feu: 38, lampadaire: 156, poubelle: 86, cone: 8 };
+  const att = { banc: 196, panneau: 210, feu: 38, lampadaire: 158, poubelle: 86, cone: 8 };
   const ok = r.length === 2 && r.every(o => o.perdus === 0 && o.surRue.length === 0 && o.ferme.length === 0
-    && o.meubles > 850 && o.range && o.range.fautes > 200 && o.range.restants <= 8
+    && o.meubles > 850 && o.range && o.range.fautes > 200 && o.range.restants === 0
     && Object.keys(att).every(k => o.compte[k] === att[k]));
-  return { ok, detail: `tout le decor solide passe par la meme porte que les arbres · ${r.map(o => `graine ${o.graine} : ${o.meubles} meubles au registre (${Object.entries(o.fam).map(([k, v]) => k + ' ' + v).join(', ')}) — la passe a trouve ${o.range.fautes} fautes (${JSON.stringify(o.range.parQuoi)}), en a DEPLACE ${o.range.deplaces} et en laisse ${o.range.restants} (3 feux/lampadaires poses a la main DANS un batiment, 3 objets hors carte, tous anterieurs) → ${o.surRue.length} meuble sur la chaussee, ${o.ferme.length} trottoir ferme sous ${(2 * 0.4).toFixed(2)} m, ${o.perdus} solide perdu · comptes par famille inchanges : ${JSON.stringify(o.compte)}`).join(' · ')}` };
+  return { ok, detail: `tout le decor solide passe par la meme porte que les arbres · ${r.map(o => `graine ${o.graine} : ${o.meubles} meubles au registre (${Object.entries(o.fam).map(([k, v]) => k + ' ' + v).join(', ')}) — la passe a trouve ${o.range.fautes} fautes (${JSON.stringify(o.range.parQuoi)}), et les a TOUTES rangees (${o.range.deplaces} deplacements, ${o.range.restants} restant) → ${o.surRue.length} meuble sur la chaussee, ${o.ferme.length} trottoir ferme sous ${(2 * 0.4).toFixed(2)} m, ${o.perdus} solide perdu · comptes par famille inchanges : ${JSON.stringify(o.compte)}`).join(' · ')}` };
 });
 
 // ====== ET L'ENFANT PEUT TOUJOURS ENTRER : les 30 entrees declarees restent franchissables ======

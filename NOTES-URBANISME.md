@@ -625,129 +625,151 @@ seule façon de le **déplacer d'un bloc** au lieu de le supprimer.
 
 ## 1. L'inventaire, tel que le code le produit
 
-**892 meubles** au registre, 10 familles (graine 6174) :
+**874 meubles** au registre, 10 familles (graine 6174) :
 
-| famille | nombre | | famille | nombre |
-|---------|--------|-|---------|--------|
-| arbre | 210 | | poubelle | 86 |
-| panneau | 210 | | feu | 56 |
-| lampadaire | 158 | | palmier | 40 |
-| banc | 119 | | abribus | 24 (4 abris × 6 pièces) |
-| | | | borne | 6 · totem 3 |
+| famille | n | | famille | n | | famille | n |
+|---------|---|-|---------|---|-|---------|---|
+| arbre | 210 | | poubelle | 86 | | borne | 6 |
+| panneau | 210 | | palmier | 40 | | abribus | 4 |
+| lampadaire | 158 | | feu | 38 | | totem | 3 |
+| banc | 119 | | | | | | |
 
 *(Les 196 fiches de `city.benches` comptent aussi les chaises d'école, les sièges du cinéma et
-les banquettes d'abribus : 119 seulement sont des bancs de voirie posés par `bench()`.)*
+les banquettes d'abribus : 119 seulement sont des bancs de voirie posés par `bench()`. Et le
+registre OUBLIE ce que le jeu retire volontairement — les feux qu'`elagueLesFeux()` élimine
+faute de file à arrêter, ceux qui tombent dans une parcelle de villa : 56 feux posés, 38
+gardés.)*
 
-## 2. Les trois questions, et les chiffres AVANT
+## 2. Les trois questions, et les seuils
 
-Le seuil du piéton est celui du code : **`P.hw` = 0,40 m**, donc l'enfant fait **0,80 m** de large,
-et il enjambe tout ce qui monte à moins de `STEP_UP` = 0,60 m.
+Les seuils sont ceux du **code**, pas d'une opinion : **`P.hw` = 0,40 m**, donc l'enfant fait
+**0,80 m** de large, et `STEP_UP` = 0,60 m, donc il enjambe tout ce qui monte à moins de 60 cm.
 
-| question | seuil exigé | pourquoi ce seuil |
-|----------|-------------|-------------------|
-| **chaussée** | 30 cm entre l'emprise et la rive | même règle que la végétation : un tronc à 24 cm dans une rue de 8 m est déjà dans la voie de droite (axe à largeur/4, demi-gabarit 1,20 m) |
-| **porte** | **1,00 m** de passage libre dehors | 0,80 m de gabarit + 10 cm de jeu de chaque côté : une baie est un ENTONNOIR, et la collision du joueur est une boîte alignée sur les axes — en deçà, il accroche le montant à chaque image au lieu de passer |
-| **trottoir** | **0,90 m** pour ranger, **0,80 m** pour juger | 0,80 m est le gabarit strict ; le rangement vise 5 cm de jeu de chaque côté |
+| question | seuil | pourquoi celui-là |
+|----------|-------|-------------------|
+| **chaussée** | 30 cm entre l'emprise et la rive | même règle que la végétation : un objet à 24 cm dans une rue de 8 m est déjà dans la voie de droite (axe à largeur/4, demi-gabarit 1,20 m) |
+| **porte** | **1,00 m** de passage libre **dehors** | 0,80 m de gabarit + 10 cm de jeu de chaque côté : une baie est un ENTONNOIR et la collision du joueur est une boîte alignée sur les axes — en deçà, il accroche le montant à chaque image au lieu de passer |
+| **trottoir** | **0,90 m** pour ranger, **0,80 m** (le gabarit nu) pour juger | 5 cm de jeu de chaque côté ; en deçà l'enfant est obligé de descendre sur la route |
 
-**RELEVÉ AVANT** — la passe compte elle-même ce qu'elle trouve, sur la même population
-(graine 6174 ; les autres graines donnent 311 à 314) :
+## 3. Les chiffres AVANT
 
-| défaut | nombre |
-|--------|--------|
-| ferme un trottoir sous 0,90 m | **153** |
-| sur le bitume (garde < 30 cm) | **89** |
-| planté dans un autre solide | 41 |
-| planté dans un bâtiment | 21 |
-| hors des limites de la carte | 7 |
-| **total** | **311 / 892** |
+**a) La passe compte elle-même**, sur la même population (graine 6174 ; 245 à 246 selon la
+graine) : **245 meubles en faute sur 874** — **106 sur le bitume**, **139 fermant un trottoir**
+sous 0,90 m, **0 devant une porte**.
+Par famille : panneau 132 · lampadaire 61 · arbre 21 · feu 12 · banc 8 · palmier 6 ·
+poubelle 4 · abribus 1.
 
-Par famille : panneau 135 · lampadaire 78 · arbre 36 · feu 19 · banc 18 · palmier 10 ·
-poubelle 10 · abribus 4 · borne 1.
-
-**Les deux cas les plus flagrants**, mesurés :
-- un **ABRIBUS planté à 2,08 m DANS la chaussée** de (−145 ; 264), 8 m de large — il n'a pas
-  bougé, c'est la rue qui s'est élargie par-dessus lui au round 75 ;
-- un **BANC qui ferme COMPLÈTEMENT** (0,00 m de passage) le trottoir de (−3,9 ; 9,9) : boîte de
-  2,30 m sur un trottoir de 1,80 m, l'enfant est obligé de descendre sur la route.
-
-**Deuxième recensement, indépendant du registre** (le même script sait mesurer une version
-antérieure, `ca70b34`, qui n'a pas de registre — il reconstruit la population à partir des
-registres du jeu : `city.benches`, `city.panneaux`, `city.trafficLights`, `breakables`, et la
-signature de forme pour les abribus, bornes et totems). Cinq graines :
+**b) Un second recensement, indépendant du registre**, sait mesurer une version antérieure
+(`ca70b34`, qui n'a pas de registre) : il reconstruit la population à partir des registres du
+jeu (`city.benches`, `city.panneaux`, `city.trafficLights`, `breakables`) et de la signature de
+forme des abribus, bornes et totems. **Cinq graines** (6174, 987654321, 1, 42, 20260926) :
 
 | | avant | après |
 |---|-------|-------|
 | mobilier dont l'emprise mord une chaussée | **69** | **0** |
 | portes sous 1,00 m de passage | **0 / 30** | **0 / 30** |
-| trottoirs sous 0,80 m | 44-45 / 311 | 38-39 / 311 |
-| … dont **à cause d'un meuble** | **7** | **1** |
+| trottoirs sous 0,80 m | 44-45 / 311 | **40-41 / 311** |
+| … dont **à cause d'un meuble** | **7** | **3** |
+| trottoir le plus étroit de la ville | **0,00 m** | **0,00 m** (un mur, voir §6) |
 
-## 3. La réparation : `rangeLeMobilier()`
+**Les deux cas les plus flagrants**, mesurés :
+- un **ABRIBUS planté à 2,08 m DANS la chaussée** de (−145 ; 264), 8 m de large — il n'a pas
+  bougé, c'est la rue qui s'est élargie par-dessus lui au round 75 ; pire, `degageLesRoutes()`
+  lui **arrachait ses quatre pieds** à chaque chargement ;
+- un **BANC qui ferme COMPLÈTEMENT** (0,00 m) le trottoir de (−3,9 ; 9,9) : une boîte de 2,30 m
+  sur un trottoir de 1,80 m — l'enfant est obligé de descendre sur la route.
 
-Une passe, appelée **en dernier** (après le décor solidifié, les métiers et les cabines
+## 4. La réparation : `rangeLeMobilier()`
+
+Une passe appelée **en dernier** (après le décor solidifié, les métiers et les cabines
 d'ascenseur : c'est le dernier moment où une rue, un mur ou un véhicule peut encore apparaître
 sous un banc). Pour chaque meuble en faute, elle cherche **la place valable la plus proche**, en
 s'écartant D'ABORD perpendiculairement à la rue, **du côté opposé au bitume**.
 
-**C'est ce qui conserve le SENS du décor** : l'abribus reste au bord de la route, le banc contre
-son trottoir, le panneau à vue des voitures, la jardinière contre sa façade — personne ne part à
-l'autre bout du quartier. Recul **médian 0,60 m**, maximum 6,07 m.
+**C'est ce qui conserve le SENS du décor** : l'abribus reste au bord de la route (relevé après
+rangement : 2,80 à 4,80 m du bitume le plus proche), le banc contre son trottoir, le panneau à
+vue des voitures, la jardinière contre sa façade. Recul **médian 0,60 m**, maximum 6,07 m ; les
+17 feux déplacés le sont de 0,30 à 2,01 m et **leurs 38 lignes d'arrêt restent toutes sur une
+chaussée**, comme avant.
 
-Une place n'est valable que si elle passe les cinq contrôles : hors carte, **bitume** (30 cm),
-**bâtiment** (20 cm), **voisins** (15 cm), **trottoir** (0,90 m restants), **porte** (1,00 m
-restants). Le contrôle « porte » est un garde-fou : il y avait 0 porte bouchée avant, il doit y
-en avoir 0 après.
+**ON NE RANGE QUE LES TROIS QUESTIONS DU POSTE.** Un meuble déjà planté dans un mur, dans un
+autre objet ou hors carte n'est pas un défaut de voirie : c'est du décor posé à la main. Le
+déplacer casse la scène — mesuré : la première version déplaçait la **poubelle du camp du Bois
+des Aventuriers** et le contrôle « le camp et le mobilier arrêtent » tombait. Ces états restent
+en revanche des **refus de destination** : on n'a pas le droit d'ENVOYER un meuble dans un mur.
+Une **place de stationnement marquée** en est un aussi (un lampadaire rangé sur une place du
+Parking du Sud, et le contrôle des 16 places n'en comptait plus que 15 libres).
 
-## 4. Les mesures APRÈS
+## 5. Les mesures APRÈS
 
 | mesure | avant | après |
 |--------|-------|-------|
-| meubles en faute | **311 à 314** selon la graine | toutes trouvées, **305 à 308 rangées** |
+| meubles en faute | **245** (106 chaussée + 139 trottoir) | 245 trouvées, **245 rangées, 0 restante** |
 | mobilier sur la chaussée | 69 | **0** |
-| trottoirs fermés par un meuble | 7 | **1** (0,77 m, un panneau en (31,1 ; 20,4) — cas combiné avec un mur) |
+| trottoirs fermés par un meuble | 7 | **3** (cas combinés, voir §6) |
 | portes sous 1,00 m | 0 / 30 | **0 / 30** |
-| meubles supprimés | — | **0** |
+| **meubles supprimés** | — | **0** |
 
-**RIEN N'A ÉTÉ SUPPRIMÉ, et c'est mesuré.** Comptes relevés à graine figée, ancien index.html
-contre le neuf, trois graines (6174 / 987654321 / 42) :
+**RIEN N'EST SUPPRIMÉ, ET LA VILLE A MÊME REGAGNÉ CE QU'ELLE JETAIT.** Un meuble déclaré n'est
+plus jamais ramassé par `degageLesRoutes()` ni par `degageDecorSurRoutes()` : il attend le
+rangement. Comptes à graine figée, ancien index.html contre le neuf :
 
-| | 6174 | 987654321 | 42 |
-|---|------|-----------|-----|
-| solides (avant = après) | **5307** | **5303** | **5302** |
-| bancs / panneaux / feux | 196 / 210 / 38 | idem | idem |
-| lampadaires / poubelles / cônes / étals | 156 / 86 / 8 / 14 | idem | idem |
-| objets cassables | 538 | 538 | 538 |
+| | avant | après |
+|---|-------|-------|
+| solides de meuble disparus de `solids` | 24 | **0** |
+| lampadaires | 156 | **158** (+2 que le nettoyage jetait) |
+| pieds d'abribus emportés par le nettoyage | **4** | **0** (les 4 pieds rendus) |
+| bancs / panneaux / feux / poubelles / cônes / étals | 196 / 210 / 38 / 86 / 8 / 14 | **identiques** |
+| objets cassables | 538 | 540 (les 2 lampadaires) |
+| solides au total (graine 6174) | 5307 | 5313 |
 
-**Zéro écart sur toutes les lignes, sur les trois graines** : la ville n'a rien perdu, chaque
-meuble a seulement changé de place.
+## 6. Ce qu'on ne range pas, et pourquoi
 
-## 5. Les 6 meubles qu'on n'a pas su ranger, et les 37 trottoirs qu'on ne touchera pas
+- **3 trottoirs restent sous 0,80 m à cause d'un meuble**, et ce sont des **cas combinés** : deux
+  lampadaires en (±4,8 ; −31,5) laissent 0,45 m parce que le trottoir est coincé entre eux et la
+  **façade des immeubles de (±8 ; −35,5)** (mur avant à z = −32,17, déjà décrit au round 76) ; un
+  panneau en (31,1 ; 20,4) laisse 0,77 m, 3 cm sous le gabarit. La passe garantit que **chaque
+  meuble pris seul** laisse 0,90 m : c'est le mur d'en face qui manque.
+- **37 à 38 trottoirs restent sous 0,80 m SANS qu'un meuble y soit pour rien** : ce sont des
+  **murs**, des **clôtures de 40 m** et des **piliers de portail** (0,80 × 3,60 m) le long
+  desquels le trottoir a été posé — le pire est à **0,00 m**. Les déplacer, c'est déplacer de
+  l'architecture : **c'est exactement ce qui mangerait les 10 cm de marge**, et c'est un chantier
+  de voirie à part (il faudrait décaler le trottoir, donc la rive, donc la chaussée).
 
-- **3 meubles plantés dans un bâtiment** — un lampadaire en (−4,2 ; 20) et deux feux en
-  (−4,2 ; 21,8) et (13,8 ; 202,2) : aucune des 90 places d'essai n'est libre autour d'eux. Ce sont
-  les poteaux déjà décrits au **round 76 §4** (« 5 lampadaires posés à la main dans l'emprise d'un
-  bâtiment ») : ils appartiennent aux postes qui ont bâti ces quartiers.
-- **3 meubles hors carte** — un arbre en (210 ; 259) et deux panneaux en (108,6 ; 353,25) et
-  (97 ; 352,6), au-delà du bord du monde.
-- **37 trottoirs sous 0,80 m qui ne sont PAS le fait d'un meuble** : ce sont des **murs**, des
-  **clôtures de 40 m** et des **piliers de portail** (0,80 × 3,60 m) le long desquels le trottoir a
-  été posé — le pire est à 0,00 m. Les déplacer, c'est déplacer de l'architecture : **c'est
-  exactement ce qui mangerait les 10 cm de marge de la ville**, et c'est un chantier de voirie à
-  part (il faudrait décaler le trottoir, donc la rive, donc la chaussée).
+## 7. LES 10 CM DE MARGE, NOIR SUR BLANC
 
-## 6. LES 10 CM DE MARGE, NOIR SUR BLANC
+**Ils n'ont pas bougé.** Cet item n'a déplacé **que du mobilier** : aucune chaussée élargie,
+aucun mur, aucun bâtiment, aucune dalle, aucun trottoir touché. **91 chaussées** et **311
+trottoirs** avant comme après, aux mêmes largeurs, sur les cinq graines relevées. La pire valeur
+de la ville reste celle du round 76 : les trois boutiques de z = 19,5 contre la rue z = 26,
+**+0,30 m**.
 
-**Ils n'ont pas bougé.** Cet item n'a déplacé **que du mobilier** : aucune chaussée n'a été
-élargie, aucun mur, aucun bâtiment, aucune dalle, aucun trottoir n'a été touché. Le nombre de
-chaussées (91), de trottoirs (311) et leurs largeurs sont identiques au caractère près avant et
-après, sur les trois graines relevées. La pire valeur de la ville reste celle du round 76 : les
-trois boutiques de z = 19,5 contre la rue z = 26, **+0,30 m**.
+## 8. Coût de chargement
 
-## 7. Bancs
+La première version relisait les 311 trottoirs ET les 5 300 solides à **chaque essai de
+position** : **+0,84 s** de chargement (9,10 → 9,94 s au banc Node). Les portes sont sorties une
+fois pour toutes et les trottoirs rangés dans une grille de 16 m : **8,57 s**, soit moins
+qu'avant les travaux.
+
+## 9. Les deux captures du cas flagrant
+
+`verification/b3-trottoir-avant.png` et `b3-trottoir-apres.png`, même caméra, même graine 6174,
+monde rebâti UNE SEULE FOIS avec la graine avant les prises. Le trottoir de **(−3,9 ; 9,9)**,
+entre la Salle de sport et le Snack :
+
+| | avant | après |
+|---|-------|-------|
+| banc | (−4,00 ; 14,90), en travers | (−5,20 ; 13,70), rangé le long |
+| **passage libre minimal** | **0,00 m** (en z = 14,6) | **1,05 m** (en z = 13,4) |
+
+Sur la capture AVANT, le banc barre la totalité du trottoir devant la vitrine de la Salle de
+sport : l'enfant doit descendre sur la chaussée pour continuer. Sur la capture APRÈS, il est
+rangé le long de la terrasse et le trottoir passe.
+
+## 10. Bancs
 
 Lint **5 ✅**. `traffic.js` **14/14**, `vehicle-contact.js` **6/6**, `city-detail.js` **10/10**,
-`strategy.js` 7/0, `empire.js` 15/0, `save-strategy.js` 4/0, `cosmetic-performance.js` vert,
-`garage.js` identique à l'ancien index.html. Deux tests ajoutés à la fin de `harness/play.js`
-(les numéros bougent à chaque fusion : ils s'appellent « aucun mobilier urbain ne mord la
-chaussee, et le trottoir reste marchable » et « les 30 entrees de la ville laissent passer
-l'enfant, mobilier compris »).
+`strategy.js` 7/0, `empire.js` 15/0, `save-strategy.js` 4/0, `cosmetic-performance.js` vert.
+Deux tests ajoutés à la fin de `harness/play.js` (les numéros bougent à chaque fusion, on ne les
+écrit pas en dur) : « aucun mobilier urbain ne mord la chaussee, et le trottoir reste
+marchable » et « les 30 entrees de la ville laissent passer l'enfant, mobilier compris ».

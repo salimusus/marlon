@@ -19297,6 +19297,7 @@ const sfx = (() => {
     const o = c.createOscillator(), g = c.createGain(), at = c.currentTime + t;
     o.type = type; o.frequency.setValueAtTime(f, at);
     if (slide) o.frequency.exponentialRampToValueAtTime(slide, at + dur);
+    g.gain.value = .0001;   // LE CLIC : voir bruitVers ci-dessous. Un gain neuf vaut 1.
     g.gain.setValueAtTime(.0001, at);
     g.gain.exponentialRampToValueAtTime(vol, at + .015);
     g.gain.exponentialRampToValueAtTime(.0001, at + dur);
@@ -19338,6 +19339,7 @@ const sfx = (() => {
       const o = c.createOscillator(), g = c.createGain(), at = c.currentTime + t;
       o.type = type; o.frequency.setValueAtTime(Math.max(20, f), at);
       if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), at + dur);
+      g.gain.value = .0001;   // LE CLIC : voir bruitVers ci-dessous. Un gain neuf vaut 1.
       g.gain.setValueAtTime(.0001, at);
       g.gain.exponentialRampToValueAtTime(Math.max(.0002, vol), at + Math.min(.02, dur / 3));
       g.gain.exponentialRampToValueAtTime(.0001, at + dur);
@@ -19350,6 +19352,24 @@ const sfx = (() => {
       const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), at = c.currentTime + t;
       src.buffer = noise.buf; src.loop = true; src.playbackRate.value = 0.85 + Math.random() * 0.3;
       f.type = type; f.frequency.value = Math.max(30, freq); f.Q.value = q;
+      // ============ LE CLIC DE DEPART, ET IL S'ENTENDAIT ============
+      // UN GAIN NEUF VAUT 1. On ne programmait que `setValueAtTime(.0001, at)`, a une date
+      // FUTURE : entre la fabrication du noeud et `at`, le robinet etait donc grand ouvert. Or
+      // `src.start(at)` est precis a l'echantillon alors que l'automation d'un parametre est
+      // calculee par blocs : quand `at` tombe au milieu d'un bloc, les premiers echantillons du
+      // souffle passent A GAIN 1 — du bruit blanc PLEINE ECHELLE. Mesure (test 340, analyseur au
+      // bout de la chaine, forme d'onde relevee autour du maximum) : UN SEUL echantillon a
+      // 0,1536 au milieu d'une averse qui vaut 0,0086, facteur de crete 136 la ou un vrai son
+      // vaut 6 a 12 — et TOUJOURS la meme valeur 0,1536, parce que c'est toujours le premier
+      // echantillon du meme tampon de bruit partage. Trois fenetres sur huit touchees, au
+      // hasard de la date de depart : c'est ce qui tenait le test 340 rouge en suite complete
+      // (« averse 0,1027 » au lieu de 0,0086) apres trois tentatives, et ce n'etait pas un
+      // pollueur exterieur — c'etait l'averse elle-meme qui claquait.
+      // Un clic a 0,15 sur une sortie qui plafonne a 1, c'est AUDIBLE : chaque pas sur le
+      // gravier, chaque goutte, chaque flamme, chaque coup en claquait un de temps en temps.
+      // Le remede tient en une ligne : le robinet part FERME (sonEn le faisait deja pour le
+      // sien : `g.gain.value = Math.max(0.0001, att)`).
+      g.gain.value = .0001;
       g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(Math.max(.0002, vol), at + Math.min(0.04, dur / 3)); g.gain.exponentialRampToValueAtTime(.0001, at + dur);
       src.connect(f).connect(g).connect(dest); src.start(at); src.stop(at + dur + 0.05);
     },
@@ -19365,6 +19385,7 @@ const sfx = (() => {
     if (!noise.buf) { const b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; noise.buf = b; }
     const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); src.buffer = noise.buf; src.loop = true;
     f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.7;
+    g.gain.value = .0001;   // LE CLIC : un gain neuf vaut 1 (voir bruitVers)
     g.gain.setValueAtTime(.0001, c.currentTime); g.gain.exponentialRampToValueAtTime(vol, c.currentTime + Math.min(0.05, dur / 3)); g.gain.exponentialRampToValueAtTime(.0001, c.currentTime + dur);
     src.connect(f).connect(g).connect(sortie('effets')); src.start(); src.stop(c.currentTime + dur + 0.05);
   }
@@ -19706,6 +19727,17 @@ function cadencePas(e, vitesse, dt) {
   return 0;
 }
 // ---- LES COUPS ----
+// TOUS LES COUPS ENTRE HABITANTS PASSENT PAR ICI (poste SON, round 82). Neuf endroits
+// frappaient encore avec `sfx.hit()` : un bip mono, ECRIT EN DUR dans le bus « effets », au
+// meme volume qu'on soit dessus ou a deux cents metres, et INVISIBLE du registre `SON`.
+// C'est exactement le defaut du tonnerre, et c'etait le dernier pollueur du test 340 : le
+// mouchard du banc l'a nomme — « 6x tone < gangTick » et « 6x noise < gangTick », crete
+// 0,2895 pendant l'ecoute d'une averse qui vaut 0,0086, et zero fenetre declaree salie
+// puisque `SON.joues` ne voyait rien. Une bagarre de gang a l'autre bout de la ville cognait
+// donc dans l'oreille de l'enfant. Les neuf appels sont devenus `sonCoup` : place, atténué
+// avec la distance, compte — et le banc sait desormais qu'une fenetre a ete salie.
+// (Les `sfx.hit()` qui restent sont ceux qui s'adressent AU JOUEUR : il encaisse un coup, il
+// se trompe a l'ecole, il cogne sa voiture. Ceux-la n'ont pas de position dans le monde.)
 function sonCoup(x, y, z, force, quoi) {   // impact SOURD (le corps) + CLAQUEMENT (la peau)
   const f = clamp(force == null ? 1 : force, 0.4, 2);
   const dest = sonEn(x, y, z, d => {
@@ -20306,6 +20338,7 @@ const music = (() => {   // musique de fond générée : batterie, basse, accord
     const c = sfx.ctx(), g0 = out(); if (!c || !g0) return;
     const o = c.createOscillator(), g = c.createGain(), at = c.currentTime + t;
     o.type = type; o.frequency.setValueAtTime(fr, at); if (slide) o.frequency.exponentialRampToValueAtTime(slide, at + dur);
+    g.gain.value = .0001;   // LE CLIC : un gain neuf vaut 1 (voir bruitVers)
     g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + .012); g.gain.exponentialRampToValueAtTime(.0001, at + dur);
     o.connect(g).connect(g0); o.start(at); o.stop(at + dur + .05);
   }
@@ -21825,7 +21858,7 @@ function chienTick(dt) {
         else if (d < 1.8 && simTime > (chien.morsT || 0)) {
           chien.morsT = simTime + 1.1;
           const mordu = 5 + Math.round(perfDe(chien) / 9);
-          g3.hp -= mordu; impact(g3.x, g3.y + 1.1, g3.z, { x: p.x - g3.x, y: 0, z: p.z - g3.z }, 'sang', 1); sfx.hit(); sfx.noise(.08, 500, .07);
+          g3.hp -= mordu; impact(g3.x, g3.y + 1.1, g3.z, { x: p.x - g3.x, y: 0, z: p.z - g3.z }, 'sang', 1); sonCoup(g3.x, g3.y + 1.1, g3.z, 1.2);   // PLACE (voir sonCoup) : un combat a l'autre bout de la ville ne cogne plus dans l'oreille
           bubble(g3.av, pickOne(['aïe ! ce chien !', 'dégage sale bête !', 'rappelle ton clebs !']));
           // il RALENTIT sa proie : le gangster perd du temps sur le joueur, qui peut filer
           g3.cd = simTime + 1.6; g3.mordu = simTime + 2.2;
@@ -23854,7 +23887,7 @@ function protectionTick(dt) {
           b.villaCd = simTime + 1.2;
           b.rdv = { x: m.x + 1, z: m.z + 1, y: 0.3, nom: 'intrus', arrive: false, libre: true }; b.rdvRoute = null; b.wait = 0;
           if (Math.hypot(b.pos.x - m.x, b.pos.z - m.z) < 2) {
-            m.hp -= 10 + Math.round(perfDe(b) / 9); b.av.rig.swing = 0.3; impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sfx.hit();
+            m.hp -= 10 + Math.round(perfDe(b) / 9); b.av.rig.swing = 0.3; impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sonCoup(m.x, m.y + 1.2, m.z, 1);
             if (m.hp <= 0) { m.ko = simTime + 18; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 2, 'il a défendu ta villa'); botSay(b, ['et voilà ! 😤', 'la villa est à nous !']); }
           }
           break;
@@ -23949,7 +23982,7 @@ function bagarreTick(b, dt) {
     c.fuitDe = b;
     c.hp = (c.hp ?? 100) - 12; c.fight = 'flee'; c.fightT = simTime + 6; c.wait = 0;
     c.pos.x += dx / d * 0.5; c.pos.z += dz / d * 0.5;
-    impact(c.pos.x, c.pos.y + 1.2, c.pos.z, null, 'sang', 1); sfx.hit();
+    impact(c.pos.x, c.pos.y + 1.2, c.pos.z, null, 'sang', 1); sonCoup(c.pos.x, c.pos.y + 1.2, c.pos.z, 1);
     if (Math.random() < 0.5) botSay(c, ['aïe !', 'arrête !', 'au secours !']);
     if (c.hp <= 0) {
       // Un homme du gang (ou un ami) ne « meurt » pas dans une bagarre : il tombe, et on
@@ -23978,7 +24011,7 @@ function gardeTick(b) {
     if (m.ko || Math.hypot(m.x - P.pos.x, m.z - P.pos.z) > 7) continue;
     b.gardeCd = simTime + 1.2; b.av.rig.swing = 0.3;
     b.facing = Math.atan2(m.x - b.pos.x, m.z - b.pos.z);
-    m.hp -= 9 + Math.round(perfDe(b) / 9); impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sfx.hit();
+    m.hp -= 9 + Math.round(perfDe(b) / 9); impact(m.x, m.y + 1.2, m.z, { x: m.x - b.pos.x, y: 0, z: m.z - b.pos.z }, 'sang', 1); sonCoup(m.x, m.y + 1.2, m.z, 1);
     if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 2, 'il t\'a défendu'); botSay(b, ['personne ne touche au chef ! 😤']); }
     return;
   }
@@ -30356,7 +30389,7 @@ function shotsTick(dt) {
       if (a.hp <= 0) agentTue(a, s.mine ? null : (s.ami || s.byName || 'un tireur'));   // (n° 85) pas NOTRE balle, pas NOTRE meurtre : ni l'annonce, ni l'armée
       else { bubble(a.av, `touché ! ❤️ ${Math.max(0, a.hp)}`); if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur la police', 2, 3); } }
     } else if (quoi === 'gangeur') {
-      const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sfx.hit();
+      const m = cible; m.hp -= (s.dmg || 20); impact(m.x, m.y + 1.2, m.z, { x: dx, y: dy, z: dz }, 'balle', 1); sonCoup(m.x, m.y + 1.2, m.z, 1.2);
       // (n° 85) « le joueur » n'est l'auteur que si la balle est la sienne : une balle de la
       // police ou d'un ami armé annonçait « X a été tué par <l'enfant> » et retournait le gang
       // contre lui pour un coup qu'il n'avait pas porté.
@@ -34955,7 +34988,7 @@ function gangTick(dt) {
             else {
               const b2 = c.bot;
               b2.hp = (b2.hp ?? 100) - Math.max(4, Math.round(9 + (perfDe(m) - perfDe(b2)) / 5));
-              impact(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, null, 'sang', 0.9); sfx.hit();
+              impact(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, null, 'sang', 0.9); sonCoup(b2.pos.x, b2.pos.y + 1.2, b2.pos.z, 0.9);
               m.hp -= Math.max(2, Math.round(4 + perfDe(b2) / 8));   // il rend les coups
               if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; m.chasse = null; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b2, 3, 'il a repoussé une embuscade'); }
               else if (b2.hp <= 0) { b2.hp = 0; m.chasse = null;
@@ -35025,7 +35058,7 @@ function gangTick(dt) {
       if (G.etat === 'rival') for (const O of gangs) { if (O === G) continue;
         for (const o2 of O.membres) { if (o2.ko) continue;
           if (Math.hypot(o2.x - m.x, o2.z - m.z) < 1.6 && simTime > m.cd) { m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
-            o2.hp -= 6 + Math.round(perfDe(m) / 6); impact(o2.x, o2.y + 1.2, o2.z, { x: o2.x - m.x, y: 0, z: o2.z - m.z }, 'sang', 0.9); sfx.hit();
+            o2.hp -= 6 + Math.round(perfDe(m) / 6); impact(o2.x, o2.y + 1.2, o2.z, { x: o2.x - m.x, y: 0, z: o2.z - m.z }, 'sang', 0.9); sonCoup(o2.x, o2.y + 1.2, o2.z, 0.9);
             if (o2.hp <= 0) { o2.ko = simTime + 14; o2.hp = 0; corpsAuSol(o2.av, o2.x, o2.z, o2.y); perfGagne(m, 2); perfPerd(o2, 5); verifieElimination(O, G.id); } } } }
       // ILS S'EN PRENNENT AUSSI À TES HOMMES — et peuvent les tuer. Un membre bien entraîné
       // encaisse et rend les coups ; un débutant envoyé seul face à un chef y laisse la peau.
@@ -35036,7 +35069,7 @@ function gangTick(dt) {
           m.cd = simTime + 1.3; m.av.rig.swing = 0.3;
           const attaque = perfDe(m), defense = perfDe(b);
           b.hp = (b.hp ?? 100) - Math.max(4, Math.round(10 + (attaque - defense) / 5));
-          impact(b.pos.x, b.pos.y + 1.2, b.pos.z, null, 'sang', 0.9); sfx.hit();
+          impact(b.pos.x, b.pos.y + 1.2, b.pos.z, null, 'sang', 0.9); sonCoup(b.pos.x, b.pos.y + 1.2, b.pos.z, 0.9);
           // il rend les coups
           m.hp -= Math.max(2, Math.round(4 + defense / 8));
           if (m.hp <= 0) { m.ko = simTime + 16; m.hp = 0; corpsAuSol(m.av, m.x, m.z, m.y); perfGagne(b, 3, 'il a mis un rival au tapis'); botSay(b, ['et voilà ! 😤', 'personne ne touche au gang !']); }
@@ -35438,7 +35471,7 @@ function recruesTick(dt) {
       animateRig(m.av.rig, 'idle', 0, dt, simTime);
       if (cible && simTime > (m.cd || 0)) {   // il frappe l'ennemi
         m.cd = simTime + 1.2; m.av.rig.swing = 0.3;
-        cible.hp -= 12 + Math.round(gang.force / 12); impact(cible.x, cible.y + 1.2, cible.z, null, 'sang', 1); sfx.hit();
+        cible.hp -= 12 + Math.round(gang.force / 12); impact(cible.x, cible.y + 1.2, cible.z, null, 'sang', 1); sonCoup(cible.x, cible.y + 1.2, cible.z, 1);
         if (cible.hp <= 0) gangeurKO(cible, m.nom, true);   // bagarre entre hommes de main : on assomme, on n'execute pas
       }
     }

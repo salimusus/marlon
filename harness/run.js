@@ -44,6 +44,7 @@ globalThis.__G = {
   pathPos, startCountdown, get raceKarts() { return raceKarts; }, WEAPONS, keys, safesTick, fire, DECOR,
   schQuestion, schTirage, school, swingTick, sitSwing, CULT,
   construireGraphe, traficDestination, traficPose, traficRoule, gapDevant, codeRoute, croisementLibre, carrefourLibre, flotteMaj, vehBloque, vehiculeMord, vehBloqueDur, vehicleSolid, avanceVehicule, surLaChaussee, itineraireVoies, traceSuit, feuPhase, separerVehicules, pointRouteLibre, makeCar, makeVehicle, degageLesRoutes,
+  gabaritCollision, gabaritDeService, stationnementAlterne, placeHorsBitume, bitumeSous, chaineDisques,
   setTrafficTime(v) { simTime = v; flotteT = -1; }, cheminAretes, projVoie, pietonDevant,
 };
 `;

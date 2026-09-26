@@ -2989,6 +2989,129 @@ function declareLesParkings() {
   P(RACE_C.x, RACE_C.z + RACE_C.r + 2, 70, 24, 'Grille de départ');            // les karts
   for (const g of gangs) if (g.base) P(g.base[0], g.base[1] + 7, 20, 16, 'Base ' + (g.nom || 'de gang'));
 }
+// ============ STATIONNEMENT ALTERNÉ : DEUX VOITURES GARÉES NE FERMENT PLUS UNE RUE ============
+// La largeur libre d'une rue n'a RIEN à voir avec la largeur de son bitume dès qu'on se gare
+// des deux côtés. À la sortie du commissariat — `road(-46, 9, 6, 12)`, portée à 8 m par
+// `elargirLesVoies()` — les deux voitures de patrouille de (-49 ; 9) et (-44 ; 9) occupent
+// 2 × 2,40 m et ne laissent entre elles que **2,60 m**. Mesuré : AUCUN des sept véhicules de
+// service ne passe, pas même l'ambulance, et le bulldozer y reste planté avec 862 images de
+// blocage sur 900 — la file se bouche derrière lui.
+// ÉLARGIR LA RUE N'Y CHANGERAIT RIEN : les deux voitures sont posées à une abscisse FIXE, un
+// mètre de bitume de plus s'ajoute AUTOUR d'elles et l'entre-deux reste à 2,60 m. On applique
+// donc la règle des vraies villes : dans une rue trop étroite on ne se gare QUE D'UN CÔTÉ.
+// Aucune géométrie ne bouge — on déplace UN véhicule — donc la marge de 10 cm est intacte.
+//
+// LE GABARIT À RESPECTER N'EST PAS `baseW`. Le moteur de collision (`carBlocked`) traite un
+// véhicule comme une CHAÎNE DE DISQUES de rayon `DISQ.r` et gonfle l'obstacle d'autant : le
+// bulldozer (2,80 m de tôle) demande en réalité 3,15 m de passage, le camion 3,01 m. C'est
+// cette largeur-là qu'on mesure, sinon on « prouve » un passage qui ne passe pas.
+function gabaritCollision(v) {
+  const A = (v && v.baseD ? v.baseD : 4.4) / 2, B = (v && v.baseW ? v.baseW : 2.4) / 2;
+  const r0 = Math.sqrt((A / 3) * (A / 3) + B * B) + 0.02, L = A * 2 / 3;
+  return 2 * chaineDisques(r0, L, 0).r;
+}
+function gabaritDeService() {   // le plus large véhicule qui doit pouvoir remonter n'importe quelle rue
+  let W = 0;
+  for (const v of [].concat(city.cars || [], city.aiCars || [], police.cars || []))
+    if (v && !v.heli && !v.kart && v.kind !== 'jetski') W = Math.max(W, gabaritCollision(v));
+  return W;
+}
+const ALT_GOULOT = 8;    // à moins de 8 m l'un de l'autre, on ne slalome pas un camion entre deux caisses
+const ALT_GARDE = 0.4;   // 20 cm de garde de chaque côté du gabarit
+function stationnementAlterne() {
+  const PASSE = +(gabaritDeService() + ALT_GARDE).toFixed(3);
+  const roulants = new Set(city.aiCars || []);
+  const gares = [].concat(city.cars || [], police.cars || [])
+    .filter(v => v && v.g && v.solid && !v.heli && v.kind !== 'jetski' && !roulants.has(v));
+  // demi-emprise de la boîte ORIENTÉE : [en travers de la rue, dans sa longueur]
+  const demi = (v, long) => {
+    const cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+    const W = (v.baseW || 2.4) * cs + (v.baseD || 4.4) * sn, D = (v.baseW || 2.4) * sn + (v.baseD || 4.4) * cs;
+    return long ? [W / 2, D / 2] : [D / 2, W / 2];
+  };
+  const placeDe = v => (city.parkings || []).find(q =>
+    Math.abs(v.x - q.x) + demi(v, true)[0] <= q.w / 2 + 0.5 && Math.abs(v.z - q.z) + demi(v, true)[1] <= q.d / 2 + 0.5);
+  // LA LARGEUR LIBRE QUE LAISSE `v` LÀ OÙ IL EST : sur chaque chaussée qu'il touche, la distance
+  // entre son bord intérieur et, selon le cas, la rive d'en face ou le bord intérieur d'un autre
+  // véhicule garé en face à moins de ALT_GOULOT mètres. C'est la seule mesure qui compte.
+  const libreAutour = v => {
+    let mini = Infinity, ou = null;
+    for (const r of (city.routes || [])) {
+      if (Math.abs(v.x - r.x) > r.w / 2 + 6 || Math.abs(v.z - r.z) > r.d / 2 + 6) continue;
+      const long = r.d >= r.w, W = long ? r.w : r.d, L = long ? r.d : r.w;
+      const axe = long ? r.x : r.z, cen = long ? r.z : r.x;
+      const [dt, dl] = demi(v, long);
+      const t = long ? v.x : v.z, sl = long ? v.z : v.x;
+      if (Math.abs(sl - cen) > L / 2 + dl) continue;
+      if (Math.abs(t - axe) - dt > W / 2) continue;         // il ne touche pas ce bitume
+      const cote = t >= axe ? 1 : -1, dedans = t - cote * dt;
+      let oppose = axe - cote * W / 2;                       // la rive d'en face
+      for (const o of gares) {
+        if (o === v) continue;
+        const [ot, ol] = demi(o, long);
+        const ta = long ? o.x : o.z, sa = long ? o.z : o.x;
+        if (Math.abs(sa - sl) - (ol + dl) > ALT_GOULOT) continue;   // trop loin le long de la rue
+        if (Math.abs(ta - axe) - ot > W / 2) continue;
+        if ((ta >= axe ? 1 : -1) === cote) continue;        // garé du même côté
+        const bordO = ta + cote * ot;
+        if (cote > 0 ? bordO > oppose : bordO < oppose) oppose = bordO;
+      }
+      const l = Math.abs(dedans - oppose);
+      if (l < mini) { mini = l; ou = r; }
+    }
+    return { libre: mini, rue: ou };
+  };
+  // les grilles d'essai, de la plus petite au plus grande distance : on déplace le moins possible
+  const essais = [];
+  for (let ot = 0; ot <= 8.01; ot += 0.3) for (const st of (ot ? [1, -1] : [0]))
+    for (let ol = 0; ol <= 12.01; ol += 0.6) for (const sl of (ol ? [1, -1] : [0]))
+      if (ot || ol) essais.push([ot * st, ol * sl, Math.hypot(ot, ol)]);
+  essais.sort((u, w) => u[2] - w[2]);
+  const bouchons = [], deplaces = [], restants = [];
+  for (const r of (city.routes || [])) {
+    const long = r.d >= r.w, W = long ? r.w : r.d, L = long ? r.d : r.w, axe = long ? r.x : r.z, cen = long ? r.z : r.x;
+    const bord = [];
+    for (const v of gares) {
+      const [dt, dl] = demi(v, long);
+      const t = long ? v.x : v.z, sl = long ? v.z : v.x;
+      if (Math.abs(sl - cen) > L / 2 + dl) continue;
+      if (Math.abs(t - axe) - dt > W / 2) continue;
+      bord.push({ v, cote: t >= axe ? 1 : -1, sl, dl, dt, dedans: t - (t >= axe ? 1 : -1) * dt });
+    }
+    for (const a of bord) for (const b of bord) {
+      if (a.cote >= 0 || b.cote <= 0) continue;
+      if (Math.abs(a.sl - b.sl) - (a.dl + b.dl) > ALT_GOULOT) continue;
+      const libre = b.dedans - a.dedans;
+      if (libre >= PASSE) continue;
+      bouchons.push({ rue: [r.x, r.z], larg: W, libre: +libre.toFixed(2), passe: PASSE,
+        de: [+a.v.x.toFixed(1), +a.v.z.toFixed(1)], a: [+b.v.x.toFixed(1), +b.v.z.toFixed(1)] });
+      // ON DÉPLACE L'UN DES DEUX, le moins loin possible : il doit rester sur sa place de
+      // stationnement déclarée (sinon c'est du stationnement sauvage), la place visée doit être
+      // libre, et APRÈS le déplacement les DEUX véhicules doivent laisser passer le gabarit.
+      const bouge = (m, autre) => {
+        const q0 = placeDe(m.v), x0 = m.v.x, z0 = m.v.z;
+        for (const [ot, ol] of essais) {
+          const nx = m.v.x + (long ? ot : ol), nz = m.v.z + (long ? ol : ot);
+          if (vehBloque(m.v, nx, nz, m.v.h || 0, { bar: true, veh: true })) continue;
+          m.v.x = nx; m.v.z = nz; vehicleSolid(m.v);
+          const lm = libreAutour(m.v), la = libreAutour(autre.v);
+          if ((q0 && !placeDe(m.v)) || lm.libre < PASSE || la.libre < PASSE) { m.v.x = x0; m.v.z = z0; vehicleSolid(m.v); continue; }
+          settleVehicle(m.v); m.v.g.position.set(m.v.x, m.v.y, m.v.z); vehicleSolid(m.v);
+          if (m.v.home) m.v.home = [m.v.x, m.v.z];
+          if (m.v.home0) m.v.home0 = [m.v.x, m.v.z, m.v.h || 0];
+          deplaces.push({ kind: m.v.kind || 'voiture', rue: [r.x, r.z], avant: +libre.toFixed(2),
+            de: [+x0.toFixed(2), +z0.toFixed(2)], vers: [+m.v.x.toFixed(2), +m.v.z.toFixed(2)],
+            apres: +Math.min(lm.libre, la.libre).toFixed(2), recul: +Math.hypot(ot, ol).toFixed(2) });
+          return true;
+        }
+        return false;
+      };
+      if (!bouge(b, a) && !bouge(a, b)) restants.push({ rue: [r.x, r.z], libre: +libre.toFixed(2) });
+    }
+  }
+  if (deplaces.length) { sgridSale(); navSale(); }
+  return { passe: PASSE, bouchons, deplaces, restants };
+}
 function buildShops() {
   // ---- boutique de vêtements : vitrines avec mannequins habillés, portants, miroir, tapis rouge ----
   // La façade ouest mordait la rue de 80 cm. Une boutique plus compacte libère
@@ -5711,12 +5834,18 @@ function placeHorsBitume(x, z, r, marge = 0.5) {
   const R = r + marge;
   const rt = bitumeSous(x, z, R);
   if (!rt) return [x, z];
+  // ON NE TROQUE PAS UNE RUE CONTRE UN MUR. La première version de ce garde-fou ne regardait que
+  // le bitume : elle a poussé un arbre du quartier nord DANS la maison de (-40 ; 264) et un autre
+  // dans le bloc du Techno-Parc (relevé par `harness/audit.js`, 14 poteaux dans un bâtiment → 15).
+  // Un emplacement qui tombe dans un bâtiment ou un intérieur n'en est pas un.
+  const batsP = [...(city.batiments || []), ...(city.interieurs || [])];
+  const dansUnMur = (px, pz) => batsP.some(b => Math.abs(px - b.x) < b.w / 2 + r + 0.3 && Math.abs(pz - b.z) < b.d / 2 + r + 0.3);
   const long = rt.d >= rt.w;                       // la rue court selon z : on s'écarte en x
   const demi = (long ? rt.w : rt.d) / 2;
   const s1 = long ? (x >= rt.x ? 1 : -1) : (z >= rt.z ? 1 : -1);   // le bord le plus proche d'abord
   for (let e = 0.1; e < 4.9; e += 0.6) for (const sg of [s1, -s1]) {
     const nx = long ? rt.x + sg * (demi + R + e) : x, nz = long ? z : rt.z + sg * (demi + R + e);
-    if (!bitumeSous(nx, nz, R)) return [nx, nz];
+    if (!bitumeSous(nx, nz, R) && !dansUnMur(nx, nz)) return [nx, nz];
   }
   return [x, z];
 }
@@ -7160,6 +7289,7 @@ const WORLDS = [
       // possibles. Il vient APRES la signalisation (il retient ou sont les feux et les
       // panneaux) et APRES finirPlan (il rattache chaque desserte de quartier a une voie).
       B('places de stationnement', declareLesParkings);   // poste Circulation : la liste des places légitimes (dépôt, caserne, garage, héliports…)
+      B('stationnement alterné', () => { city.alternance = stationnementAlterne(); });   // deux voitures garées face à face fermaient une rue au plus large véhicule de service
       B('graphe des voies', () => { city.graphe = construireGraphe(); city.dessertesVoies = rattacheDessertes(); traficPlace(); });
       // « REMETS LES VOITURES A BONNE HAUTEUR » (joueur, round 74). On repose TOUS les vehicules
       // sur ce qu'il y a VRAIMENT sous leurs roues, une fois la ville entiere batie. Un vehicule

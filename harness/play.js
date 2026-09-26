@@ -261,8 +261,35 @@ test('les libellés de commandes suivent le mode tactile', async p => {
   return { ok, detail: `clavier « ${r.avant} » ; tactile « ${r.action} » / « ${r.saut} » ; monde préservé : ${r.monde.includes('Espace')}` };
 });
 
+// ================= LE PALMIER DE LA PLAGE TIRÉ AU SORT (round 82) =================
+// « 0 balle sur 6 » en suite complete, 6 sur 6 seul : LA CAUSE EST MESUREE, et ce n'est ni la
+// duree de vie de la balle ni le groupe des ephemeres. La voie de tir de ce test, de (110 ; 60)
+// a (110 ; 72), TRAVERSE LA RANGEE DE PALMIERS DE LA PLAGE : le jeu en plante six a
+// z = -50 + i × 38 (donc z = 64, pile entre le tireur et la cible) et tire leur abscisse au
+// sort, `rnd(105, 110)`. Le tronc fait 0,60 m, `castSolids` l'arrondit a 0,36 m de large au
+// minimum : des que le tirage tombe au-dela de x = 109,70 — une fois sur seize — le palmier
+// est DANS la ligne de mire. Mesure, palmier deplace a la main a x = 109,85 puis a x = 106,
+// tout le reste identique :
+//   · x = 106    → verrou = « Lucas_2014 », ecart de cap 0,027 rad, 7 pas de vol, 24 degats ;
+//   · x = 109,85 → verrou = AUCUN, ecart de cap 0,113 rad, 2 pas de vol, 0 degat, reticule
+//                  pose a z = 63,70 (le tronc) au lieu de z = 72 (la cible).
+// C'est mot pour mot la signature du releve r81 (verrou=AUCUN, 0,114 rad, 2 pas, 0 degat) : UNE
+// cause, TROIS symptomes. Le tronc arrete la balle (c'est son travail), il coupe la ligne de vue
+// de `ciblesVerrouillables` (donc plus de verrou) et il ramene le point de visee a 3,70 m — d'ou
+// les 0,11 rad d'ecart, qui ne sont PAS de la dispersion (celle du pistolet plafonne a 0,009 rad).
+// DEUX REMEDES, parce qu'un seul ne suffit pas :
+//   1. la graine est figee AVANT la reconstruction du monde : le palmier tombe toujours au meme
+//      endroit, la loterie disparait (meme geste que les tests 178, 390 et 465) ;
+//   2. on DEGAGE LA VOIE DE TIR comme on degageait deja les habitants : tout solide qui coupe le
+//      rayon tireur → cible est ecarte de la liste des solides, et le bilan le NOMME. Ainsi le
+//      test mesure la balistique a 12 m quel que soit ce que l'urbanisme plantera demain a z = 64.
 test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
-  await p.evaluate(() => {
+  const degagement = await p.evaluate(() => {
+    // GRAINE FIGEE AVANT LA RECONSTRUCTION : c'est elle qui place le palmier de la plage.
+    // (On ne touche PAS a `simTime` : ce test ne mesure ni les feux ni le cycle du jour, et le
+    //  faire reculer perimerait les minuteries laissees par les tests precedents.)
+    window.__vraiRnd17 = Math.random; let graine = 20260926;
+    Math.random = () => ((graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     __SHOT.go({ world: 4, x: 110, y: 0.5, z: 60, hour: 12 });
     const b = __G.bots[0];
     __G.P.pos.set(110, 0.4, 60); __G.P.vel.set(0, 0, 0);
@@ -284,6 +311,24 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
     b.av.group.position.copy(b.pos);
     __G.owned.add('arme:pistol'); __G.equipWeapon('pistol'); __G.drawWeapon(true);
     __G.P.aimToggle = true; __G.P.aim = true;   // visée épaulée : dispersion réduite
+    // ON DEGAGE AUSSI LA VOIE DE TIR (voir le palmier de la plage, en tete de ce test). On tire
+    // le rayon des YEUX et celui de la BOUCHE DU CANON vers la poitrine de la cible ; tout solide
+    // qui les coupe sort de la liste, et on le nomme. Douze passes au plus : on ne demonte pas la
+    // ville, on ouvre un couloir de 12 m.
+    const ecartes = [];
+    for (let k = 0; k < 12; k++) {
+      let bloque = null;
+      for (const d of [[110, 1.75, 60], [110.34, 1.68, 60.62]]) {
+        const dx = 110 - d[0], dy = 1.4 - d[1], dz = 72 - d[2], L = Math.hypot(dx, dy, dz) || 1;
+        const h = __G.castSolids(d[0], d[1], d[2], dx / L, dy / L, dz / L, L - 0.4, false);
+        if (h.o) { bloque = h.o; break; }
+      }
+      if (!bloque) break;
+      const i = __G.solids.indexOf(bloque); if (i < 0) break;
+      ecartes.push(`${(bloque.mesh && bloque.mesh.name) || 'solide'} ${bloque.w.toFixed(1)}×${bloque.h.toFixed(1)}×${bloque.d.toFixed(1)} m en ${bloque.x.toFixed(1)}/${bloque.z.toFixed(1)}`);
+      __G.solids.splice(i, 1); __G.sgridSale();   // la grille spatiale doit oublier le solide retiré
+    }
+    return ecartes;
   });
   const hp0 = await p.evaluate(() => __G.bots[0].hp);
   const pos0 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
@@ -320,7 +365,11 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
         // fonction du jeu, `shotsTick`), jusqu'a l'impact : la mesure ne depend plus de la
         // charge de la machine. Cent pas = 1,67 s de vol, la balle en vit 1,6.
         let pas = 0; while (G.shots.length && pas++ < 100) G.shotsTick(1 / 60);
-        return { parti: 1, derive, pas, tir: `verrou=${P.lock ? P.lock.nom : 'AUCUN'} ecart de cap=${ec.toFixed(3)} rad joueur=${P.pos.x.toFixed(1)}/${P.pos.z.toFixed(1)} cible=${b.pos.x.toFixed(1)}/${b.pos.z.toFixed(1)} camYaw=${G.cam.yaw.toFixed(2)} visible=${b.av.group.visible} degainee=${!!P.drawn}` };
+        // LE RETICULE DIT OU LA VISEE S'ARRETE. C'est lui qui a nomme le palmier : pose a
+        // z = 63,70 au lieu de z = 72, il disait qu'un solide coupait la voie a 3,70 m — et un
+        // point de visee a 3,70 m explique a lui seul les 0,11 rad d'ecart (la bouche du canon
+        // est a 34 cm a droite du joueur) et les 2 pas de vol.
+        return { parti: 1, derive, pas, tir: `verrou=${P.lock ? P.lock.nom : 'AUCUN'} ecart de cap=${ec.toFixed(3)} rad reticule=z ${G.aimPoint.z.toFixed(2)} (cible a z 72) joueur=${P.pos.x.toFixed(1)}/${P.pos.z.toFixed(1)} cible=${b.pos.x.toFixed(1)}/${b.pos.z.toFixed(1)} camYaw=${G.cam.yaw.toFixed(2)} visible=${b.av.group.visible} degainee=${!!P.drawn}` };
       }
       // POURQUOI RIEN N'EST PARTI ? fire() a sept portes de sortie ; on les releve toutes,
       // sinon « 0 balle sur 6 » ne dit rien de ce qu'il faut reparer. C'est ce releve qui a
@@ -335,9 +384,11 @@ test('une rafale de 6 balles visées touche un bot à 12 m', async p => {
   }
   const hp1 = await p.evaluate(() => __G.bots[0].hp);
   const pos1 = await p.evaluate(() => [__G.bots[0].pos.x, __G.bots[0].pos.z]);
+  // la graine est rendue : les tests suivants retrouvent le vrai hasard
+  await p.evaluate(() => { if (window.__vraiRnd17) { Math.random = window.__vraiRnd17; window.__vraiRnd17 = null; } });
   const bouge = Math.hypot(pos1[0] - pos0[0], pos1[1] - pos0[1]);
   const touches = Math.round((hp0 - hp1) / 24);
-  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon ; touchée, la cible détale (fuite maximale relevée entre deux coups : ${fuite.toFixed(2)} m), elle est reposée à 12 m avant chaque tir — écart final ${bouge.toFixed(2)} m${mutisme ? ' · le canon est resté muet : ' + mutisme : ''}${touches < 5 && trajets ? ' · premier tir : ' + trajets : ''}${touches < 5 && vol ? ` · vol le plus long ${pasDeVol} pas de simulation (une balle met 8 pas pour faire 12 m), ${vol.reste} balle(s) volaient encore à la fin` : ''}` };
+  return { ok: touches >= 5, detail: `${touches} balles sur 6 ont touché (${hp0 - hp1} points de dégâts) · ${partis} balles sur 6 sont réellement parties du canon ; touchée, la cible détale (fuite maximale relevée entre deux coups : ${fuite.toFixed(2)} m), elle est reposée à 12 m avant chaque tir — écart final ${bouge.toFixed(2)} m · voie de tir : ${degagement.length ? degagement.length + ' solide(s) écarté(s) du couloir de 12 m (' + degagement.join(' ; ') + ')' : 'libre, rien à écarter'}${mutisme ? ' · le canon est resté muet : ' + mutisme : ''}${touches < 5 && trajets ? ' · premier tir : ' + trajets : ''}${touches < 5 && vol ? ` · vol le plus long ${pasDeVol} pas de simulation (une balle met 8 pas pour faire 12 m), ${vol.reste} balle(s) volaient encore à la fin` : ''}` };
 });
 
 test('une balle ne traverse plus une cloison fine', async p => {
@@ -11579,16 +11630,29 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
     };
     let solide = 0, collisions = 0, vmax = 0, images = 0;
     const raisons = {};
+    // QUI CHEVAUCHE QUOI. « 692 images ou un vehicule chevauche un solide » ne dit rien de ce
+    // qu'il faut reparer : trois minutes de ville, quarante vehicules, cinq mille solides. On
+    // tient donc le classement des couples (vehicule, solide) et on NOMME les trois premiers,
+    // avec la premiere image ou le couple apparait et l'endroit exact. Sans ce releve, ce test
+    // se relit dix fois sans qu'on voie qu'il s'agit d'UN seul vehicule contre UN seul mur.
+    const coupables = {};
     for (let i = 0; i < 60 * 180; i++) {
       G.simTime += 1 / 60; G.lightsTick(); G.cityStep(1 / 60); images++;
       for (const c of ai) {
-        if (dansUnSolide(c)) solide++;
+        const dedans = dansUnSolide(c);
+        if (dedans) { solide++;
+          const cle = `${c.kind || 'voiture'}${c.exactVeh ? ' (controle exact)' : ''} dans ${(dedans.mesh && dedans.mesh.name) || 'solide'} ${dedans.w.toFixed(1)}×${dedans.h.toFixed(1)}×${dedans.d.toFixed(1)} m en ${dedans.x.toFixed(1)}/${dedans.z.toFixed(1)}${dedans.bar ? ' [barriere]' : ''}${dedans.glass ? ' [vitre]' : ''}${dedans.pol ? ' [police]' : ''}`;
+          const e = coupables[cle] || (coupables[cle] = { n: 0, img: i, ou: `${c.x.toFixed(1)}/${c.z.toFixed(1)}`, raison: c.raison || 'aucune' });
+          e.n++;
+        }
         vmax = Math.max(vmax, Math.abs(c.speed || 0));
         if (c.raison) raisons[c.raison] = (raisons[c.raison] || 0) + 1;
       }
       for (let a = 0; a < ai.length; a++) for (let b = a + 1; b < ai.length; b++) if (seChevauchent(ai[a], ai[b])) collisions++;
     }
-    const res = { images, solide, collisions, vmax: +vmax.toFixed(1), raisons };
+    const res = { images, solide, collisions, vmax: +vmax.toFixed(1), raisons,
+      coupables: Object.entries(coupables).sort((a, b) => b[1].n - a[1].n).slice(0, 3)
+        .map(([k, e]) => `${e.n} images · ${k} · vehicule en ${e.ou} des l'image ${e.img}, motif d'arret « ${e.raison} »`) };
     // ---- l'ARRÊT AU FEU ROUGE, mesuré : on pose une voiture 24 m avant la ligne d'un feu
     // dont le groupe vient de passer au rouge, et on regarde où elle s'immobilise.
     const c0 = ai[0];
@@ -11641,7 +11705,7 @@ test('la circulation respecte le code de la route : trois minutes sans rien chev
     && !!r.feu && r.feu.arrete > 30 && r.feu.avant != null && r.feu.avant > 0 && r.feu.avant < 6
     && !!r.stop && r.stop.arrete > 20 && r.stop.vApres > 2
     && (r.raisons.feu || 0) > 0 && (r.raisons.stop || 0) > 0;
-  return { ok, detail: `trois minutes de circulation (${r.images} images, ${Object.keys(r.raisons).length} sortes d'arrêts) : ${r.solide} image où un véhicule chevauche un solide, ${r.collisions} collision voiture-voiture, vitesse maximale ${r.vmax} m/s · motifs d'arrêt : ${JSON.stringify(r.raisons)} · feu rouge en (${r.feu ? r.feu.x + ',' + r.feu.z : '?'}) : la voiture reste immobile ${r.feu ? r.feu.arrete : 0} images et s'arrête à ${r.feu ? r.feu.avant : '?'} m AVANT la ligne · stop en (${r.stop ? r.stop.x + ',' + r.stop.z : '?'}) : arrêt complet ${r.stop ? r.stop.arrete : 0} images puis redémarrage à ${r.stop ? r.stop.vApres : 0} m/s` };
+  return { ok, detail: `trois minutes de circulation (${r.images} images, ${Object.keys(r.raisons).length} sortes d'arrêts) : ${r.solide} image où un véhicule chevauche un solide, ${r.collisions} collision voiture-voiture, vitesse maximale ${r.vmax} m/s${r.coupables && r.coupables.length ? ' · QUI CHEVAUCHE QUOI : ' + r.coupables.join(' ; ') : ''} · motifs d'arrêt : ${JSON.stringify(r.raisons)} · feu rouge en (${r.feu ? r.feu.x + ',' + r.feu.z : '?'}) : la voiture reste immobile ${r.feu ? r.feu.arrete : 0} images et s'arrête à ${r.feu ? r.feu.avant : '?'} m AVANT la ligne · stop en (${r.stop ? r.stop.x + ',' + r.stop.z : '?'}) : arrêt complet ${r.stop ? r.stop.arrete : 0} images puis redémarrage à ${r.stop ? r.stop.vApres : 0} m/s` };
 });
 
 test('la police abandonne les recherches quand le joueur est cache, et repart des qu\'il se montre', async p => {

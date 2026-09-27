@@ -4653,6 +4653,64 @@ function immeubleZone(x, z, w, d, col, dir) {
     m.position.set(x - w / 2 - 0.18, 1.6 + i * 0.2, z - 2 + i * 2); m.rotation.y = -Math.PI / 2; worldGroup.add(m);
   }
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
+  // ---------- LA CAMÉRA DANS LA CAGE D'ESCALIER (défaut n° 109, round 83) ----------
+  // « LE VISAGE DE L'ENFANT REMPLIT L'ÉCRAN » : plus une marche, plus un garde-corps. Perche
+  // mesurée (objectif ↔ tête) aux six points de l'escalier, quatre caps chacun, pour un confort
+  // que le jeu se fixe à 4,60 m : le PIRE de chaque point valait 0,48 / 0,52 / 0,88 / 0,59 /
+  // 0,48 / 0,48 m. Vingt-quatre relevés, dix-huit sous 2 m. Témoin : la rue, au même instant,
+  // rend 5,09 à 9,10 m.
+  // TROIS CAUSES, MESURÉES RAYON PAR RAYON (l'axe et les deux rayons à ±0,4 rad) :
+  //   1. `cam.pmax` = 0,04 rad AUX VINGT-QUATRE RELEVÉS. Une cage d'escalier a, par définition,
+  //      une dalle au-dessus de la tête : `cam.plafond` vaut 1,05 m sur les paliers et 0,44 m
+  //      sur les volées, donc la loi « un plafond bas n'interdit que de MONTER »
+  //      (clamp((plafond − 1,1) × 0,22)) écrase la visée à son minimum. Or LA MONTÉE EST LE SEUL
+  //      SECOURS du jeu quand il n'y a pas de place derrière : `cam.hausse` valait 0 partout ici,
+  //      contre 0,717 rad dans la rue à dix mètres de là. La caméra restait donc clouée à la
+  //      hauteur de la poitrine — exactement la hauteur des garde-corps.
+  //   2. LES GARDE-CORPS (0,22 × 1,15 m d'appui, plus les 0,30 m de garde de la caméra : une
+  //      paroi de 1,45 à 1,97 m) arrêtent les TROIS rayons dans huit caps sur vingt-quatre, à
+  //      0,67 à 1,38 m. Sur la volée descendante, qui en porte un de chaque côté, l'est et
+  //      l'ouest tombent tous les deux à 0,71 m.
+  //   3. LA VOLÉE ET LE PALIER DE L'ÉTAGE AU-DESSUS — le plafond, pas un mur — arrêtent quatre
+  //      caps à 1,38 / 1,80 m, et la façade est porteuse (0,36 × 3,20 × 10 m, 1,30 m seulement du
+  //      milieu de la volée) cinq autres, à 0,97 à 2,87 m. Les deux piliers porteurs
+  //      (0,45 × 6,60 × 0,70 m) ferment les deux derniers, à 2,87 m.
+  // CE QUE LA CAGE PEUT OFFRIR AU MIEUX (mesuré en rendant traversables le garde-corps, les murs
+  // et le plafond de l'étage du dessus) : 4,64 à 9,30 m sur les paliers, 4,47 m en pleine volée à
+  // 0,55 rad de visée, 9,30 m sur la volée descendante. Il y a donc bel et bien la place — à
+  // condition de ne PAS rester à hauteur de poitrine, et de traiter le plafond en plafond.
+  // LA RÉPARATION : un volume de caméra PAR NIVEAU (voir camPieceDe), et non un seul pour toute
+  // la cage. C'est ce qui permet de dire « le plafond, c'est ce qui est au-dessus de MA poitrine
+  // à MOI » : un volume unique de neuf mètres de haut ne saurait pas à quel étage on se trouve.
+  // `cage: true` (voir interieurEntre) veut dire exactement deux choses : le garde-corps et le
+  // plafond sont traversables par la caméra, et RIEN n'est effacé — l'escalier reste entier à
+  // l'image, seul le fondu à 22 % de la maison de poupée joue sur ce qui coupe la ligne de vue.
+  // (« CORRIGE ON VOIT NI ESCALIER NI PLANCHER NI MUR » est le défaut qu'on ne réveille pas.)
+  // DEUX RECTANGLES PAR NIVEAU, et pas un seul : la cage est adossée à la façade est, la coursive
+  // court le long de la façade sud. Leur boîte commune engloberait l'APPARTEMENT, dont la caméra
+  // est déjà réglée (city.batiments) et dont le relevé témoin vaut 5,23 m — on n'y touche pas.
+  // les deux autres emprises que la caméra a le droit de traverser depuis l'escalier : l'immeuble
+  // que la cage dessert, et la coursive qui longe ses portes (voir interieurEntre). L'immeuble
+  // VOISIN, à vingt-six mètres, n'y est jamais.
+  const EMP = [{ x, z, w, d }, { x: (pontX0 + pontX1) / 2, z: (courZ0 + courZ1) / 2,
+    w: pontX1 - pontX0, d: courZ1 - courZ0 }];
+  for (let f = 0; f < N; f++) {
+    const y1 = f * H + 0.1;
+    // la cage : les deux bandes, les paliers, les piliers ; à l'ouest on va chercher la façade
+    // est porteuse (marge de interieurEntre : 0,60 m), à l'est les deux piliers.
+    // en z, la cage va du palier de demi-tour (au nord) jusqu'au bout de la coursive (au sud) :
+    // le poteau qui porte la coursive (0,20 x 6,60 x 0,20 m) barrait sinon le rayon d'axe a
+    // 4,32 m depuis la volee descendante, et un poteau n'arrete que l'axe, jamais les cotes.
+    city.camPieces.push({ x: (xE - 0.3 + xE + palW + 0.8) / 2, z: (zM0 - 0.45 + courZ1 + 0.45) / 2,
+      w: palW + 1.1, d: courZ1 - zM0 + 0.9, y1, y2: y1 + H, cage: true, emprises: EMP,
+      nom: 'cage d\'escalier de La Zone' });
+    // la coursive : de plain-pied avec le palier, elle longe les portes des appartements. Son
+    // rectangle s'arrête au nu intérieur de la façade sud (courZ0 − 0,10) : un joueur DANS
+    // l'appartement (z < 14,70 ici) n'y tombe jamais.
+    if (f > 0) city.camPieces.push({ x: (pontX0 - 0.3 + xE + palW + 0.8) / 2, z: (courZ0 - 0.1 + courZ1 + 0.45) / 2,
+      w: (xE + palW + 0.8) - (pontX0 - 0.3), d: (courZ1 + 0.45) - (courZ0 - 0.1), y1, y2: y1 + H,
+      cage: true, emprises: EMP, nom: 'coursive de La Zone' });
+  }
   // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
   return { x, z, w, d, etages: N, h: H, rails: RAILS,
     esc: { xE, zS, larg: LARG, pal: PAL, pald: PALD, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP,
@@ -20109,7 +20167,12 @@ function interieurEntre(r) {
   // Capture à l'appui : à 1,20 m l'enfant disparaissait derrière son propre panneau ; à 1,00 m
   // l'enseigne s'efface avec le toit, et l'on voit l'enfant entier dans sa cabane.
   const yTete = P.pos.y + 2.25, marge = 0.6;
-  const yMasque = r.tout ? r.y1 + 1 : yTete;
+  // UNE CAGE D'ESCALIER N'EFFACE RIEN (défaut n° 109). Effacer ce qui dépasse la tête, dans un
+  // escalier à deux demi-tours, c'est reprendre à l'enfant la volée, le palier et le garde-corps
+  // qu'il est en train de gravir — le défaut « CORRIGE ON VOIT NI ESCALIER NI PLANCHER NI MUR ».
+  // Ici la caméra TRAVERSE (xray, plus bas) et le fondu à 22 % de la maison de poupée suffit :
+  // seul ce qui coupe vraiment la ligne de vue devient translucide, tout le reste reste plein.
+  const yMasque = r.cage ? 1e9 : (r.tout ? r.y1 + 1 : yTete);
   interieur.yTete = yTete;   // hauteur de reference : si le joueur change d'etage, il faudra refaire le tri
   // les sols praticables depuis les pieds du joueur : leurs maillages sont intouchables, et le
   // premier qui dépasse la tête pose le PLAFOND DE COUPE (au-dessus, on n'efface plus rien).
@@ -20134,7 +20197,54 @@ function interieurEntre(r) {
     if (Math.abs(cx - r.x) > r.w / 2 + marge || Math.abs(cz - r.z) > r.d / 2 + marge) return;
     if (_bb.min.y > yMasque && _bb.min.y < yCoupe) { o.visible = false; interieur.masques.push(o); }
   });
-  for (const o of solids) {
+  // ============ DANS UNE CAGE D'ESCALIER, LE PLAFOND N'EST PAS UN MUR (défaut n° 109) ============
+  // camLibres dit déjà « LE SOL SUR LEQUEL ON MARCHE N'EST PAS UN MUR » : une dalle dont le dessus
+  // ne dépasse pas la CEINTURE du joueur laisse passer la perche. Son symétrique manquait, et une
+  // cage d'escalier est faite de cela : sous chaque volée il y a le palier de l'étage du dessous,
+  // au-dessus de chaque palier la volée de l'étage du dessus. Ce que la mesure rayon par rayon a
+  // relevé, et ce que chaque ligne ci-dessous répare :
+  //   · le GARDE-CORPS (0,22 × 1,15 m, plus 0,30 m de garde de caméra) fermait les TROIS rayons à
+  //     0,67 m sur la volée descendante, qui en porte un de chaque côté ;
+  //   · la VOLÉE et le PALIER de l'étage du dessus, à 1,38 et 1,80 m ;
+  //   · une fois la caméra passée derrière la façade (elle en a le droit : plus de 2,20 m de haut),
+  //     le PLANCHER de l'appartement du dessus (16,00 × 0,40 × 10,00 m) à 3,18 m, la dalle de la
+  //     coursive du dessus (21,20 × 0,35 × 2,00 m) à 3,34 m, un trumeau de la façade sud à 3,18 m,
+  //     et jusqu'à une CHAISE posée au premier étage (0,50 × 0,90 × 0,50 m) à 3,65 m.
+  // TROIS EMPRISES, ET PAS UNE. La cage est adossée à la façade est, la coursive longe la façade
+  // sud, et l'immeuble est entre les deux : leur boîte commune engloberait l'appartement, dont la
+  // caméra est déjà réglée (city.batiments, relevé témoin 5,23 m). On énumère donc les emprises.
+  // ÊTRE SUR L'ESCALIER D'UN IMMEUBLE, C'EST ÊTRE DANS L'IMMEUBLE : la maison de poupée rend déjà
+  // ses murs traversables à qui se tient DEDANS, et le palier extérieur est de plain-pied avec la
+  // coursive et avec les appartements.
+  // LES DEUX SEUILS, ET POURQUOI CEUX-LÀ.
+  //   · L'OBJECTIF (P.pos.y + 1,50 m) pour tout le reste : la caméra est toujours au-dessus de ce
+  //     point (l'inclinaison est positive dans une pièce), donc rien dont le DESSOUS est plus haut
+  //     ne peut se glisser entre elle et l'enfant. Un seuil plus bas (la poitrine, + 1,40 m)
+  //     basculait d'un relevé à l'autre : le joueur monté d'une marche (1,48 → 1,80 m) faisait
+  //     repasser le plancher du dessus du côté des murs et la perche retombait de 4,95 à 0,93 m.
+  //   · LA CEINTURE (P.pos.y + 0,45 m) pour les VRAIES DALLES, minces et larges dans les deux
+  //     sens : c'est le seuil que camLibres emploie lui-même pour dire « ceci est un plancher ».
+  //     Une dalle plus haute que ma ceinture est un plancher ou un plafond, jamais un mur. On la
+  //     cherche jusqu'à NEUF MÈTRES (la perche n'est jamais plus longue) parce que la dalle qui
+  //     gêne appartient souvent au voisin — l'appartement, la coursive du dessus.
+  // CE QUI CONTINUE DE FERMER LA VUE : tout ce qui est à HAUTEUR D'HOMME dans la cage. Une marche
+  // devant soi, le limon, une carcasse garée au pied de l'escalier, un meuble du même étage. La
+  // caméra ne peut donc pas passer sous l'escalier, ni traverser une volée par le flanc.
+  if (r.cage) {
+    const yObj = P.pos.y + 1.5, yCeint = P.pos.y + 0.45;
+    const emprises = [{ x: r.x, z: r.z, w: r.w, d: r.d }].concat(r.emprises || []);
+    for (const o of solids) {
+      if (!o.mesh || o.h > 30 || o.veh || o.xray) continue;
+      const bas = o.y - o.h / 2;
+      let ouvre = o.h <= 0.8 && Math.max(o.w, o.d) >= 2.5 && Math.min(o.w, o.d) >= 1.2 && bas >= yCeint
+        && Math.abs(o.x - r.x) <= r.w / 2 + 9 && Math.abs(o.z - r.z) <= r.d / 2 + 9;
+      if (!ouvre) for (const e2 of emprises) {
+        if (Math.abs(o.x - e2.x) > e2.w / 2 + marge || Math.abs(o.z - e2.z) > e2.d / 2 + marge) continue;
+        if (o.rambarde || bas >= yObj || (o.h >= 2.2 && bas <= yTete)) { ouvre = true; break; }
+      }
+      if (ouvre) { o.xray = true; interieur.murs.push(o); }
+    }
+  } else for (const o of solids) {
     if (!o.mesh || o.h > 30 || o.veh) continue;
     if (Math.abs(o.x - r.x) > r.w / 2 + marge || Math.abs(o.z - r.z) > r.d / 2 + marge) continue;
     if (o.y - o.h / 2 > yTete) continue;

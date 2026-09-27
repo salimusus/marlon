@@ -24198,7 +24198,8 @@ test('aucun mobilier urbain ne mord la chaussee, et le trottoir reste marchable'
         for (const m of (c.meubles || [])) fam[m.fam] = (fam[m.fam] || 0) + 1;
         const bk = k => G.breakables.filter(b => b.kind === k).length;
         sorties.push({ graine, meubles: (c.meubles || []).length, perdus, surRue, ferme, fam,
-          range: c.range ? { fautes: c.range.fautes, parQuoi: c.range.parQuoi, deplaces: c.range.deplaces.length, restants: c.range.restants.length } : null,
+          range: c.range ? { fautes: c.range.fautes, parQuoi: c.range.parQuoi, deplaces: c.range.deplaces.length,
+                             restants: c.range.restants.length, ouverts: (c.range.ouverts || []).length, quiOuverts: c.range.ouverts || [] } : null,
           compte: { banc: (c.benches || []).length, panneau: (c.panneaux || []).length, feu: (c.trafficLights || []).length,
                     lampadaire: bk('lamp'), poubelle: bk('poubelle'), cone: bk('cone') } });
       }
@@ -24206,10 +24207,18 @@ test('aucun mobilier urbain ne mord la chaussee, et le trottoir reste marchable'
     return sorties;
   });
   const att = { banc: 196, panneau: 210, feu: 38, lampadaire: 158, poubelle: 86, cone: 8 };
+  // LE COMPTE DOIT TOMBER JUSTE, ET IL NE TOMBAIT PAS : `fautes` = `deplaces` + `restants` etait
+  // faux d'une unite, et le bilan ne disait pas pourquoi. Un meuble que la passe ne SAIT PAS
+  // bouger et qui ferme un trottoir fait desormais interrompre le pave a son droit (le mat du
+  // feu sud-est du rond-point de la statue, coince dans une bande de 0,99 m entre la chaussee et
+  // la parcelle voisine, n'y laisse que 0,42 m). On publie donc ce troisieme chiffre, et on le
+  // BRIDE : ouvrir le pave est une issue de secours, pas une methode — au-dela de quatre par
+  // chargement, c'est la passe qui a un probleme.
   const ok = r.length === 2 && r.every(o => o.perdus === 0 && o.surRue.length === 0 && o.ferme.length === 0
     && o.meubles > 850 && o.range && o.range.fautes > 200 && o.range.restants === 0
+    && o.range.ouverts <= 4 && o.range.fautes === o.range.deplaces + o.range.ouverts + o.range.restants
     && Object.keys(att).every(k => o.compte[k] === att[k]));
-  return { ok, detail: `tout le decor solide passe par la meme porte que les arbres · ${r.map(o => `graine ${o.graine} : ${o.meubles} meubles au registre (${Object.entries(o.fam).map(([k, v]) => k + ' ' + v).join(', ')}) — la passe a trouve ${o.range.fautes} fautes (${JSON.stringify(o.range.parQuoi)}), et les a TOUTES rangees (${o.range.deplaces} deplacements, ${o.range.restants} restant) → ${o.surRue.length} meuble sur la chaussee, ${o.ferme.length} trottoir ferme sous ${(2 * 0.4).toFixed(2)} m, ${o.perdus} solide perdu · comptes par famille inchanges : ${JSON.stringify(o.compte)}`).join(' · ')}` };
+  return { ok, detail: `tout le decor solide passe par la meme porte que les arbres · ${r.map(o => `graine ${o.graine} : ${o.meubles} meubles au registre (${Object.entries(o.fam).map(([k, v]) => k + ' ' + v).join(', ')}) — la passe a trouve ${o.range.fautes} fautes (${JSON.stringify(o.range.parQuoi)}), et les a TOUTES rangees (${o.range.deplaces} deplacements, ${o.range.ouverts} pave(s) interrompu(s) sous un meuble qui n'a aucune place valable${o.range.ouverts ? ' → ' + JSON.stringify(o.range.quiOuverts) : ''}, ${o.range.restants} restant) → ${o.surRue.length} meuble sur la chaussee, ${o.ferme.length} trottoir ferme sous ${(2 * 0.4).toFixed(2)} m, ${o.perdus} solide perdu · comptes par famille inchanges : ${JSON.stringify(o.compte)}`).join(' · ')}` };
 });
 
 // ====== ET L'ENFANT PEUT TOUJOURS ENTRER : les 30 entrees declarees restent franchissables ======

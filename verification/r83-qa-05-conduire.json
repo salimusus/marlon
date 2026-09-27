@@ -1,0 +1,176 @@
+{
+ "mobilier": {
+  "total": 874,
+  "surLaChaussee": 0,
+  "exemples": []
+ },
+ "sorties": {
+  "essayees": 16,
+  "bloquees": 0,
+  "listeBloquees": [],
+  "echecs": [],
+  "mediane": 54.87
+ },
+ "balade": {
+  "parcouru_m": 12.1,
+  "releve": [
+   {
+    "s": 0,
+    "x": 43,
+    "z": -13,
+    "v": 0,
+    "degats": 0
+   },
+   {
+    "s": 5,
+    "x": 43,
+    "z": -8.2,
+    "v": 0,
+    "degats": 0
+   },
+   {
+    "s": 10,
+    "x": 43,
+    "z": -8.2,
+    "v": 0,
+    "degats": 0
+   },
+   {
+    "s": 15,
+    "x": 43,
+    "z": -8.2,
+    "v": 0,
+    "degats": 0
+   },
+   {
+    "s": 20,
+    "x": 43,
+    "z": -8.2,
+    "v": 0,
+    "degats": 0
+   },
+   {
+    "s": 25,
+    "x": 43,
+    "z": -8.2,
+    "v": 0,
+    "degats": 0
+   }
+  ],
+  "degatsMax": 0,
+  "etoilesGagnees": 3,
+  "vitesseApresFrein": 0,
+  "aPied": true,
+  "hp": 100,
+  "accidente": false,
+  "msg": "⛓️ Véhicule chargé sur le plateau : direction le garage",
+  "chat": "che Joueur44 (écraser Lea_star)\nTom_le_ouf : tu vas voir la prochaine fois\nLea_star : tu vas voir la prochaine fois\nLucas_2014 : la police court après quelqu'un !\nZoe_rider : Joueur44, Tu as déjà piloté l'hélico ?\nInes_gg : tu vas voir la prochaine fois\nTom_le_ouf : direction Foot !\n🔥 Un incendie s'est déclaré en ville — les pompiers arrivent !\n🎤"
+ },
+ "autres": [
+  {
+   "kind": "voiture",
+   "parcouru_m": 16.9,
+   "vmax_ms": 0,
+   "vmax_kmh": 0,
+   "hp": 100,
+   "etoiles": 3
+  },
+  {
+   "kind": "bike",
+   "parcouru_m": 26.6,
+   "vmax_ms": 13.9,
+   "vmax_kmh": 50,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "jetski",
+   "parcouru_m": 73.3,
+   "vmax_ms": 24.2,
+   "vmax_kmh": 87,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "buggy",
+   "parcouru_m": 168.9,
+   "vmax_ms": 33,
+   "vmax_kmh": 119,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "ambulance",
+   "parcouru_m": 12,
+   "vmax_ms": 21.6,
+   "vmax_kmh": 78,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "depanneuse",
+   "parcouru_m": 0.2,
+   "vmax_ms": 3,
+   "vmax_kmh": 11,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "moto",
+   "parcouru_m": 18.5,
+   "vmax_ms": 27.7,
+   "vmax_kmh": 100,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "truck",
+   "parcouru_m": 40.8,
+   "vmax_ms": 19.8,
+   "vmax_kmh": 71,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "benne",
+   "parcouru_m": 57.3,
+   "vmax_ms": 18,
+   "vmax_kmh": 65,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "grue",
+   "parcouru_m": 45.1,
+   "vmax_ms": 14,
+   "vmax_kmh": 50,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "pelle",
+   "parcouru_m": 40.3,
+   "vmax_ms": 11,
+   "vmax_kmh": 40,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "tracteur",
+   "parcouru_m": 23.5,
+   "vmax_ms": 14.8,
+   "vmax_kmh": 53,
+   "hp": 100,
+   "etoiles": 0
+  },
+  {
+   "kind": "bulldozer",
+   "parcouru_m": 0.6,
+   "vmax_ms": 1.5,
+   "vmax_kmh": 5,
+   "hp": 100,
+   "etoiles": 0
+  }
+ ],
+ "erreurs": []
+}

@@ -39301,7 +39301,9 @@ function buildMetiers() {
   // la premiere rangee des que la chaussee devant eux s'elargit, et une place ecrite en dur
   // derriere eux se retrouve alors DANS la benne — c'est exactement ce qui est arrive au
   // second passage d'elargissement. 7 m d'entraxe pour 7 m + 5,40 m de caisses : 0,80 m entre
-  // les deux, quelle que soit la largeur de la rue.
+  // les deux, quelle que soit la largeur de la rue. (C'est sa place de DEPART ; le bloc du
+  // decalage, plus bas, le pose finalement en x = 28,20 — a l'est des bennes a gravats ET hors
+  // du nez de la grue. Le calcul sur benne.z reste ce qui lui donne son z.)
   const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, benne.z - 7, 0));
   // ---------- SA PLACE DOIT ÊTRE LIBRE, ET ON LE VÉRIFIE (défaut n° 113, round 83) ----------
   // MESURE : garé en (18,20 ; 121,50), le bulldozer avait la première BENNE À GRAVATS

@@ -24252,7 +24252,8 @@ test('un delit perime ne rend pas l\'enfant provocateur, et une vraie provocatio
     && r.apresGo.avance > 5000
     && r.propre.essais >= 5 && r.propre.surJoueur === 0 && r.propre.surBot > 0
     && r.provoque.provoque && r.provoque.surJoueur === r.provoque.essais;
-  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · horloge rendue a ${r.horloge} s, jamais en arriere` };
+  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · une horloge cassee ne met plus le feu a un immeuble : prochainFeu posee a ${r.feu.posee}, reposee a +${r.feu.ecart} s, ${r.feu.incendies} incendie apres 120 pas (la version d'avant ce correctif la mettait a zero et allumait 1 incendie)`
+    + ` · horloge rendue a ${r.horloge} s, jamais en arriere` };
 });
 
 // ====== UN TROTTOIR NE MENE PLUS DANS UN MUR (round 83, item 4) ======
@@ -24327,4 +24328,307 @@ test('aucun trottoir ne mene dans un mur : le pave s\'arrete la ou le passage s\
   const ok = r.length === 2 && r.every(o => o.pct < 0.3 && o.longMorte < 20 && o.trottoirs > 350
     && o.recoupe && o.recoupe.pire >= 0.9 && o.recoupe.coupes > 20);
   return { ok, detail: `« refais les routes mieux organisees, plus fluides, plus larges » : un trottoir a 0,00 m de large jette l'enfant sur la chaussee · la bande de 1,80 m etait posee sans regarder les murs ; elle est maintenant RETRECIE (jamais sous 0,90 m) ou INTERROMPUE, bordure comprise, et aucune architecture n'a bouge · ${r.map(o => `graine ${o.graine} : ${o.recoupe.avant} trottoirs -> ${o.trottoirs} (${o.recoupe.gardes} intacts, ${o.recoupe.retrecis} retrecis, ${o.recoupe.coupes} coupes, ${o.recoupe.retires} retire, ${o.recoupe.marches} marches posees devant une estrade, ${o.recoupe.fermes} passages fermes recenses) ; le plus etroit pave fait ${o.recoupe.pire} m ; surface pavee ou l'enfant ne passe pas : ${o.morte} m2 sur ${o.aire} (${o.pct} %), soit ${o.longMorte} m de trottoir menteur ; ${o.sous} trottoir dont le minimum tombe sous 0,80 m${o.pires.length ? ' ' + JSON.stringify(o.pires) : ''}`).join(' \u00b7 ')}` };
+});
+
+// ====== UNE HORLOGE QUI RECULE NE PIEGE PLUS PERSONNE (round 83, poste PREUVE) ======
+// LA CLASSE. Le jeu ecrit 555 dates « maintenant + tant de secondes » sur 275 champs. Quand
+// l'horloge de simulation recule d'un coup — une synchro reseau, un banc qui repose l'horloge —
+// toutes ces dates se retrouvent dans l'avenir et TOUT ce qui les lit se fige. `horlogeArriere`
+// ne remettait d'aplomb qu'une liste ECRITE A LA MAIN : 38 champs sur 244. Mesure du piege, le
+// MEME script sur l'ancien jeu (c7565b0) puis sur le nouveau, recul de 6 000 s, meme depart,
+// meme cap choisi par la mesure, temoin libre 31,51 m dans les deux cas :
+//     P.stunT   metres en 400 pas         4,14 m  ->  31,50 m   (vraiment sonne : 4,14 m)
+//     P.crime   provocateur 22 s apres    OUI     ->  NON       (10/10 habitants -> 0/10)
+//     P.aTerreT pas pour se relever       jamais  ->  96        (un vrai KO : 96)
+//     P.sleep   pas pour se reveiller     jamais  ->  252       (un vrai sommeil : 252)
+//     sw.diraT  le rappel « SAUT pour sauter »  muet 6 004 s -> 4 s
+//     cbt.esqFin  pas pour se redresser   jamais  ->  33        (et NaN -> 0)
+//     gym.end / race.goT / ia.refaire / b.dead   +6 000 s -> +20, +5, +6, +8 s
+// LES DEUX MOITIES DE CE TEST. 1) LE RECENSEUR relit le TEXTE du jeu (le bloc de script entier
+// plus les trois fichiers voisins), cherche mecaniquement toute pose de date tiree de
+// l'horloge, ne garde que les champs RELUS contre l'horloge, et les recoupe avec `DATES_JEU`.
+// Le jour ou un poste ecrit `X = simTime + 5` sans inscrire `X` au registre, ce test passe au
+// rouge et NOMME la variable. 2) LA PREUVE PAR LE SYMPTOME : on monte le piege en page, on
+// laisse `step` trouver le recul tout seul (jamais d'appel a `horlogeArriere` a la main) et on
+// regarde ce que devient l'enfant — et, non-regression capitale, qu'un marqueur VRAIMENT frais
+// fait toujours son travail.
+test("une horloge qui recule ne laisse l'enfant ni provocateur, ni paralyse, ni a terre, ni endormi", async p => {
+  // ---------- MOITIE 1 : LE RECENSEUR, sur le texte du jeu ----------
+  const FICHIERS = ['index.html', 'city-detail.js', 'cinematic.js', 'controls.js'];
+  const HORLOGE = /\b(?:simTime|tempsMonde\(\)|horlogeSaine\(\)|G\.simTime|__G\.simTime)\b/;
+  const HORLOGE_MOT = /\b(?:simTime|tempsMonde|horlogeSaine)\b/;
+  // LES QUATRE SEULS NOMS EXCLUS, chacun pour une raison verifiee : `x`/`y` sont des
+  // coordonnees, `m.arrivee` est une DUREE (`simTime - m.t0`), et `st` est un champ de message
+  // reseau dont l'homonyme `r.st` est l'ETAPE d'un joueur distant (un petit entier).
+  const HORS = { x: 'coordonnee', y: 'coordonnee', arrivee: 'duree', st: 'champ reseau / etape' };
+  const corps = f => {
+    const s = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    if (!f.endsWith('.html')) return s;
+    // SURTOUT PAS lastIndexOf('<script>') : un commentaire du jeu contient le texte
+    // « un seul <script> » et on perdait 10 335 lignes sur 40 037.
+    return [...s.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+  };
+  const nu = l => l.replace(/'(?:\\.|[^'\\])*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""')
+                   .replace(/`(?:\\.|[^`\\])*`/g, '``').replace(/\/\/.*$/, '');
+  // UNE POSE DE DATE, et non une PHASE d'animation : l'horloge doit rester un terme ADDITIF de
+  // premier niveau. On remplace chaque groupe entre parentheses par un jeton, donc
+  // `Math.sin(simTime * 1.8) * 0.5` (le roulis du bateau) et `(t > simTime ? 1.35 : 1) * dt`
+  // disparaissent, tandis que `simTime + 8` et `simTime - 200` restent.
+  const estUneDate = val => {
+    let v = val;
+    for (let i = 0; i < 12; i++) { const n = v.replace(/\([^()]*\)/g, '\u00d8'); if (n === v) break; v = n; }
+    if (!HORLOGE.test(v)) return false;
+    return !/[*\/%]\s*(?:simTime|tempsMonde|horlogeSaine)\b|\b(?:simTime|tempsMonde\(\)|horlogeSaine\(\))\s*[*\/%]/.test(v);
+  };
+  // LA BALISE OUVRANTE NE DOIT PLUS JAMAIS PARAITRE DANS UN COMMENTAIRE DU JEU. Elle y etait
+  // une fois (« un seul <script> », a cote de `vehiculeMord`) et elle a coute deux fois cher :
+  // le recenseur de la premiere passe, qui cherchait le debut du code avec `lastIndexOf`,
+  // perdait 10 335 lignes sur 40 037 ; et le test n° 121 (« aucun commentaire n'avale du
+  // code »), qui la cherche de la meme facon, ne relisait que 15 062 lignes sur 40 062.
+  const balise = (() => {
+    const brut = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').split('\n');
+    const prem = brut.findIndex(l => l.trim() === '<script>');
+    return brut.map((l, i) => ({ l, i })).filter(o => o.i > prem && o.l.includes('<' + 'script>')).map(o => o.i + 1);
+  })();
+  const poses = new Map(), relus = new Set();
+  let lignes = 0, nbPoses = 0;
+  for (const f of FICHIERS) {
+    const L = corps(f).split('\n'); lignes += L.length;
+    L.forEach((brut, k) => {
+      const l = nu(brut); if (!HORLOGE_MOT.test(l)) return;
+      const note = nom => { if (!poses.has(nom)) poses.set(nom, []); poses.get(nom).push(f + ':' + (k + 1)); nbPoses++; };
+      let m;
+      const rxA = /(?:^|[;{}(),&|?:]|\breturn\b|\belse\b)\s*((?:[A-Za-z_$][\w$]*)(?:\s*\.\s*[A-Za-z_$][\w$]*|\s*\[[^\]]*\])*)\s*(?:=(?!=)|\+=|-=)\s*([^;,]*)/g;
+      while ((m = rxA.exec(l))) {
+        if (!estUneDate(m[2])) continue;
+        const nom = (/\.\s*([A-Za-z_$][\w$]*)\s*$/.exec(m[1]) || [])[1]
+          || (/\[\s*['"]?([A-Za-z_$][\w$]*)['"]?\s*\]\s*$/.exec(m[1]) || [])[1]
+          || (/^([A-Za-z_$][\w$]*)$/.exec(m[1]) || [])[1];
+        if (nom) note(nom);
+      }
+      const rxB = /([A-Za-z_$][\w$]*)\s*:\s*([^,;}]*)/g;
+      while ((m = rxB.exec(l))) if (estUneDate(m[2])) note(m[1]);
+    });
+  }
+  // UN CHAMP N'EST UNE DATE QUE S'IL EST RELU CONTRE L'HORLOGE ailleurs que la ou on le pose.
+  for (const f of FICHIERS) for (const brut of corps(f).split('\n')) {
+    const l = nu(brut); if (!HORLOGE_MOT.test(l)) continue;
+    for (const bout of l.split(/[;{}]/)) {
+      if (!HORLOGE.test(bout) || !/[<>]|-/.test(bout)) continue;
+      for (const nom of poses.keys()) {
+        if (relus.has(nom)) continue;
+        if (new RegExp('\\.\\s*' + nom + '\\b(?!\\s*=[^=])').test(bout)) relus.add(nom);
+      }
+    }
+  }
+  const srcJeu = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const mReg = /const DATES_JEU = new Set\(\[([\s\S]*?)\]\);/.exec(srcJeu);
+  const registre = new Set(mReg ? (mReg[1].match(/'[^']+'/g) || []).map(s => s.slice(1, -1)) : []);
+  const datesTrouvees = [...poses.keys()].filter(n => relus.has(n)).sort();
+  const manquants = datesTrouvees.filter(n => !registre.has(n) && !HORS[n]);
+  const recenseur = { lignes, nbPoses, champs: poses.size, dates: datesTrouvees.length,
+    registre: registre.size, manquants: manquants.map(n => n + ' (' + poses.get(n)[0] + ')') };
+
+  // ---------- MOITIE 2 : LA PREUVE PAR LE SYMPTOME, en page ----------
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, DT = 1 / 60, RECUL = 6000, CAP = 900, MARCHE = 400, R = {};
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+    await new Promise(z => setTimeout(z, 500));
+    G.jail.on = false; if (G.uiOpen) G.closeUI();
+    const t0 = G.simTime;
+    const propre = () => { P.stunT = 0; P.sleep = 0; P.crime = 0; P.crimeTir = 0; P.aTerreT = 0;
+      P.swingT = 0; P.hp = 100; P.grace = 0; G.police.wanted = 0; P.weapon = null; P.drawn = false;
+      if (P.swing) G.lacheBalancoire(); };
+    const pas = (n, marche) => { let d = 0, px = P.pos.x, pz = P.pos.z;
+      if (marche) G.keys.add('KeyW');
+      for (let i = 0; i < n; i++) { G.step(DT, true); d += Math.hypot(P.pos.x - px, P.pos.z - pz); px = P.pos.x; pz = P.pos.z; }
+      if (marche) G.keys.delete('KeyW');
+      return +d.toFixed(2); };
+    // ON NE SUPPOSE PAS QU'UNE RUE PART D'ICI : ON LA CHERCHE. La touche « avant » pousse le
+    // joueur dans l'axe de la CAMERA, et le depart (0 ; 8) donne 40,4 m dans un cap et 7,6 m
+    // dans un autre — un mur, pas un etourdissement. On essaie donc les huit caps sur 150 pas,
+    // on garde le plus degage, et les trois marches comparees se font toutes dans CE cap.
+    const marche = (n, yaw) => { G.cam.yaw = yaw; P.pos.set(0, 1, 8); P.vel.set(0, 0, 0);
+      return pas(n, true); };
+    // LE PIEGE. L'horloge AVANCE (une synchro, un test), le jeu pose ses marqueurs, puis elle
+    // RECULE : c'est `step` qui doit s'en apercevoir. On n'appelle JAMAIS horlogeArriere ici.
+    // La base est RELATIVE a l'horloge du moment et le piege la rend 100 s PLUS LOIN : aucun
+    // test suivant n'herite d'un recul, et deux pieges de suite ne s'empilent pas.
+    const recule = pose => { const base = G.simTime + RECUL + 100;
+      G.simTime = base; G.step(DT, true); pose();
+      G.simTime = base - RECUL; G.step(DT, true);
+      return G.horlogeBilan ? G.horlogeBilan() : null; };
+    // UN MONDE PROPRE AVANT CHAQUE PIEGE. Mesure a l'appui : deux pieges enchaines sans remise
+    // a neuf laissent 12 000 s de dates dans le PASSE, la ville rattrape tout d'un coup et
+    // l'enfant ne marche plus que 24,7 m au lieu de 40,4 — on aurait impute a l'etourdissement
+    // ce qui venait du montage du piege. Avec la remise a neuf : 40,44 m libre, 38,10 m avec un
+    // etourdissement de 0,5 s, et 40,44 m au piege suivant (trois essais, chiffres identiques).
+    const neuf = async () => { __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12 });
+      await new Promise(z => setTimeout(z, 350));
+      G.jail.on = false; if (G.uiOpen) G.closeUI(); propre();
+      P.pos.set(0, 1, 8); P.vel.set(0, 0, 0); };
+
+    // LE TEMOIN PASSE PAR LE MEME PIEGE, SANS MARQUEUR : meme remise a neuf, meme recul,
+    // meme horloge d'arrivee. C'est la seule facon de comparer deux fois la meme marche.
+    await neuf(); recule(() => {});
+    let yawLibre = 0, mieux = -1;
+    for (let k = 0; k < 8; k++) { const y = k * Math.PI / 4, d = marche(150, y); if (d > mieux) { mieux = d; yawLibre = y; } }
+    R.cap = { yaw: +yawLibre.toFixed(2), sonde150: +mieux.toFixed(2) };
+    R.temoin = marche(MARCHE, yawLibre);
+
+    // 1. P.stunT : il ne peut plus bouger, et rien a l'ecran ne le lui dit
+    await neuf();
+    R.bilan = recule(() => { P.stunT = G.simTime + 0.5; });
+    R.stun = { ecart: +(P.stunT - G.simTime).toFixed(2), metres: marche(MARCHE, yawLibre) };
+    await neuf(); P.stunT = G.simTime + 12;
+    R.stun.fraisMetres = marche(MARCHE, yawLibre);   // non-regression : vraiment sonne = vraiment bloque
+
+    // 2. P.crime : declare provocateur, et battu tout a fait legitimement (defaut 84)
+    await neuf(); recule(() => { P.crime = G.simTime + 20; P.crimeTir = G.simTime + 1; });
+    R.crime = { ecart: +(P.crime - G.simTime).toFixed(2), aussitot: !!G.joueurAProvoque() };
+    pas(1320);                                 // 22 s : un delit de 20 s doit avoir expire
+    R.crime.apres22s = !!G.joueurAProvoque();
+    const bag = (G.ACTIVITES || []).find(a => a.k === 'bagarre') || { k: 'bagarre', e: '\u{1F624}', n: 'bagarre', poids: 1 };
+    const vrai = Math.random;
+    const tir = () => { const proches = G.bots.filter(b => !b.ko && b.av && b.av.group.visible
+        && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40).slice(0, 10);
+      let surJoueur = 0, surBot = 0; Math.random = () => 0.1;
+      for (const b of proches) { b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null; b.rdv = null; b.wait = 0;
+        G.lancerActivite(b, bag);
+        if (b.fight && b.fight !== 'flee') surJoueur++;
+        if (b.bagarre) surBot++;
+        b.activite = null; b.fight = null; b.bagarre = null; b.ordre = null; }
+      Math.random = vrai; return { essais: proches.length, surJoueur, surBot }; };
+    P.hp = 100; G.vie.debut = G.simTime - 1000; G.vie.t = 0;
+    R.crime.tirage = tir();
+    P.crime = G.simTime + 20;                  // non-regression : un delit VRAIMENT frais
+    R.crime.tirageFrais = { ...tir(), provoque: !!G.joueurAProvoque() };
+
+    // 3. P.aTerreT : il reste a terre (le chien de garde du relevage desarme)
+    await neuf();
+    recule(() => { P.hp = 0; G.step(DT, true); });   // relevageTick pose P.aTerreT tout seul
+    R.aTerre = { ecart: +(G.simTime - (P.aTerreT || 0)).toFixed(2), poseParLeJeu: !!P.aTerreT };
+    let n = 0; while (n < CAP && P.hp <= 0) { G.step(DT, true); n++; }
+    R.aTerre.pas = P.hp > 0 ? n : -1;
+    propre(); P.hp = 0; G.step(DT, true); let n2 = 0;
+    while (n2 < CAP && P.hp <= 0) { G.step(DT, true); n2++; }
+    R.aTerre.fraisPas = P.hp > 0 ? n2 : -1;    // non-regression : il ne se releve pas d'un coup
+
+    // 4. P.sleep : il dort
+    await neuf();
+    recule(() => { P.sleep = G.simTime + 4.2; });
+    R.sommeil = { ecart: +(P.sleep - G.simTime).toFixed(2), dort: !!(P.sleep && G.simTime < P.sleep) };
+    let n3 = 0; while (n3 < CAP && P.sleep && G.simTime < P.sleep) { G.step(DT, true); n3++; }
+    R.sommeil.pas = (P.sleep && G.simTime < P.sleep) ? -1 : n3;
+    propre(); P.sleep = G.simTime + 4.2; let n4 = 0;
+    while (n4 < CAP && P.sleep && G.simTime < P.sleep) { G.step(DT, true); n4++; }
+    R.sommeil.fraisPas = (P.sleep && G.simTime < P.sleep) ? -1 : n4;
+
+    // 5. LA BALANCOIRE (defaut 87). Le SIEGE est `P.swing`, un objet SANS date : un saut le
+    // libere quelle que soit l'horloge. Mais la seule date de la balancoire, `sw.diraT`, porte
+    // le rappel « Espace / SAUT pour sauter » — le seul geste que l'enfant de six ans ne
+    // devine pas. Restee dans l'avenir, elle rend ce rappel MUET pendant 100 minutes. Et
+    // `P.swingT`, qu'on nous donnait pour le siege, est le coup de RAQUETTE envoye au reseau.
+    await neuf(); const sw = (G.city.swings || [])[0];
+    R.balancoire = { siege: !!sw };
+    if (sw) {
+      G.sitSwing(sw);
+      recule(() => { P.swingT = G.simTime + 0.35; sw.diraT = G.simTime + 4; });
+      R.balancoire.assis = !!P.swing && sw.rider === 'me';
+      R.balancoire.ecartRaquette = +(P.swingT - G.simTime).toFixed(2);
+      R.balancoire.ecartRappel = +(sw.diraT - G.simTime).toFixed(2);
+      let n5 = 0; while (n5 < CAP && G.simTime < P.swingT) { G.step(DT, true); n5++; }
+      R.balancoire.pasRaquette = G.simTime < P.swingT ? -1 : n5;
+      P.jumpBuf = 1; G.step(DT, true); G.step(DT, true);
+      R.balancoire.descendu = !P.swing && sw.rider !== 'me';
+      G.lacheBalancoire();
+    }
+
+    // 6. L'ESQUIVE BAISSEE, la seule date de l'avatar du JOUEUR : `me` etait la 35e racine
+    // manquante. Sa seule sortie est `simTime > cc.esqFin` — NaN la rend impossible, l'avenir
+    // aussi, et l'enfant reste ACCROUPI.
+    await neuf(); const esq = {};
+    try {
+      const rig = G.me && G.me.rig;
+      const cbt = rig ? (rig.cbt = rig.cbt || { coup: 0, coupD: 0.4, main: 1, couteau: 0, chute: 0, esqK: 0, souffle: 0 }) : null;
+      if (cbt) {
+        G.simTime = NaN; cbt.esqFin = G.simTime + 0.55;   // l'horloge cassee : le chemin de horlogeSaine
+        G.step(DT, true);
+        esq.nanApres = String(cbt.esqFin); esq.horlogeSaine = Number.isFinite(G.simTime);
+        recule(() => { cbt.esqFin = G.simTime + 0.55; }); // l'horloge qui recule : le chemin de step
+        esq.ecart = +(cbt.esqFin - G.simTime).toFixed(2);
+        let n6 = 0; while (n6 < CAP && G.simTime <= cbt.esqFin) { G.step(DT, true); n6++; }
+        esq.pas = G.simTime <= cbt.esqFin ? -1 : n6;
+        cbt.esqFin = 0;
+      } else esq.pasDeRig = true;
+    } catch (e) { esq.erreur = String(e).slice(0, 90); }
+    R.esquive = esq;
+
+    // 7. LES CINQ DATES QUE LE RECENSEUR A SORTIES DE L'OMBRE (round 83) : elles doivent
+    // maintenant suivre l'horloge comme les autres.
+    await neuf(); recule(() => {
+      try { G.gym.on = 'course'; G.gym.debut = G.simTime; G.gym.end = G.simTime + 20; } catch (e) {}
+      try { G.race.goT = G.simTime + 5; } catch (e) {}
+      try { const c = (G.city.aiCars || [])[0]; if (c) { c.ia = c.ia || {}; c.ia.refaire = G.simTime + 6; } } catch (e) {}
+      try { const b = G.bots[0]; if (b) b.dead = G.simTime + 8; } catch (e) {}
+    });
+    const cIA = (G.city.aiCars || [])[0];
+    R.nouveaux = { gymEnd: +((G.gym.end || 0) - G.simTime).toFixed(1),
+      raceGoT: +((G.race.goT || 0) - G.simTime).toFixed(1),
+      iaRefaire: cIA && cIA.ia ? +((cIA.ia.refaire || 0) - G.simTime).toFixed(1) : null,
+      botDead: G.bots[0] ? +((G.bots[0].dead || 0) - G.simTime).toFixed(1) : null };
+    try { G.gym.on = null; if (G.bots[0]) G.bots[0].dead = 0; } catch (e) {}
+
+    // 8. UNE HORLOGE CASSEE NE MET PAS LE FEU A UN IMMEUBLE. Dans la branche « horloge
+    // cassee » on remet a zero toute date devenue NaN, parce que zero la LIBERE. Trois dates
+    // font l'inverse : zero les DECLENCHE. La meteo et la reunion de gang etaient recensees ;
+    // `METIERS.prochainFeu`, lue par `simTime > METIERS.prochainFeu`, appelle `declencheIncendie`
+    // a l'image suivante. Mesure sur la version d'avant ce correctif : 1 incendie allume dans
+    // les 2 s qui suivent la reparation de l'horloge. Ici : reposee a +100 s, 0 incendie.
+    await neuf();
+    const feu = {};
+    try {
+      G.simTime = NaN; G.METIERS.prochainFeu = G.simTime + 100;   // posee pendant l'image cassee
+      feu.posee = String(G.METIERS.prochainFeu);
+      G.step(DT, true);
+      feu.ecart = +((G.METIERS.prochainFeu || 0) - G.simTime).toFixed(1);
+      for (let i = 0; i < 120; i++) G.step(DT, true);
+      feu.incendies = (G.city.incendies || []).length;
+    } catch (e) { feu.erreur = String(e).slice(0, 90); }
+    R.feu = feu;
+
+    // ON REND L'HORLOGE DEVANT LE PIEGE : aucun test suivant ne doit heriter d'un recul.
+    propre(); G.simTime = Math.max(G.simTime, t0 + 9100);
+    R.horloge = +G.simTime.toFixed(0);
+    return R;
+  });
+
+  const N = R => R.nouveaux;
+  const ok = recenseur.manquants.length === 0 && recenseur.dates > 200 && recenseur.lignes > 40000
+    && balise.length === 0
+    && r.bilan && r.bilan.recul > 5000 && r.bilan.dates > 100
+    // le symptome a disparu
+    && r.stun.ecart < 2 && r.stun.metres > r.temoin * 0.7 && r.temoin > 15
+    && !r.crime.apres22s && r.crime.tirage.essais >= 5 && r.crime.tirage.surJoueur === 0
+    && r.aTerre.poseParLeJeu && r.aTerre.pas > 0 && Math.abs(r.aTerre.pas - r.aTerre.fraisPas) <= 5
+    && r.sommeil.pas > 0 && Math.abs(r.sommeil.pas - r.sommeil.fraisPas) <= 5
+    && r.balancoire.siege && r.balancoire.assis && r.balancoire.ecartRappel <= 5
+    && r.balancoire.pasRaquette > 0 && r.balancoire.descendu
+    && r.esquive.nanApres === '0' && r.esquive.horlogeSaine && r.esquive.ecart < 2 && r.esquive.pas > 0
+    && N(r).gymEnd < 25 && N(r).raceGoT < 10 && N(r).iaRefaire < 12 && N(r).botDead < 15
+    && r.feu.posee === 'NaN' && r.feu.ecart > 50 && r.feu.incendies === 0
+    // ... et le mecanisme n'est pas desarme
+    && r.stun.fraisMetres < r.temoin * 0.4
+    && r.crime.tirageFrais.provoque && r.crime.tirageFrais.surJoueur === r.crime.tirageFrais.essais
+    && r.aTerre.fraisPas > 30 && r.sommeil.fraisPas > 60;
+  return { ok, detail: `RECENSEUR (il relit le texte du jeu) : ${recenseur.lignes} lignes des 4 fichiers, ${recenseur.nbPoses} poses de date sur ${recenseur.champs} champs, dont ${recenseur.dates} RELUS contre l'horloge ; registre DATES_JEU ${recenseur.registre} noms ; MANQUANTS ${recenseur.manquants.length}${recenseur.manquants.length ? ' -> ' + recenseur.manquants.join(', ') : ''} ; balise ouvrante ecrite dans un commentaire du jeu : ${balise.length ? 'lignes ' + balise.join(', ') + ' (elle fait perdre 25 000 lignes au test n° 121)' : 'aucune'}`
+    + ` \u00b7 PIEGE : l'horloge avance, le jeu pose ses marqueurs, elle recule de ${r.bilan.recul} s et c'est step() qui s'en apercoit (${r.bilan.dates} dates decalees sur ${r.bilan.objets} objets)`
+    + ` \u00b7 P.stunT : ecart +${r.stun.ecart} s, ${r.stun.metres} m parcourus en 400 pas dans le cap le plus degage (temoin libre ${r.temoin} m ; avant le correctif 4,17 m) et un enfant VRAIMENT sonne ne fait que ${r.stun.fraisMetres} m`
+    + ` \u00b7 P.crime (defaut 84) : provocateur aussitot=${r.crime.aussitot} puis 22 s plus tard=${r.crime.apres22s} ; tirage force sur ${r.crime.tirage.essais} habitants : ${r.crime.tirage.surJoueur} s'en prennent a l'enfant, ${r.crime.tirage.surBot} a un autre habitant ; avec un delit VRAIMENT frais ${r.crime.tirageFrais.surJoueur}/${r.crime.tirageFrais.essais} lui courent dessus`
+    + ` \u00b7 P.aTerreT : pose par le jeu, ecart ${r.aTerre.ecart} s, il se releve en ${r.aTerre.pas} pas (un vrai KO : ${r.aTerre.fraisPas} pas)`
+    + ` \u00b7 P.sleep : il se reveille en ${r.sommeil.pas} pas (un vrai sommeil : ${r.sommeil.fraisPas} pas)`
+    + ` \u00b7 balancoire (defaut 87) : le siege est P.swing, un objet SANS date — un saut suffit (descendu=${r.balancoire.descendu}) ; sa seule date est le rappel « SAUT pour sauter », muet 6 000 s avant, ${r.balancoire.ecartRappel} s maintenant ; P.swingT est le coup de RAQUETTE, relache en ${r.balancoire.pasRaquette} pas`
+    + ` \u00b7 esquive baissee (me.rig.cbt.esqFin, l'avatar du joueur etait la 35e racine manquante) : NaN -> ${r.esquive.nanApres}, ecart +${r.esquive.ecart} s, redresse en ${r.esquive.pas} pas`
+    + ` \u00b7 les 5 dates sorties de l'ombre, ecart a l'horloge apres le recul (etait +6 000 s) : gym.end +${N(r).gymEnd} s, race.goT +${N(r).raceGoT} s, ia.refaire +${N(r).iaRefaire} s, b.dead +${N(r).botDead} s`
+    + ` \u00b7 horloge rendue a ${r.horloge} s, jamais en arriere` };
 });

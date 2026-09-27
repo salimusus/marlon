@@ -25162,3 +25162,185 @@ test('les parkings sans place marquee sont proteges par leur rectangle, et le pa
     + ` · ... MAIS ON NE DERANGE PAS CE QUI Y EST DEJA : les ${r.dejaLa} meubles deja dans un rectangle peuvent tous se decaler de 30 cm sans qu'un seul soit refuse pour « parking » (${r.refusDeja})`
     + ` · RANGEMENT INCHANGE : ${r.meubles} meubles, ${r.fautes} fautes (${JSON.stringify(r.parQuoi)}), ${r.deplaces} deplaces, ${r.restants} restant, ${r.ouverts} trottoir ouvert · ${r.atterrissages} meubles atterrissent dans un rectangle de parking, et ${r.venusDeDehors} y entre depuis l'exterieur (avant : 11 et 1)` };
 });
+// ============ ON RENVERSE CE VERS QUOI ON VA, PAS CE DONT ON S'ELOIGNE (round 83) ============
+// `ecraseAuSol` n'etait qu'un RECTANGLE pose autour de la caisse : il ne regardait pas le sens de
+// la marche. MESURE au Parking du centre : la voiture bridee a 2,40 m/s creuse jusqu'a Tom_le_ouf
+// et le TOUCHE sans le blesser (le seuil d'ecrasement est 3 m/s) ; l'enfant passe alors la marche
+// arriere, et Tom — a 2,02 m DEVANT un capot qui S'ELOIGNE — est renverse a 3,17 m/s, 100 -> 81 PV.
+// Le plafond de manoeuvre le neutralisait dans un parking ; le defaut de principe restait partout
+// ailleurs. Ce test se joue donc EN PLEINE RUE (0 ; 60), loin de tout rectangle de parking.
+// AVANT, dix essais dans la boite : NEUF renversements, dans les deux sens indifferemment (le
+// dixieme n'etait epargne que par le plancher des 3 m/s). LA REGLE : le pieton doit avoir encore
+// une demi-largeur de corps du cote ou l'on va — la demi-largeur que tout le jeu donne a un
+// personnage (`hw = 0.4` de npcBlocked), pas un nombre invente pour l'occasion.
+// LA CONTRE-EPREUVE EST LA MOITIE DU TEST : une voiture qui RECULE sur quelqu'un place DERRIERE
+// elle doit toujours le renverser, et un corps pile sous la caisse l'est dans les deux sens. Sans
+// cela, on n'aurait pas repare l'ecrasement, on l'aurait desarme.
+test('on renverse ce vers quoi on va, pas ce dont on s\'eloigne — et reculer sur quelqu\'un le renverse toujours', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12, frais: true });
+    const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    const b = G.bots.find(x => x.av && x.av.group.visible);
+    const RX = 0, RZ = 60;
+    // le pieton a `lz` metres dans l'axe de la caisse (lz > 0 : devant le capot, cap h = 0 -> +z)
+    const essai = (nom, lz, vitesse) => {
+      car.x = RX; car.z = RZ; car.h = 0; car.dmg = 0;
+      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      b.hp = 100; b.ko = 0; b.hitT = 0; b.enVoiture = null; b.drive = null; b.prison = 0; b.fight = null;
+      b.pos.set(RX, 0.14, RZ + lz); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+      return { nom, lz, vitesse,
+        dansLaBoite: Math.abs(lz) <= (car.baseD || 4.4) / 2 + 0.5,
+        touches: G.ecraseAuSol(car, { speed: vitesse }), hp: +b.hp.toFixed(1) };
+    };
+    const out = {
+      horsParking: !G.sortDeStationnement(car, 12), seuil: G.ECRASE_DOS, baseD: car.baseD,
+      // CE QU'ON DOIT TOUJOURS RENVERSER
+      avantDevant: essai('devant 2,0 m, on AVANCE a 12 m/s', 2.0, 12),
+      arriereDerriere: essai('derriere 2,0 m, on RECULE a 12 m/s', -2.0, -12),
+      milieuAvant: essai('pile sous la caisse, on AVANCE', 0, 12),
+      milieuArriere: essai('pile sous la caisse, on RECULE', 0, -12),
+      bordDedans: essai('0,3 m derriere, on AVANCE (corps encore devant)', -0.3, 12),
+      // CE QU'ON NE DOIT PLUS RENVERSER
+      arriereDevant: essai('devant 2,0 m, on RECULE a 12 m/s', 2.0, -12),
+      mesureDuRound: essai('devant 2,02 m, on RECULE a 3,17 m/s', 2.02, -3.17),
+      avantDerriere: essai('derriere 2,0 m, on AVANCE a 12 m/s', -2.0, 12),
+      bordDehors: essai('0,5 m derriere, on AVANCE (corps entier derriere)', -0.5, 12),
+      // et le plancher des 3 m/s ne bouge pas
+      souLeSeuil: essai('devant 2,0 m, on AVANCE a 2,4 m/s', 2.0, 2.4),
+    };
+    return out;
+  });
+  const doit = [r.avantDevant, r.arriereDerriere, r.milieuAvant, r.milieuArriere, r.bordDedans];
+  const doitPas = [r.arriereDevant, r.mesureDuRound, r.avantDerriere, r.bordDehors, r.souLeSeuil];
+  const ok = r.horsParking && Math.abs(r.seuil - 0.4) < 1e-9
+    && doit.every(q => q.dansLaBoite && q.touches === 1 && q.hp < 70)
+    && doitPas.every(q => q.dansLaBoite && q.touches === 0 && q.hp === 100);
+  const l = q => `${q.nom} : ${q.touches} touche, ❤️ ${q.hp}`;
+  return { ok, detail: `\`ecraseAuSol\` n'etait qu'un RECTANGLE sans direction · AVANT, les dix memes essais, tous DANS la boite : NEUF renversements indifferemment devant ou derriere, en avancant ou en reculant — dont « devant 2,02 m, on RECULE a 3,17 m/s » a ❤️ 81, la mesure exacte du round ; seul « devant, on avance a 2,4 m/s » etait epargne, et par le plancher des 3 m/s, pas par la direction`
+    + ` · APRES, en pleine rue (0 ; 60), hors de tout rectangle de parking (${r.horsParking}), caisse de ${r.baseD} m, seuil = la demi-largeur d'un pieton (${r.seuil} m, le \`hw\` de npcBlocked)`
+    + ` · CE QU'ON RENVERSE TOUJOURS : ${doit.map(l).join(' · ')}`
+    + ` · CE QU'ON NE RENVERSE PLUS : ${doitPas.map(l).join(' · ')}`
+    + ` · la contre-epreuve tient : reculer sur quelqu'un place DERRIERE la caisse le renverse (${r.arriereDerriere.touches} touche, ❤️ ${r.arriereDerriere.hp}), et un corps pile sous la caisse l'est dans les deux sens — on n'a pas desarme l'ecrasement, on lui a donne un sens` };
+});
+// ============ UNE PERSONNE N'EST PAS UN LAMPADAIRE : LA VICTIME PORTE PLAINTE (round 83) ============
+// ARBITRAGE DU CHEF. La clemence du jeu — « pas de temoin policier a moins de 28 m, pas d'etoile,
+// juste un avertissement n/4 » — est juste pour une vitrine, un lampadaire, une tole froissee. Elle
+// ne l'est pas pour quelqu'un qu'on vient de renverser : MESURE, au Parking du centre l'enfant
+// ecrasait Tom_le_ouf a 8,78 m/s et la ville repondait « la police laisse passer (avertissement
+// 1/4) ». On garde la regle, on lui ajoute LE TEMOIN QUI MANQUAIT : la victime.
+// CE QUE LE GUICHET DES PLAINTES SAIT FAIRE, MESURE AVANT DE TOUCHER A QUOI QUE CE SOIT : c'est un
+// outil A SENS UNIQUE, du joueur vers un habitant. Six motifs (peines 80 a 150 s), AUCUN delai (la
+// chasse part a l'instant du depot), deux agents crees au commissariat, une fenetre de 180 s, et
+// pour resolution `emprisonneBot` qui ecrit `b.prison` et PAIE le joueur 15 🪙. Rien, dans tout le
+// mecanisme, ne touche au joueur : ni `police.wanted`, ni `jail`, ni `infraction`. Son objet
+// `plainte` n'a meme pas de champ pour un PLAIGNANT — le plaignant est le joueur, implicitement.
+// LE RETOURNER SERAIT UNE SECONDE MACHINE (un habitant qui marche jusqu'au poste, puis une chasse
+// du joueur), donc un mecanisme neuf. On prend la voie la plus etroite : la victime signale d'ou
+// elle est, et `infraction` — qui existe — fait le reste avec `sansPitie`, puisqu'il y a desormais
+// un temoin. Douze lignes, zero agent de plus, zero chasse de plus.
+// LE DELAI NE S'AJOUTE PAS AU TEMPS A TERRE, IL LE CONTIENT : on n'enregistre la plainte que quand
+// la victime est DEBOUT et que PLAINTE_ECRASE est ecoule. Le dosage vient donc du jeu lui-meme —
+// plus on fait mal, plus la victime reste a terre, plus tard la police arrive.
+test('un passant renverse par l\'enfant porte plainte, et l\'etoile tombe quand il est debout — pas au moment du choc', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P, police = G.police;
+    __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+    const R = { PLAINTE_ECRASE: G.PLAINTE_ECRASE };
+    // ---- 1. LE RECENSEMENT DU GUICHET : ce qu'il fait, et ce qu'il ne fait pas
+    R.guichet = {
+      desk: G.city.plainteDesk ? [+G.city.plainteDesk.x.toFixed(1), +G.city.plainteDesk.z.toFixed(1)] : null,
+      motifs: (G.PLAINTE_MOTIFS || []).map(m => m.k), peines: (G.PLAINTE_MOTIFS || []).map(m => m.peine),
+      champs: Object.keys(G.plainte), plaignant: Object.keys(G.plainte).some(k => /plaignant|auteur|par/i.test(k)),
+    };
+    G.clearWanted('essai'); police.crimeLevel = 0; police.avert = 0; police.avertT = -999;
+    { const accuse = G.bots.find(b => !b.prison);
+      G.plainte.qui = accuse; G.plainte.motif = 'coups';
+      const w0 = G.wallet, t0 = G.simTime;
+      G.deposerPlainte();
+      const ch = G.plainte.chasse;
+      R.depot = { chasse: !!ch, agents: ch ? ch.agents.length : 0, delai: 0,
+        fenetre: ch ? +(ch.fin - t0).toFixed(0) : null, wantedDuJoueur: police.wanted, jailDuJoueur: !!G.jail.on };
+      // on fait aboutir la chasse pour ne rien laisser derriere nous (les agents sont retires par finPlainte)
+      for (let i = 0; i < 400 && G.plainte.chasse; i++) {
+        for (const a of G.plainte.chasse.agents) { a.x = accuse.pos.x; a.z = accuse.pos.z; }
+        G.plainteTick(1 / 60);
+      }
+      R.depot.resolution = { prisonDuBot: +Math.max(0, (accuse.prison || 0) - G.simTime).toFixed(0),
+        gainDuJoueur: G.wallet - w0, wantedDuJoueur: police.wanted, jailDuJoueur: !!G.jail.on };
+      accuse.prison = 0; G.resetBot(accuse, 99);
+    }
+    // ---- 2. LA CHAINE.
+    // UN MONDE NEUF PAR SCENARIO. Premier jet : les trois se polluaient l'un l'autre — l'etoile du
+    // premier lance la police, ses voitures roulent vers le lieu pendant les 900 pas suivants, et
+    // au scenario d'apres `policeTemoin(28)` repond oui alors qu'on mesure justement le cas SANS
+    // temoin (releve : ★1 des le choc au lieu de ★0). On rebatit donc, et on ECARTE tout le monde :
+    // deux habitants dans la meme boite et `touches` vaut 2 au lieu de 1.
+    const scenario = (nom, k, vitesse, pas, policier) => {
+      __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+      G.bots.forEach((b, i) => { b.pos.set(120 + i * 4, 0.14, 120); b.av.group.position.copy(b.pos);
+        b.porteplainte = 0; b.ko = 0; b.hitT = 0; b.hp = 100; b.prison = 0; b.target = null; b.wait = 9999; b.fight = null; });
+      G.clearWanted('essai'); police.crimeLevel = 0; police.avert = 0; police.avertT = -999;
+      police.agents.length = 0; G.plainte.contreMoi = 0;
+      for (const a of G.city.ambulances) { a.etat = null; a.victime = null; }
+      const libres = G.city.cars.filter(c => c.parts && !c.rider && !c.kart);
+      const v = G.bots[k], car = libres[k % libres.length], X = -13, Z = 5.4;
+      car.busy = false; car.dmg = 0;
+      v.hp = 100; v.ko = 0; v.hitT = 0; v.porteplainte = 0; v.wait = 9999;
+      v.pos.set(X, 0.14, Z); v.av.group.position.copy(v.pos); v.av.group.visible = true;
+      car.x = X; car.z = Z; car.h = 0; car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      if (G.drive.car) G.exitCar();
+      P.pos.set(X, (car.y || 0) + 0.4, Z); G.enterCar(car);
+      if (policier) police.agents.push(G.creerAgent(P.pos.x + 6, P.pos.z + 2, 0.3, false));
+      const auVolant = G.drive.car === car, temoin = G.policeTemoin(28);
+      const touches = G.ecraseAuSol(car, { speed: vitesse });
+      const amb = G.city.ambulances.find(a => a.victime === v);
+      const choc = { auVolant, temoin, touches, hp: +v.hp.toFixed(1), wanted: police.wanted,
+        avert: police.avert || 0, aTerre: +((v.ko || 0) - G.simTime).toFixed(1),
+        plainteDans: v.porteplainte ? +(v.porteplainte - G.simTime).toFixed(1) : null,
+        ambulance: amb ? amb.etat : null };
+      // ON COMPTE DES PAS, UN PAR IMAGE — le banc rend une image par seconde, on ne mesure pas le temps
+      let img = -1, dit = null;
+      for (let i = 0; i < pas; i++) {
+        G.plainteTick(1 / 60); G.step(1 / 60, true);
+        if (img < 0 && police.wanted > 0) { img = i + 1; dit = (document.getElementById('msg') || {}).textContent.trim(); }
+      }
+      G.exitCar();
+      const fin = { wanted: police.wanted, crime: police.crimeLevel, contreMoi: G.plainte.contreMoi,
+        images: img, secondes: img < 0 ? null : +(img / 60).toFixed(2), dit };
+      v.pos.set(120 + k * 4, 0.14, 120); v.av.group.position.copy(v.pos);
+      return { nom, choc, fin };
+    };
+    R.leger = scenario('bousculé à 4 m/s', 0, 4, 600, false);
+    R.grave = scenario('renversé à 12 m/s (l\'ambulance part, il gît 40 s)', 1, 12, 2500, false);
+    R.policier = scenario('renversé à 12 m/s sous les yeux d\'un agent', 2, 12, 120, true);
+    R.registre = G.DATES_JEU ? G.DATES_JEU.has('porteplainte') : null;
+    return R;
+  });
+  const g = r.guichet, d = r.depot;
+  const ok = !!g.desk && g.motifs.length === 6 && Math.min(...g.peines) >= 80 && Math.max(...g.peines) <= 150
+    && !g.plaignant                                       // le guichet n'a pas de champ « plaignant » : il est a sens unique
+    && d.chasse && d.agents === 2 && d.fenetre === 180
+    && d.wantedDuJoueur === 0 && !d.jailDuJoueur           // rien, dans le guichet, ne touche au joueur
+    && d.resolution.prisonDuBot >= 80 && d.resolution.gainDuJoueur === 15
+    && d.resolution.wantedDuJoueur === 0 && !d.resolution.jailDuJoueur
+    // la chaine : pas d'etoile au choc, une plainte, une etoile quand la victime est debout
+    && r.leger.choc.auVolant && !r.leger.choc.temoin && r.leger.choc.touches === 1
+    && r.leger.choc.wanted === 0 && r.leger.choc.avert === 0 && r.leger.choc.plainteDans === r.PLAINTE_ECRASE
+    && r.leger.fin.wanted === 1 && r.leger.fin.contreMoi === 1
+    && Math.abs(r.leger.fin.secondes - r.PLAINTE_ECRASE) < 0.1
+    // ... et plus on fait mal, plus tard on paie : il reste a terre 40 s, la police n'arrive qu'apres
+    && r.grave.choc.wanted === 0 && r.grave.choc.aTerre === 40 && r.grave.choc.ambulance === 'route'
+    && r.grave.fin.wanted === 1 && Math.abs(r.grave.fin.secondes - 40) < 0.2
+    && /porté plainte/.test(r.grave.fin.dit || '')
+    // un policier qui a VU reagit tout de suite : la regle « pas de temoin, pas d'etoile » est entiere
+    && r.policier.choc.temoin && r.policier.choc.wanted === 1 && r.policier.choc.plainteDans === null
+    && r.policier.fin.contreMoi === 0 && r.policier.choc.ambulance === 'route'
+    && r.registre === true;
+  return { ok, detail: `LE GUICHET DES PLAINTES, RECENSE AVANT DE RIEN TOUCHER : un outil A SENS UNIQUE, du joueur vers un habitant · comptoir en ${JSON.stringify(g.desk)}, ${g.motifs.length} motifs (${g.motifs.join(', ')}), peines ${Math.min(...g.peines)} a ${Math.max(...g.peines)} s · champs de l'objet \`plainte\` : ${g.champs.join(', ')} — AUCUN champ pour un plaignant (${g.plaignant}), le plaignant est le joueur, implicitement · depot : AUCUN delai (la chasse part a l'instant), ${d.agents} agents crees au commissariat, fenetre de ${d.fenetre} s · resolution : ${d.resolution.prisonDuBot} s de cellule pour le bot et +${d.resolution.gainDuJoueur} 🪙 pour le joueur, et sur le joueur RIEN (★${d.resolution.wantedDuJoueur}, prison=${d.resolution.jailDuJoueur}) · LE RETOURNER SERAIT UNE SECONDE MACHINE : on a donc pris la voie la plus etroite — la victime signale d'ou elle est, \`infraction\` fait le reste avec \`sansPitie\``
+    + ` · AVANT : « ⚠️ ecraser Tom_le_ouf : la police laisse passer (avertissement 1/4) », ★0 · APRES, la chaine, et le delai ne s'AJOUTE pas au temps a terre, il le CONTIENT (${r.PLAINTE_ECRASE} s) :`
+    + ` ${r.leger.nom} — au volant=${r.leger.choc.auVolant}, temoin=${r.leger.choc.temoin}, ${r.leger.choc.touches} touche, ❤️ ${r.leger.choc.hp}, ★${r.leger.choc.wanted}, avertissement ${r.leger.choc.avert}, il reste a terre ${r.leger.choc.aTerre} s, plainte prevue dans ${r.leger.choc.plainteDans} s → etoile a l'image ${r.leger.fin.images} (${r.leger.fin.secondes} s), ★${r.leger.fin.wanted}, « ${r.leger.fin.dit} »`
+    + ` · ${r.grave.nom} — au volant=${r.grave.choc.auVolant}, temoin=${r.grave.choc.temoin}, ${r.grave.choc.touches} touche, ❤️ ${r.grave.choc.hp}, ★${r.grave.choc.wanted}, ambulance=${r.grave.choc.ambulance}, il git ${r.grave.choc.aTerre} s → etoile a l'image ${r.grave.fin.images} (${r.grave.fin.secondes} s), ★${r.grave.fin.wanted} : PLUS ON FAIT MAL, PLUS TARD ON PAIE (${r.leger.fin.secondes} s contre ${r.grave.fin.secondes} s), et la victime reste soignee`
+    + ` · ${r.policier.nom} — au volant=${r.policier.choc.auVolant}, temoin=${r.policier.choc.temoin}, ${r.policier.choc.touches} touche, ★${r.policier.choc.wanted} DES LE CHOC (image ${r.policier.fin.images}), aucune plainte a venir (${r.policier.choc.plainteDans}) : la regle « pas de temoin policier, pas d'etoile » est entiere, on lui a seulement ajoute le temoin qui manquait`
+    + ` · \`porteplainte\` est au registre DATES_JEU (${r.registre}) — la lecon du test 525` };
+});

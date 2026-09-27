@@ -1,0 +1,63 @@
+{
+ "standDuBonCote": [
+  {
+   "depuis_z": 13,
+   "distance_m": 1.6,
+   "verrou": "CIBLE",
+   "tirs": 15,
+   "points": 2,
+   "etoiles": 0,
+   "hp": 100,
+   "msg": "🎯 Touché !"
+  },
+  {
+   "depuis_z": 15,
+   "distance_m": 3.6,
+   "verrou": "CIBLE",
+   "tirs": 15,
+   "points": 2,
+   "etoiles": 0,
+   "hp": 100,
+   "msg": "🎯 Touché !"
+  },
+  {
+   "depuis_z": 17,
+   "distance_m": 5.6,
+   "verrou": "CIBLE",
+   "tirs": 15,
+   "points": 3,
+   "etoiles": 0,
+   "hp": 100,
+   "msg": "🎯 Touché !"
+  },
+  {
+   "depuis_z": 19,
+   "distance_m": 7.6,
+   "verrou": "CIBLE",
+   "tirs": 15,
+   "points": 4,
+   "etoiles": 0,
+   "hp": 100,
+   "msg": "🎯 Touché !"
+  },
+  {
+   "depuis_z": 21,
+   "distance_m": 9.6,
+   "verrou": "CIBLE",
+   "tirs": 15,
+   "points": 4,
+   "etoiles": 0,
+   "hp": 100,
+   "msg": "🎯 Touché !"
+  }
+ ],
+ "habitantDerriere": {
+  "habitant": "Lucas_2014",
+  "verrou": "CIBLE",
+  "points": 2,
+  "hpHabitant": 100,
+  "etoiles": 0,
+  "chat": "er ? 🍦\nTom_le_ouf : Joueur40, Tu es musclé toi ?\n🌧️ La pluie arrive sur la ville\nZoe_rider : direction Parc 🏍️\n🚩 Les Requins Rouges s'en prennent à une boutique !\n🚩 Les Frelons Jaunes s'en prennent à une boutique !\nLucas_2014 : ma moto va trop vite 🏍️\n🎤"
+ },
+ "erreurs": []
+}

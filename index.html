@@ -3010,6 +3010,13 @@ function declareLesParkings() {
 // vue des voitures : personne ne part à l'autre bout du quartier.
 const MOB_GARDE_RUE = 0.3;     // 30 cm entre le meuble et la rive, comme pour la végétation
 const MOB_PASSE_PIED = 0.9;    // trottoir : 0,80 m de gabarit (2 × P.hw) + 5 cm de jeu de chaque côté
+// UN FEU TRICOLORE NE QUITTE PAS SON CARREFOUR. C'est la seule bride qui ait un sens : un feu
+// commande une file, il a une ligne d'arret, et le joueur comme les conducteurs le cherchent AU
+// CARREFOUR. La ville plante ses feux a 4,20 m du centre (`cross`) ou a 6,20 m (carrefours des
+// quartiers neufs) ; on tolere jusqu'a 11 m sur chaque axe — le controle 26 en accepte 12, on
+// garde un metre de marge. Mesure avant cette bride : deux feux du rond-point de la statue
+// finissaient annonces a 13,80 m du centre, donc HORS carrefour.
+const FEU_CARREFOUR = 11;
 const MOB_PASSE_PORTE = 1.0;   // une baie est un entonnoir : 0,80 m + 10 cm de jeu de chaque côté
 // DEUX CACHES POUR LA PASSE. `refusMeuble` relisait les 311 trottoirs ET les 5 300 solides a
 // CHAQUE essai de position : 0,84 s de chargement en plus, mesure au banc. Les portes sont
@@ -3091,9 +3098,56 @@ function refusMeubleReste(m, e) {
   }
   return '';
 }
+// LA PLACE VISEE CONVIENT-ELLE A UN FEU ? Deux conditions de plus que pour un banc :
+//   1. il reste A SON CARREFOUR (11 m sur chaque axe, voir FEU_CARREFOUR) ;
+//   2. il commande toujours une file : `ligneFeu` sait encore dire OU s'arreter depuis la
+//      nouvelle position. Sans cette seconde condition, un feu pousse assez loin pour ne plus
+//      voir sa chaussee garderait une ligne d'arret orpheline.
+function placeFeuOk(tl, nx, nz) {
+  let d = 1e9, c0 = null;
+  for (const q of (city.crossings || [])) { const k = Math.hypot(tl.x - q[0], tl.z - q[1]); if (k < d) { d = k; c0 = q; } }
+  if (c0 && (Math.abs(nx - c0[0]) > FEU_CARREFOUR || Math.abs(nz - c0[1]) > FEU_CARREFOUR)) return false;
+  return !!ligneFeu({ x: nx, z: nz, sens: tl.sens });
+}
+// LE PAVE S'ARRETE LA OU LE MEUBLE NE PEUT PAS BOUGER. `recoupeLesTrottoirs()` ignore le
+// mobilier a dessein : un banc sur un trottoir est normal, et le rangement va le deplacer. Mais
+// un meuble que le rangement ne sait PAS bouger ferme la bande pour de bon. Mesure : le mat du
+// feu sud-est du rond-point de la statue est coince entre la chaussee du rond-point (bord a
+// z = -31,00) et la parcelle voisine (z = -31,99) dans une bande de 0,99 m ; il n'y laisse
+// 0,42 m, la moitie du gabarit de l'enfant, et il n'a AUCUNE place valable : au nord c'est la
+// chaussee, au sud la facade, et a 5 m en travers il ne commande plus sa file. On ne deplace ni
+// le mat ni l'architecture : on INTERROMPT le pave a son droit, bordure comprise, exactement
+// comme la recoupe le fait pour un mur. L'enfant voit le pave s'arreter et contourne.
+const MOB_JEU_PAVE = 0.15;   // le jeu laisse entre le meuble et le bout de pave repose
+function ouvreLeTrottoirSous(m) {
+  let fait = 0;
+  for (const so of m.solides) {
+    if (!meubleBloqueJoueur(so)) continue;
+    for (let i = (city.trottoirs || []).length - 1; i >= 0; i--) {
+      const t = city.trottoirs[i];
+      const alongZ = t.alongZ, L = alongZ ? t.d : t.w, W = (alongZ ? t.w : t.d) / 2;
+      const c0 = alongZ ? t.x : t.z, s0 = (alongZ ? t.z : t.x) - L / 2, s1 = s0 + L;
+      const ot = alongZ ? so.x : so.z, dt = (alongZ ? so.w : so.d) / 2;
+      const ol = alongZ ? so.z : so.x, dl = (alongZ ? so.d : so.w) / 2;
+      if (Math.abs(ot - c0) > W + dt || ol + dl <= s0 || ol - dl >= s1) continue;
+      if (Math.max((ot - dt) - (c0 - W), (c0 + W) - (ot + dt)) >= MOB_PASSE_PIED) continue;   // il reste de quoi marcher a cote
+      if (t.o && t.o.mesh) { worldGroup.remove(t.o.mesh); const k = solids.indexOf(t.o); if (k >= 0) solids.splice(k, 1); }
+      if (t.bord && t.bord.mesh) worldGroup.remove(t.bord.mesh);
+      city.trottoirs.splice(i, 1);
+      for (const [u, v] of [[s0, ol - dl - MOB_JEU_PAVE], [ol + dl + MOB_JEU_PAVE, s1]]) {
+        if (v - u < 1.2) continue;
+        const mid = (u + v) / 2;
+        poseTrottoir(t.route, alongZ, t.side, alongZ ? c0 : mid, alongZ ? mid : c0, v - u, 2 * W, 0);
+      }
+      fait++;
+    }
+  }
+  if (fait) { sgridSale(); cacheMobilier(); }   // les caches de la passe connaissent les nouveaux troncons
+  return fait;
+}
 function rangeLeMobilier() {
   cacheMobilier();
-  const fautes = [], deplaces = [], restants = [];
+  const fautes = [], deplaces = [], restants = [], ouverts = [];
   // les essais, du plus petit déplacement au plus grand
   const essais = [];
   for (let a = 0.3; a <= 4.51; a += 0.3) for (let b = 0; b <= 6.01; b += 0.6)
@@ -3105,13 +3159,26 @@ function rangeLeMobilier() {
     // pose dans un mur, dans un autre objet ou hors carte est du decor ancien pose a la main :
     // le deplacer casse la scene (mesure : la poubelle du camp du Bois, controle 485).
     if (pourquoi !== 'chaussee' && pourquoi !== 'trottoir' && pourquoi !== 'porte') continue;
+    // UN FEU TRICOLORE N'EST PAS UN BANC. Sa position COMMANDE une file : sa ligne d'arret et
+    // sa fleche sont deja PEINTES sur le bitume au droit du mat (`ligneArret`, `flecheSol`), et
+    // sa fiche dit a tous les conducteurs OU s'immobiliser. Le glisser LE LONG de sa voie
+    // deplace le mat sans deplacer la peinture : mesure, 10 feux sur 38 se retrouvaient avec
+    // une ligne d'arret hors de leur voie (controle 236), et deux quittaient meme leur
+    // carrefour de 4,80 m (controle 26). On ne lui autorise donc qu'un ecart EN TRAVERS de la
+    // chaussee QU'IL COMMANDE — celle que designe son cap `sens`, pas forcement la plus proche,
+    // qui au coin d'un carrefour est souvent la perpendiculaire. Sa position le long de la voie
+    // ne change pas : la ligne d'arret reste exactement ou elle est peinte, et le feu reste a
+    // son carrefour. C'est la meme regle que `degageDecorSurRoutes` applique deja aux feux.
+    const feuM = m.fam === 'feu' ? (m.solides[0] && m.solides[0].brk) : null;
+    const axeFeu = feuM && typeof feuM.sens === 'number' ? Math.abs(Math.cos(feuM.sens)) > 0.5 : null;
     // la rue la plus proche donne l'axe : on s'écarte EN TRAVERS d'elle, jamais le long du seul hasard
     let rue = null, dd = 1e9;
     for (const r of (city.routes || [])) {
+      if (axeFeu !== null && (r.d >= r.w) !== axeFeu) continue;   // un feu ne juge que SA chaussee
       const q = Math.max(Math.abs(m.x - r.x) - r.w / 2, Math.abs(m.z - r.z) - r.d / 2);
       if (q < dd) { dd = q; rue = r; }
     }
-    const long = rue ? rue.d >= rue.w : true;
+    const long = axeFeu !== null ? axeFeu : (rue ? rue.d >= rue.w : true);
     const axe = rue ? (long ? rue.x : rue.z) : 0, t0 = long ? m.x : m.z;
     const loin = t0 >= axe ? 1 : -1;                     // le sens qui ÉLOIGNE du bitume
     fautes.push({ fam: m.fam, quoi: pourquoi, x: +m.x.toFixed(2), z: +m.z.toFixed(2), rue: rue ? `${rue.x}/${rue.z}` : null });
@@ -3119,18 +3186,22 @@ function rangeLeMobilier() {
     for (const [a, b] of essais) {
       const nt = t0 + loin * a, nl = (long ? m.z : m.x) + b;
       const nx = long ? nt : nl, nz = long ? nl : nt;
+      if (axeFeu !== null && !placeFeuOk(feuM, nx, nz)) continue;   // un feu reste a son carrefour
       if (!placeMeubleOk(m, nx, nz)) continue;
       const de = [+m.x.toFixed(2), +m.z.toFixed(2)];
       bougeMeuble(m, nx, nz);
       deplaces.push({ fam: m.fam, de, vers: [+nx.toFixed(2), +nz.toFixed(2)], recul: +Math.hypot(a, b).toFixed(2) });
       fait = true; break;
     }
-    if (!fait) restants.push({ fam: m.fam, quoi: pourquoi, x: +m.x.toFixed(2), z: +m.z.toFixed(2) });
+    if (!fait && pourquoi === 'trottoir' && ouvreLeTrottoirSous(m)) {
+      // le meuble n'a pas de place et il ferme le trottoir : le pave s'arrete a son droit
+      ouverts.push({ fam: m.fam, x: +m.x.toFixed(2), z: +m.z.toFixed(2) });
+    } else if (!fait) restants.push({ fam: m.fam, quoi: pourquoi, x: +m.x.toFixed(2), z: +m.z.toFixed(2) });
   }
   MOB_PORTES = null; MOB_TROT = null;   // les caches ne survivent pas a la passe : le monde bouge apres
   const parQuoi = {}; for (const f of fautes) parQuoi[f.quoi] = (parQuoi[f.quoi] || 0) + 1;
   const parFam = {}; for (const f of fautes) parFam[f.fam] = (parFam[f.fam] || 0) + 1;
-  return { meubles: (city.meubles || []).length, fautes: fautes.length, parQuoi, parFam, deplaces, restants };
+  return { meubles: (city.meubles || []).length, fautes: fautes.length, parQuoi, parFam, deplaces, restants, ouverts };
 }
 // ============ STATIONNEMENT ALTERNÉ : DEUX VOITURES GARÉES NE FERMENT PLUS UNE RUE ============
 // La largeur libre d'une rue n'a RIEN à voir avec la largeur de son bitume dès qu'on se gare
@@ -5988,18 +6059,36 @@ function oublieMeuble(o) {
   const i = city.meubles.indexOf(m); if (i >= 0) city.meubles.splice(i, 1);
   for (const so of m.solides) so.meuble = null;
 }
+// UN MEUBLE DEPLACE A LA MAIN DOIT LE DIRE AU REGISTRE. `degageDecorSurRoutes()` pousse les
+// feux et les lampadaires plantes en pleine voie en reecrivant leur groupe et leur solide —
+// mais PAS `m.x` / `m.z`. Le registre mentait alors de tout l'ecart : les deux feux du
+// rond-point de la statue etaient poses a z = -31,60 et le registre les annoncait a -30,20.
+// `rangeLeMobilier()` calculait donc leur emprise et leur deplacement 1,40 m a cote.
+function suitLeMeuble(so) {
+  const m = so && so.meuble; if (!m) return;
+  m.x = so.x; m.z = so.z;
+}
 function bougeMeuble(m, nx, nz) {
   const dx = nx - m.x, dz = nz - m.z;
   if (!dx && !dz) return;
   m.x = nx; m.z = nz;
   if (m.g) { m.g.position.x += dx; m.g.position.z += dz; }
+  // UN OBJET NE RECOIT LE DECALAGE QU'UNE FOIS. La fiche d'un feu tricolore est a la fois
+  // `solide.brk` (le cassable) ET une entree du registre : elle prenait DEUX FOIS le decalage,
+  // et la fiche partait deux fois plus loin que son mat. Mesure au rond-point de la statue :
+  // mat pose en (9,00 ; -31,30), fiche annoncee en (13,80 ; -31,00) — 4,80 m de mensonge, assez
+  // pour que `city.trafficLights` declare deux feux HORS de leur carrefour (controle 26).
+  const vus = new Set();
+  const decale = o => { if (!o || vus.has(o)) return; vus.add(o); o.x += dx; o.z += dz; };
   for (const so of m.solides) {
+    if (vus.has(so)) continue;
+    vus.add(so);
     so.x += dx; so.z += dz;
     if (so.mesh && (!m.g || so.mesh.parent !== m.g)) { so.mesh.position.x += dx; so.mesh.position.z += dz; }
-    if (so.brk) { so.brk.x += dx; so.brk.z += dz; }
+    decale(so.brk);
     for (const f of (so.feuillage || [])) { f.position.x += dx; f.position.z += dz; }
   }
-  for (const r of m.reg) { r.x += dx; r.z += dz; }
+  for (const r of m.reg) decale(r);
   sgridSale(); navSale();
 }
 function bitumeSous(x, z, r) {
@@ -6148,6 +6237,7 @@ function degageLesRoutes() {
     t.x = ok[0]; t.z = ok[1];
     if (t.g) t.g.position.set(t.x, t.g.position.y, t.z);
     if (t.solid) { t.solid.x = t.x; t.solid.z = t.z; }
+    suitLeMeuble(t.solid);   // le registre du mobilier doit rester VRAI : `rangeLeMobilier` le relit
     n++;
   }
   // ... et les lampadaires aussi : ceux de l'avenue des Chefs etaient plantes en plein milieu
@@ -6173,7 +6263,7 @@ function degageLesRoutes() {
       && !solidsAutour(x, z, 1.4, false).some(o => o !== br.solid && !o.sol && !o.trottoir && o.h > 0.6
         && Math.abs(x - o.x) < o.w / 2 + 0.25 && Math.abs(z - o.z) < o.d / 2 + 0.25);
     const ok = essais.find(([x, z]) => libre(x, z));
-    if (ok) { br.x = ok[0]; br.z = ok[1]; if (br.g) br.g.position.set(br.x, br.g.position.y, br.z); if (br.solid) { br.solid.x = br.x; br.solid.z = br.z; } }
+    if (ok) { br.x = ok[0]; br.z = ok[1]; if (br.g) br.g.position.set(br.x, br.g.position.y, br.z); if (br.solid) { br.solid.x = br.x; br.solid.z = br.z; suitLeMeuble(br.solid); } }
     // EN PLEIN CARREFOUR, ON NE LE JETTE PLUS. Aucun des deux trottoirs n'est libre : le
     // lampadaire reste ou il est et attend `rangeLeMobilier()`, qui essaie quatre-vingt-dix
     // places a la fin de la construction, quand tout le monde est pose. Mesure a graine figee :
@@ -7624,6 +7714,9 @@ const WORLDS = [
       // mobilier : il doit garantir ses 0,90 m sur le trottoir REEL, pas sur celui d'avant.
       B('recoupe des trottoirs', () => { city.recoupe = recoupeLesTrottoirs(); });
       B('rangement du mobilier', () => { city.range = rangeLeMobilier(); });
+      // LA PEINTURE DES FEUX EN DERNIER : le mat ne bougera plus, la ligne d'arret tombe donc
+      // au bon endroit et la fiche `tl.ligne` dit la verite (voir peintLesFeux).
+      B('lignes d\'arret', () => { city.feuxPeints = peintLesFeux(); });
       B('architecture et voirie', () => { city.art = MarlonCityDetail.build(THREE, city, worldGroup); });
       navSale(); buildNav();
       finirPlan();        // le mapping : une desserte OUVERTE sur la route pour chaque quartier
@@ -9227,7 +9320,14 @@ function trafficLight(x, z, ry, group) {
   const ligne = { x: +(x - Math.cos(sens) * 2.7).toFixed(2), z: +(z + Math.sin(sens) * 2.7).toFixed(2) };
   const tl = { kind: 'light', g, lamps, solid, x, z, r: 0.5, group, groupe: group, sens, ligne, etat: 'rouge', state: 0, broken: false };
   solid.brk = tl; city.trafficLights.push(tl); breakables.push(tl);
-  declareMeuble('feu', g, x, z, [solid], [tl, ligne]);   // la ligne d'arret suit le feu
+  // LA LIGNE D'ARRET N'EST PAS DU MOBILIER : c'est de la PEINTURE, posee sur la chaussee par
+  // `ligneArret()` a l'endroit ou la file s'immobilise. Elle n'a aucune raison de voyager avec
+  // le mat, et l'objet inscrit ici n'etait de toute facon plus le bon : `elagueLesFeux()`
+  // REMPLACE `tl.ligne` par une fiche neuve calculee sur la vraie largeur de la rue, si bien
+  // que le registre decalait un objet mort et laissait la vraie ligne sur place (mesure :
+  // 11 feux sur 38 avec une ligne hors de leur voie, controle 236). Le mat seul est declare ;
+  // sa fiche `tl` suit par `solid.brk`.
+  declareMeuble('feu', g, x, z, [solid]);
   return tl;
 }
 // OU s'arrete-t-on a ce feu ? Sur l'axe de la file qu'il arrete, au droit du feu. On cherche
@@ -9267,7 +9367,7 @@ function elagueLesFeux() {
   for (let i = city.trafficLights.length - 1; i >= 0; i--) {
     const tl = city.trafficLights[i];
     const l = ligneFeu(tl);
-    if (l) { tl.ligne = l; continue; }
+    if (l) { tl.ligne.x = l.x; tl.ligne.z = l.z; continue; }   // on MUTE : la fiche est deja referencee
     worldGroup.remove(tl.g); oublieMeuble(tl.solid);
     const si = solids.indexOf(tl.solid); if (si >= 0) solids.splice(si, 1);
     const bi = breakables.indexOf(tl); if (bi >= 0) breakables.splice(bi, 1);
@@ -9275,6 +9375,23 @@ function elagueLesFeux() {
   }
   if (n) sgridSale();
   return n;
+}
+// LA LIGNE D'ARRET ET LA FLECHE SONT PEINTES EN DERNIER. Elles disent aux conducteurs OU
+// s'arreter ; il faut donc les poser quand le mat ne bougera plus. `rangeLeMobilier()` recule
+// encore des feux apres la signalisation (14 feux sur 38, de 0,30 a 1,50 m) : la peinture posee
+// pendant la signalisation restait alors au droit de l'ANCIENNE position, et la fiche `tl.ligne`
+// avec elle — 10 feux sur 38 annoncaient une ligne d'arret hors de leur voie (controle 236).
+// On recalcule donc la ligne sur la position DEFINITIVE du mat, puis on la peint.
+function peintLesFeux() {
+  let peintes = 0;
+  for (const tl of (city.trafficLights || [])) {
+    const l = ligneFeu(tl);
+    if (l) { tl.ligne.x = l.x; tl.ligne.z = l.z; }   // on MUTE la fiche : d'autres la referencent
+    ligneArret(tl.ligne.x, tl.ligne.z, tl.sens, 3);
+    flecheSol(tl.ligne.x - Math.sin(tl.sens) * 5.5, tl.ligne.z - Math.cos(tl.sens) * 5.5, tl.sens);
+    peintes++;
+  }
+  return peintes;
 }
 const FEU_NOMS = ['rouge', 'orange', 'vert'];
 function feuPhase(T, groupe) {   // 0 = rouge, 1 = orange, 2 = vert (l'index de la lampe allumee)
@@ -10530,10 +10647,10 @@ function signalisation() {
 
   // ---- 1. lignes d'arret et fleches devant les feux ----
   const feuxOtes = elagueLesFeux();   // maintenant que TOUTES les chaussees existent
-  for (const tl of (city.trafficLights || [])) {
-    ligneArret(tl.ligne.x, tl.ligne.z, tl.sens, 3);
-    flecheSol(tl.ligne.x - Math.sin(tl.sens) * 5.5, tl.ligne.z - Math.cos(tl.sens) * 5.5, tl.sens);
-  }
+  // LA PEINTURE EST POSEE PLUS TARD (`peintLesFeux`, apres le rangement du mobilier) : un feu
+  // peut encore reculer de deux metres d'ici la, et une ligne d'arret peinte ici resterait
+  // seule au milieu de la chaussee. Elle ne gene aucun placement : elle est plate (2 cm) et
+  // sans collision, donc rien de ce qui suit ne la contourne.
 
   // ---- 2. passages pietons ----
   const passage = (x, z, r) => {   // un passage qui barre la chaussee `r`, en (x, z)

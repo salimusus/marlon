@@ -2613,6 +2613,10 @@ window.__G = {
   updateAct: typeof updateAct === 'function' ? updateAct : null,
   resolveVehicleOverlap: typeof resolveVehicleOverlap === 'function' ? resolveVehicleOverlap : null,
   policeTire: typeof policeTire === 'function' ? policeTire : null, ecraseAuSol: typeof ecraseAuSol === 'function' ? ecraseAuSol : null,
+  // le contournement des corps figes (defaut n° 420) : le test a besoin des DEUX cotes de la
+  // balance — la poussee de separerPersos et le pas de updateBot — et de rien d'autre.
+  separerPersos: typeof separerPersos === 'function' ? separerPersos : null,
+  contourneFiges: typeof contourneFiges === 'function' ? contourneFiges : null,
   infraction: typeof infraction === 'function' ? infraction : null, get police() { return typeof police !== 'undefined' ? police : null; },
   tunable: typeof tunable === 'function' ? tunable : null, tunePrix: typeof tunePrix === 'function' ? tunePrix : null,
   get atelierBrouillon() { return typeof atelierBrouillon !== 'undefined' ? atelierBrouillon : null; }, set atelierBrouillon(v) { atelierBrouillon = v; },

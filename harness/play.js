@@ -25521,3 +25521,100 @@ test('dans les cages d\'escalier de La Zone, la camera recule assez pour que l\'
   const l = s => `${s.nom} (y ${s.y}) ${s.pire} m`;
   return { ok, detail: `« le visage de l'enfant remplit l'ecran : plus une marche, plus un garde-corps » — et La Zone, c'est CINQ immeubles a TROIS niveaux · AVANT, six points de l'escalier et quatre caps chacun, pour un confort que le jeu se fixe a ${C} m : palier du rez 0,48 · 1re volee 0,52 · palier de demi-tour 0,88 · 2e volee 0,59 · palier du 1er 0,48 · coursive du 1er 0,48 m (18 releves sur 24 sous deux metres), la rue a dix metres de la donnant 5,09 a 9,10 m au meme instant · TROIS CAUSES mesurees rayon par rayon : cam.pmax ecrase a 0,04 rad AUX VINGT-QUATRE RELEVES (cam.plafond 1,05 m sur les paliers, 0,44 m sur les volees — une cage d'escalier a une dalle au-dessus de la tete, et la montee, seul secours du jeu quand il n'y a pas de place derriere, s'en trouvait interdite : hausse 0 partout, contre 0,717 rad dans la rue) ; les GARDE-CORPS fermant les trois rayons a 0,67 m ; et le PLAFOND traite comme un mur (volee et palier du dessus 1,38 / 1,80 m, plancher de l'appartement du dessus 3,18 m, dalle de la coursive 3,34 m, jusqu'a une chaise du premier a 3,65 m) · APRES, memes points, memes caps : ${r.cage.map(l).join(' · ')} — et de ${Math.min(...r.cage.map(s => s.devant))} a ${Math.max(...r.cage.map(s => s.devant))} m de degage devant l'enfant · LES QUATRE AUTRES IMMEUBLES, leurs trois niveaux : ${r.imms.map(s => `(${s.x} ; ${s.z}) pire ${s.pire} m${s.mauvais.length ? ' MAUVAIS ' + s.mauvais.join(', ') : ''}`).join(' · ')} · rien n'est efface : ${r.entier.railsCaches}/${r.entier.rails} garde-corps et ${r.entier.marchesCachees}/${r.entier.marches} marches ou paliers caches, piece « ${r.entier.piece} » · ${r.nbPieces} volumes de camera declares, et la cage n'entre PAS dans city.interieurs (${r.pasDansInterieurs}) — le sol sous l'escalier n'est l'interieur de rien · lieux temoins inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}` };
 });
+// ============ ON CONTOURNE CE QUI NE S'ECARTE PAS (round 83, defaut n° 420) ============
+// L'ARITHMETIQUE DU BLOCAGE. `separerPersos` applique le chevauchement ENTIER a celui qui n'est
+// pas fige (`pa = A.fige ? 0 : B.fige ? 1 : 0.5`), et LE JOUEUR EST TOUJOURS FIGE : on ne pousse
+// jamais celui qui tient la manette. Le pas d'un habitant, lui, vaut `b.speed * 0.7 * dt`, soit
+// 0,0653 m par image a 5,6 m/s. Il avance de 0,0653 m, cree 0,0700 m de chevauchement, se fait
+// repousser de 0,0700 m : LA POUSSEE EST PLUS GRANDE QUE LE PAS et il est EPINGLE a 1,16 m du
+// joueur, pour toujours. Et comme `npcMove` le declare libre a chaque image — ce n'est pas le
+// decor qui l'arrete — `stuckT` reste a 0 et meme le filet des 2,5 s ne le sauve pas.
+// C'EST AINSI QUE L'AMI ARRIVAIT « AU VOLANT D'AUCUNE » : l'enfant plante entre lui et la
+// portiere l'y clouait (mesure : 4,91 m parcourus, puis 4 800 images a 6,90 m du rendez-vous).
+// ON NE POUSSE PAS MOINS FORT (deux silhouettes se traverseraient, c'est tout ce que
+// `separerPersos` a repare) : ON PASSE A COTE. Ce test mesure les deux bouts — il PASSE, et il
+// ne passe pas AU TRAVERS ; plus le temoin qui garde la regle d'etre trop gourmande : un
+// rendez-vous « viens » se prend toujours a cote du joueur, sans tourner autour de lui.
+test('un habitant contourne le joueur plante sur son chemin au lieu d\'y rester epingle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // L'HABITANT EST EXIGE, PAS SUPPOSE (lecon du test precedent : un voisin lui emprunte son nom)
+    const b = G.bots.find(x => x.av && x.av.group && !x.dead && !x.prison && !x.drive);
+    if (!b) return { erreur: 'aucun habitant vivant et a pied' };
+    const R = { habitant: b.name, vitesse: b.speed };
+    // LES DOUZE AUTRES SONT RANGES AU LOIN : ce test juge UN marcheur et UN corps fige.
+    G.bots.forEach((o, i) => { if (o === b) return; o.rdv = null; o.ordre = null; o.activite = null;
+      o.drive = null; o.sport = null; o.bagarre = null; o.fight = null; o.ko = 0; o.dead = 0; o.hp = 100;
+      o.wait = 9999; o.target = null; o.pos.set(400 + i * 3, 0.4, 400); o.av.group.position.copy(o.pos); });
+    (G.gangs || []).forEach(Gg => (Gg.membres || []).forEach(m => { m.x += 600; m.z += 600;
+      if (m.av) m.av.group.position.set(m.x, m.y || 0, m.z); }));
+    (G.police.agents || []).slice().forEach(a => { a.x += 600; a.z += 600; });
+    const neuf = () => { b.rdv = null; b.rdvRoute = null; b.rdvRouteT = 0; b.target = null; b.wait = 0;
+      b.ko = 0; b.dead = 0; b.prison = false; b.stuckT = 0; b.fight = null; b.bagarre = null;
+      b.drive = null; b.ordre = null; b.activite = null; b.sport = null; b.sit = null; b.hp = 100;
+      b.av.group.visible = true; };
+    // L'ARITHMETIQUE, RELEVEE SUR LE JEU : le pas d'une image contre la poussee d'une image
+    const dt = 1 / 60, D = 1.16;                     // PERSO_R * 2, la distance de frolement
+    const pas = +(b.speed * 0.7 * dt).toFixed(4);
+    // a l'equilibre, la poussee (D - d) egale le pas : il s'immobilise a d = D - pas et n'ira
+    // jamais plus loin. C'est le 1,09 m releve dans le jeu, au centimetre.
+    R.arithmetique = { pas, separation: D, equilibre: +(D - pas).toFixed(4) };
+    // ---- 1. IL DOIT PASSER : rendez-vous a (-6 ; 8), le joueur PILE au milieu en (0 ; 8)
+    // ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS (le banc rend une image par seconde).
+    const marche = (px, pz, rx, rz, suit) => {
+      neuf();
+      b.pos.set(6, 0.3, 8); b.av.group.position.copy(b.pos);
+      P.pos.set(px, 0.5, pz); P.vel.set(0, 0, 0);
+      b.rdv = suit ? { x: px, z: pz, y: 0.3, nom: 'toi', arrive: false, suit: true }
+                   : { x: rx, z: rz, y: 0.3, nom: 'la-bas', arrive: false };
+      let images = -1, dJoueurMin = 99, dButMin = 99, sauts = 0, stuckMax = 0, travers = 0;
+      let qx = b.pos.x, qz = b.pos.z;
+      for (let i = 0; i < 1200; i++) {
+        G.separerPersos(); G.updateBot(b, dt);
+        const s = Math.hypot(b.pos.x - qx, b.pos.z - qz); if (s > 0.35) sauts++;
+        qx = b.pos.x; qz = b.pos.z;
+        stuckMax = Math.max(stuckMax, b.stuckT || 0);
+        const dj = Math.hypot(b.pos.x - px, b.pos.z - pz);
+        dJoueurMin = Math.min(dJoueurMin, dj);
+        if (dj < D - 0.02) travers++;                // il est passe DANS le joueur : interdit
+        const db = Math.hypot(b.pos.x - b.rdv.x, b.pos.z - b.rdv.z);
+        dButMin = Math.min(dButMin, db);
+        if (images < 0 && db <= (suit ? 1.15 : 1.85)) images = i + 1;
+      }
+      return { images, dJoueurMin: +dJoueurMin.toFixed(2), dButMin: +dButMin.toFixed(2),
+        travers, sauts, stuckMax: +stuckMax.toFixed(2),
+        fin: [+b.pos.x.toFixed(2), +b.pos.z.toFixed(2)], passe: b.pos.x < px };
+    };
+    R.traversLeJoueur = marche(0, 8, -6, 8, false);
+    // ---- 2. TEMOIN : le meme trajet, le joueur ECARTE de six metres — le cout du detour
+    R.joueurEcarte = marche(0, 14, -6, 8, false);
+    // ---- 3. TEMOIN : « viens » — il s'arrete A COTE du joueur, il ne tourne pas autour
+    R.vientTeVoir = marche(0, 8, 0, 8, true);
+    return R;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const A = r.traversLeJoueur, T = r.joueurEcarte, V = r.vientTeVoir;
+  const ok = A.images > 0 && A.passe && A.travers === 0 && A.sauts === 0 && A.dJoueurMin >= 1.1
+    && A.images < T.images * 3
+    && T.images > 0 && T.travers === 0
+    && V.images > 0 && V.travers === 0 && V.dJoueurMin >= 1.1 && V.dButMin <= 1.15;
+  return { ok, detail: `${r.habitant} (${r.vitesse} m/s) marche vers un but que le joueur BARRE`
+    + ` · L'ARITHMETIQUE DU BLOCAGE : son pas vaut ${r.arithmetique.pas} m par image (b.speed x 0,7 x dt) et`
+    + ` \`separerPersos\` applique a un corps NON fige le chevauchement ENTIER — le joueur, lui, est`
+    + ` toujours fige (« on ne pousse jamais celui qui tient la manette ») : sa poussee vaut`
+    + ` ${r.arithmetique.separation} m moins la distance, elle EGALE donc son pas a`
+    + ` ${r.arithmetique.equilibre} m et il ne peut plus avancer d'un millimetre — c'est le 1,09 m`
+    + ` releve dans le jeu, au centimetre — AVANT : 4,91 m parcourus puis 4 800 images (80 s) a 6,90 m du`
+    + ` rendez-vous, \`stuckT\` a 0 tout du long, donc meme le filet des 2,5 s ne partait pas, et l'ami`
+    + ` arrivait « au volant d'aucune »`
+    + ` · IL PASSE : joueur pile au milieu en (0 ; 8), but a (-6 ; 8) — atteint en ${A.images} images,`
+    + ` arrive en (${A.fin[0]} ; ${A.fin[1]}), passe de l'autre cote=${A.passe}, ${A.sauts} saut,`
+    + ` compteur de blocage ${A.stuckMax}`
+    + ` · ET IL NE PASSE PAS AU TRAVERS : ${A.travers} image dans le joueur, jamais plus pres que`
+    + ` ${A.dJoueurMin} m (la separation vaut ${r.arithmetique.separation} m)`
+    + ` · COUT DU DETOUR, meme trajet le joueur ecarte de 6 m : ${T.images} images contre ${A.images}`
+    + ` · TEMOIN, la regle n'est pas gourmande : un rendez-vous « viens » se prend TOUJOURS a cote du`
+    + ` joueur et l'habitant ne tourne pas autour — ${V.images} images, il finit a ${V.dButMin} m de son`
+    + ` but et a ${V.dJoueurMin} m du joueur, ${V.travers} image dans lui` };
+});

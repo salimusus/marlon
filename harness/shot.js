@@ -996,6 +996,7 @@ window.__SHOT = {
       if (cam.fovAjout) { camera.fov -= cam.fovAjout; camera.updateProjectionMatrix(); }   // le champ elargi par un couloir etroit reste sinon dans l'objectif
     } catch (eFov) {}
     cam.base = 9; cam.dist = 9; cam.pitch = 0.32;            // les valeurs du chargement de la page
+    cam.pitchVoulu = null; cam.pitchPose = null;   // la dette de visee laissee par une bride de plafond (camPitchBride)
     cam.voulu = 9; cam.reel = 9; cam.fovAjout = 0;
     cam.hausse = 0; cam.hausseCible = 0; cam.hauT = 0; cam.mesT = 0;
     cam.libre = null; cam.dLisse = null; cam.dJoueur = null; cam.avance = 0;
@@ -2528,6 +2529,8 @@ window.__G = {
   camPieceDe: typeof camPieceDe === 'function' ? camPieceDe : null,
   LIFT_VMAX: typeof LIFT_VMAX !== 'undefined' ? LIFT_VMAX : null,
   CAM_POTEAU: typeof CAM_POTEAU !== 'undefined' ? CAM_POTEAU : null,
+  CAM_POTEAU_HAUT: typeof CAM_POTEAU_HAUT !== 'undefined' ? CAM_POTEAU_HAUT : null,
+  CAM_PITCH_RETOUR: typeof CAM_PITCH_RETOUR !== 'undefined' ? CAM_PITCH_RETOUR : null,
   attack: typeof attack === 'function' ? attack : null,
   nearestFighter: typeof nearestFighter === 'function' ? nearestFighter : null,
   gpsRoute: typeof gpsRoute !== 'undefined' ? gpsRoute : null,

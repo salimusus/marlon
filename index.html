@@ -12080,6 +12080,21 @@ function gapDevant(c, latVoulu) {
   }
   return [gap, 1.4 + ((c.baseD || 4.4) + longDevant) / 2];
 }
+// ET CE QUI NOUS TIENT PAR L'ARRIERE ? Meme geometrie que `gapDevant`, cap inverse. Sans ce
+// relevé, le degagement ne savait rien de ce qu'il y avait derriere lui et reculait dedans.
+function gapDerriere(c) {
+  flotteMaj();
+  const fx = -Math.sin(c.h), fz = -Math.cos(c.h);
+  let gap = 99, longDerriere = 4.4;
+  for (const v of FLOTTE) {
+    if (v === c || v.heli) continue;
+    const dx = v.x - c.x, dz = v.z - c.z, al = dx * fx + dz * fz;
+    if (al < 0.5 || al > 14) continue;
+    if (Math.abs(-dx * fz + dz * fx) > 2.2) continue;
+    if (al < gap) { gap = al; longDerriere = v.baseD || 4.4; }
+  }
+  return [gap, 1.4 + ((c.baseD || 4.4) + longDerriere) / 2];
+}
 // Freine et klaxonne quand quelqu'un est a pied juste devant le capot.
 // CE QUI EST SUR LE TROTTOIR N'EST PAS DEVANT LE CAPOT. Mesure du trajet « un membre emmene
 // le joueur a la villa » : 67 % du temps la voiture etait a l'arret ou au pas avec la raison
@@ -12480,6 +12495,16 @@ function traficRoule(c, dt, opt) {
       && ((c.figeT || 0) > DEGAGE_SANS_RAISON || (c.attenteT || 0) > DEGAGE_QUAND_MEME
           || (!opt.pilote && (c.bloqueT || 0) > DEGAGE_BLOQUE && !excuseLegale(c.raison)))
       && simTime > (c.degageRepos || 0)) {
+    // DANS QUEL SENS SE DEGAGE-T-ON ? ON RECULAIT TOUJOURS. Mesure (sonde du test 450, 90 s de
+    // ville deja jouee) : une voiture de la circulation en (-73 ; 134) avait un camion de 9 m
+    // EMBOITE PAR L'ARRIERE — centre a 6,60 m pour 6,70 m de demi-longueurs cumulees, soit 10 cm
+    // de chevauchement — et RIEN DU TOUT devant elle (`gapDevant` rendait 99). Elle reculait donc
+    // DANS le camion : deux manoeuvres infructueuses de suite, 5,9 s immobile, puis reprise de la
+    // circulation ailleurs. Un conducteur, dans ce cas-la, AVANCE. On regarde donc les deux
+    // cotes : la voie libre devant et une tole a portee de file derriere, on avance ; sinon on
+    // recule comme avant (c'est le cas de loin le plus fréquent : on est coince par devant).
+    const [gAv, mAv] = gapDevant(c), [gAr, mAr] = gapDerriere(c);
+    c.degageAvant = gAv >= mAv && gAr < mAr;
     c.degageFin = simTime + DEGAGE_DUREE; c.degageSens = (c.degageSens === 1) ? -1 : 1;
     c.degageRepos = simTime + DEGAGE_DUREE + DEGAGE_REPOS;
     if (!opt.pilote) { c.degageDepart = [c.x, c.z]; c.degageJuge = false; }
@@ -12505,7 +12530,8 @@ function traficRoule(c, dt, opt) {
     if (traficPose(c)) return;
   }
   let mou = false;
-  if (simTime < (c.degageFin || 0) && !pietonDerriere(c)) {
+  // ON REGARDE DU COTE OU L'ON VA : en marche avant c'est le capot qu'il faut degager du pieton.
+  if (simTime < (c.degageFin || 0) && !(c.degageAvant ? pietonDevant(c) : pietonDerriere(c))) {
     // « suis-je DEJA imbrique dans une autre tole, a ce cap-la ? » — la reponse depend du cap,
     // et c'est tout le sujet du piege ci-dessous.
     const imbrique = hh => vehBloque(c, c.x, c.z, hh, { bar: true, veh: true }) && !vehBloque(c, c.x, c.z, hh, { bar: true, veh: false });
@@ -12522,7 +12548,7 @@ function traficRoule(c, dt, opt) {
     // chevauchement qui n'existait pas ; quand les toles sont deja imbriquees, le braquage reste
     // libre — c'est lui qui desencastre la paire, et rien ici ne le bride.
     if (dejaDedans || !imbrique(hTourne)) c.h = hTourne;
-    c.speed = -DEGAGE_V; c.recule = true; c.raison = 'degage';
+    c.speed = c.degageAvant ? DEGAGE_V : -DEGAGE_V; c.recule = !c.degageAvant; c.raison = 'degage';
     // ON NE TRAVERSE LES CAISSES QUE SI ON EST DEJA DEDANS. Premiere version : tout vehicule
     // qui se degageait cessait de voir les autres pendant toute la manoeuvre. Mesure (test
     // 298, trois minutes de circulation) : 876 chevauchements voiture-voiture et 2 075 images

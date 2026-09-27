@@ -20141,12 +20141,18 @@ test('dans une ville déjà jouée, aucun véhicule qui a une destination ne res
         if (v === c || v.heli) continue; const d = Math.hypot(v.x - c.x, v.z - c.z);
         if (d < vd) { vd = d; veh = { d: +d.toFixed(2), kind: v.kind || 'voiture', busy: !!v.busy, roule: +(v.speed || 0).toFixed(1), fond: !!v.spd }; } } } catch (e) {}
       const rt = (G.city.routes || []).find(r => Math.abs(c.x - r.x) < r.w / 2 && Math.abs(c.z - r.z) < r.d / 2);
+      // « largeurRue: 311.6 » : UNE RUE DE 311 METRES DE LARGE N'EXISTE PAS. On publiait `rt.w`,
+      // l'etendue du rectangle EN X — pour une rue est-ouest c'est sa LONGUEUR, pas sa largeur.
+      // La largeur d'une chaussee est son petit cote, `Math.min(rt.w, rt.d)`, comme partout
+      // ailleurs dans le jeu (`roleVoie`, `VOIES`, l'elargissement). Ce chiffre n'entre dans
+      // aucune decision — il n'est la que pour le lecteur — mais un chiffre faux publie a cote
+      // d'un diagnostic fait douter du diagnostic.
       return { raison: c.raison || '-', figeT: +(c.figeT || 0).toFixed(1), bloqueT: +(c.bloqueT || 0).toFixed(1),
         attenteT: +(c.attenteT || 0).toFixed(1), recule: !!c.recule, degage: +((c.degageFin || 0) - G.simTime).toFixed(1),
         repos: +((c.degageRepos || 0) - G.simTime).toFixed(1),
         parTole: G.vehBloque ? !!G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: true }) : null,
         parMur: G.vehBloque ? !!G.vehBloque(c, c.x, c.z, c.h, { bar: true, veh: false }) : null,
-        sol, veh, largeurRue: rt ? rt.w : null };
+        sol, veh, largeurRue: rt ? +Math.min(rt.w, rt.d).toFixed(1) : null, longueurRue: rt ? +Math.max(rt.w, rt.d).toFixed(1) : null };
     };
     const mesure = (images, saboter) => {
       const etats = new Map(); let ech = 0, relevs = 0;

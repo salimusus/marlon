@@ -27439,12 +27439,18 @@ const FIGES = [];              // les corps qui n'encaissent rien, tenus à jour
 const CONTOUR = [0, 0];
 function contourneFiges(x, z, sx, sz, distBut) {
   CONTOUR[0] = sx; CONTOUR[1] = sz;
-  if (!FIGES.length) return CONTOUR;
   const pas = Math.hypot(sx, sz); if (pas < 1e-5) return CONTOUR;
   const ux = sx / pas, uz = sz / pas, D = PERSO_R * 2, port = D + pas;
   let bx = 0, bz = 0, bd = 1e9, blat = 0;
-  for (let k = 0; k < FIGES.length; k++) {
-    const f = FIGES[k], dx = f[0] - x, dz = f[1] - z;
+  // LE JOUEUR EST LU EN DIRECT (k = -1), les autres corps dans le registre. `FIGES` est rafraichi
+  // par `separerPersos`, donc une fois par image de jeu ; mais le joueur est le corps fige qui
+  // bouge le plus, et un banc d'essai qui appelle `updateBot` sans faire tourner la ville entiere
+  // se retrouverait avec un fantome a l'ancienne place de l'enfant. On ne mesure pas un fantome.
+  for (let k = -1; k < FIGES.length; k++) {
+    let fx, fz;
+    if (k < 0) { if (drive.car || P.hp <= 0) continue; fx = P.pos.x; fz = P.pos.z; }
+    else { fx = FIGES[k][0]; fz = FIGES[k][1]; }
+    const dx = fx - x, dz = fz - z;
     const av = dx * ux + dz * uz;
     if (av <= 0 || av > port) continue;                      // ni derrière nous, ni encore loin
     const lat = dx * uz - dz * ux;

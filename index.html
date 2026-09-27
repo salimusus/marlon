@@ -4678,6 +4678,64 @@ function immeubleZone(x, z, w, d, col, dir) {
     m.position.set(x - w / 2 - 0.18, 1.6 + i * 0.2, z - 2 + i * 2); m.rotation.y = -Math.PI / 2; worldGroup.add(m);
   }
   city.batiments.push({ x, z, w: w + 0.4, d: d + 0.4 });
+  // ---------- LA CAMÉRA DANS LA CAGE D'ESCALIER (défaut n° 109, round 83) ----------
+  // « LE VISAGE DE L'ENFANT REMPLIT L'ÉCRAN » : plus une marche, plus un garde-corps. Perche
+  // mesurée (objectif ↔ tête) aux six points de l'escalier, quatre caps chacun, pour un confort
+  // que le jeu se fixe à 4,60 m : le PIRE de chaque point valait 0,48 / 0,52 / 0,88 / 0,59 /
+  // 0,48 / 0,48 m. Vingt-quatre relevés, dix-huit sous 2 m. Témoin : la rue, au même instant,
+  // rend 5,09 à 9,10 m.
+  // TROIS CAUSES, MESURÉES RAYON PAR RAYON (l'axe et les deux rayons à ±0,4 rad) :
+  //   1. `cam.pmax` = 0,04 rad AUX VINGT-QUATRE RELEVÉS. Une cage d'escalier a, par définition,
+  //      une dalle au-dessus de la tête : `cam.plafond` vaut 1,05 m sur les paliers et 0,44 m
+  //      sur les volées, donc la loi « un plafond bas n'interdit que de MONTER »
+  //      (clamp((plafond − 1,1) × 0,22)) écrase la visée à son minimum. Or LA MONTÉE EST LE SEUL
+  //      SECOURS du jeu quand il n'y a pas de place derrière : `cam.hausse` valait 0 partout ici,
+  //      contre 0,717 rad dans la rue à dix mètres de là. La caméra restait donc clouée à la
+  //      hauteur de la poitrine — exactement la hauteur des garde-corps.
+  //   2. LES GARDE-CORPS (0,22 × 1,15 m d'appui, plus les 0,30 m de garde de la caméra : une
+  //      paroi de 1,45 à 1,97 m) arrêtent les TROIS rayons dans huit caps sur vingt-quatre, à
+  //      0,67 à 1,38 m. Sur la volée descendante, qui en porte un de chaque côté, l'est et
+  //      l'ouest tombent tous les deux à 0,71 m.
+  //   3. LA VOLÉE ET LE PALIER DE L'ÉTAGE AU-DESSUS — le plafond, pas un mur — arrêtent quatre
+  //      caps à 1,38 / 1,80 m, et la façade est porteuse (0,36 × 3,20 × 10 m, 1,30 m seulement du
+  //      milieu de la volée) cinq autres, à 0,97 à 2,87 m. Les deux piliers porteurs
+  //      (0,45 × 6,60 × 0,70 m) ferment les deux derniers, à 2,87 m.
+  // CE QUE LA CAGE PEUT OFFRIR AU MIEUX (mesuré en rendant traversables le garde-corps, les murs
+  // et le plafond de l'étage du dessus) : 4,64 à 9,30 m sur les paliers, 4,47 m en pleine volée à
+  // 0,55 rad de visée, 9,30 m sur la volée descendante. Il y a donc bel et bien la place — à
+  // condition de ne PAS rester à hauteur de poitrine, et de traiter le plafond en plafond.
+  // LA RÉPARATION : un volume de caméra PAR NIVEAU (voir camPieceDe), et non un seul pour toute
+  // la cage. C'est ce qui permet de dire « le plafond, c'est ce qui est au-dessus de MA poitrine
+  // à MOI » : un volume unique de neuf mètres de haut ne saurait pas à quel étage on se trouve.
+  // `cage: true` (voir interieurEntre) veut dire exactement deux choses : le garde-corps et le
+  // plafond sont traversables par la caméra, et RIEN n'est effacé — l'escalier reste entier à
+  // l'image, seul le fondu à 22 % de la maison de poupée joue sur ce qui coupe la ligne de vue.
+  // (« CORRIGE ON VOIT NI ESCALIER NI PLANCHER NI MUR » est le défaut qu'on ne réveille pas.)
+  // DEUX RECTANGLES PAR NIVEAU, et pas un seul : la cage est adossée à la façade est, la coursive
+  // court le long de la façade sud. Leur boîte commune engloberait l'APPARTEMENT, dont la caméra
+  // est déjà réglée (city.batiments) et dont le relevé témoin vaut 5,23 m — on n'y touche pas.
+  // les deux autres emprises que la caméra a le droit de traverser depuis l'escalier : l'immeuble
+  // que la cage dessert, et la coursive qui longe ses portes (voir interieurEntre). L'immeuble
+  // VOISIN, à vingt-six mètres, n'y est jamais.
+  const EMP = [{ x, z, w, d }, { x: (pontX0 + pontX1) / 2, z: (courZ0 + courZ1) / 2,
+    w: pontX1 - pontX0, d: courZ1 - courZ0 }];
+  for (let f = 0; f < N; f++) {
+    const y1 = f * H + 0.1;
+    // la cage : les deux bandes, les paliers, les piliers ; à l'ouest on va chercher la façade
+    // est porteuse (marge de interieurEntre : 0,60 m), à l'est les deux piliers.
+    // en z, la cage va du palier de demi-tour (au nord) jusqu'au bout de la coursive (au sud) :
+    // le poteau qui porte la coursive (0,20 x 6,60 x 0,20 m) barrait sinon le rayon d'axe a
+    // 4,32 m depuis la volee descendante, et un poteau n'arrete que l'axe, jamais les cotes.
+    city.camPieces.push({ x: (xE - 0.3 + xE + palW + 0.8) / 2, z: (zM0 - 0.45 + courZ1 + 0.45) / 2,
+      w: palW + 1.1, d: courZ1 - zM0 + 0.9, y1, y2: y1 + H, cage: true, emprises: EMP,
+      nom: 'cage d\'escalier de La Zone' });
+    // la coursive : de plain-pied avec le palier, elle longe les portes des appartements. Son
+    // rectangle s'arrête au nu intérieur de la façade sud (courZ0 − 0,10) : un joueur DANS
+    // l'appartement (z < 14,70 ici) n'y tombe jamais.
+    if (f > 0) city.camPieces.push({ x: (pontX0 - 0.3 + xE + palW + 0.8) / 2, z: (courZ0 - 0.1 + courZ1 + 0.45) / 2,
+      w: (xE + palW + 0.8) - (pontX0 - 0.3), d: (courZ1 + 0.45) - (courZ0 - 0.1), y1, y2: y1 + H,
+      cage: true, emprises: EMP, nom: 'coursive de La Zone' });
+  }
   // le gabarit de l'escalier est publié : les tests le parcourent sans redemonter le calcul
   return { x, z, w, d, etages: N, h: H, rails: RAILS,
     esc: { xE, zS, larg: LARG, pal: PAL, pald: PALD, nm: NM, monte: MONTE, giron: GIRON, ramb: RAMB, ep: EP,
@@ -9201,7 +9259,19 @@ function buildFair() {   // fête foraine au sud du circuit : grande roue, carro
   for (const sx of [-2.4, 2.4]) for (const sz of [-4, 4]) { const leg = new THREE.Mesh(unitBox, lam(0x3b4252)); leg.scale.set(0.35, 15.5, 0.35); leg.position.set(wx + sx, 7.9, wz + sz); leg.rotation.x = sz > 0 ? -0.3 : 0.3; worldGroup.add(leg); }
   box(wx, 0.6, wz, 6, 0.5, 4, 0x3b4252, { studs: false, noRoute: true });
   box(wx - 5, 1.8, wz + 1, 1.6, 1.4, 1.6, 0xffd23f, { studs: false, noRoute: true }); box(wx - 5, 4, wz + 1, 3, 0.8, 0.1, 0xffffff, { material: new THREE.MeshBasicMaterial({ map: enseigneTexture('🎡 GRANDE ROUE', 0x35d0e6) }), deco: true, noEdges: true });
-  city.rides.push({ kind: 'wheel', n: 'la grande roue', e: '🎡', group: wheel, gondolas, x: wx, z: wz, R, ang: 0, speed: 0.22, ex: wx - 5, ez: wz - 1, rider: null });
+  // ---------- ON MONTE DANS LA GRANDE ROUE DE TOUT SON POURTOUR (défaut n° 114) ----------
+  // « On ne pouvait monter qu'en se plaçant à 2,5 m d'un unique point d'entrée invisible. Les
+  // manèges qui ont un « rayon » se prennent depuis tout leur pourtour. » Les trois carrousels de
+  // la ville ont reçu ce rayon (5,50 / 3,10 / 5,20 m) ; LA GRANDE ROUE, elle, n'en a jamais eu.
+  // MESURE (approche par l'est, un mètre à la fois, 60 images d'arrêt à chaque pas) : `rideNear`
+  // reste FAUX de 12 m jusqu'à 3 m du centre, et ne s'arme qu'à 2 m — c'est-à-dire sous la roue,
+  // le nez sur la guérite. Au même essai, le carrousel s'arme à 9 m, le manège à poneys à 9 m et
+  // le tourniquet à 7 m. L'enfant lit « 🎡 Fête foraine : grande roue et carrousel (△ pour
+  // monter) », se met devant la roue, et rien ne se propose.
+  // 5,00 m de rayon : la roue est portée par quatre jambes plantées à ±2,40 m en x et ±4,00 m en
+  // z, et son socle mesure 6 × 4 m — cinq mètres couvrent le socle entier et les quatre jambes,
+  // et l'on s'arme donc à 7,50 m du moyeu, comme devant un carrousel.
+  city.rides.push({ kind: 'wheel', n: 'la grande roue', e: '🎡', group: wheel, gondolas, x: wx, z: wz, R, ang: 0, speed: 0.22, ex: wx - 5, ez: wz - 1, rayon: 5, rider: null });
   // carrousel
   const cx = -18, cz = 152;
   const base = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 0.5, 24), lam(0xff5c5c)); base.position.set(cx, 0.55, cz); worldGroup.add(base); solids.push({ mesh: base, x: cx, y: 0.55, z: cz, w: 11, h: 0.5, d: 11 }); sgridSale();
@@ -20183,7 +20253,12 @@ function interieurEntre(r) {
   // Capture à l'appui : à 1,20 m l'enfant disparaissait derrière son propre panneau ; à 1,00 m
   // l'enseigne s'efface avec le toit, et l'on voit l'enfant entier dans sa cabane.
   const yTete = P.pos.y + 2.25, marge = 0.6;
-  const yMasque = r.tout ? r.y1 + 1 : yTete;
+  // UNE CAGE D'ESCALIER N'EFFACE RIEN (défaut n° 109). Effacer ce qui dépasse la tête, dans un
+  // escalier à deux demi-tours, c'est reprendre à l'enfant la volée, le palier et le garde-corps
+  // qu'il est en train de gravir — le défaut « CORRIGE ON VOIT NI ESCALIER NI PLANCHER NI MUR ».
+  // Ici la caméra TRAVERSE (xray, plus bas) et le fondu à 22 % de la maison de poupée suffit :
+  // seul ce qui coupe vraiment la ligne de vue devient translucide, tout le reste reste plein.
+  const yMasque = r.cage ? 1e9 : (r.tout ? r.y1 + 1 : yTete);
   interieur.yTete = yTete;   // hauteur de reference : si le joueur change d'etage, il faudra refaire le tri
   // les sols praticables depuis les pieds du joueur : leurs maillages sont intouchables, et le
   // premier qui dépasse la tête pose le PLAFOND DE COUPE (au-dessus, on n'efface plus rien).
@@ -20208,7 +20283,54 @@ function interieurEntre(r) {
     if (Math.abs(cx - r.x) > r.w / 2 + marge || Math.abs(cz - r.z) > r.d / 2 + marge) return;
     if (_bb.min.y > yMasque && _bb.min.y < yCoupe) { o.visible = false; interieur.masques.push(o); }
   });
-  for (const o of solids) {
+  // ============ DANS UNE CAGE D'ESCALIER, LE PLAFOND N'EST PAS UN MUR (défaut n° 109) ============
+  // camLibres dit déjà « LE SOL SUR LEQUEL ON MARCHE N'EST PAS UN MUR » : une dalle dont le dessus
+  // ne dépasse pas la CEINTURE du joueur laisse passer la perche. Son symétrique manquait, et une
+  // cage d'escalier est faite de cela : sous chaque volée il y a le palier de l'étage du dessous,
+  // au-dessus de chaque palier la volée de l'étage du dessus. Ce que la mesure rayon par rayon a
+  // relevé, et ce que chaque ligne ci-dessous répare :
+  //   · le GARDE-CORPS (0,22 × 1,15 m, plus 0,30 m de garde de caméra) fermait les TROIS rayons à
+  //     0,67 m sur la volée descendante, qui en porte un de chaque côté ;
+  //   · la VOLÉE et le PALIER de l'étage du dessus, à 1,38 et 1,80 m ;
+  //   · une fois la caméra passée derrière la façade (elle en a le droit : plus de 2,20 m de haut),
+  //     le PLANCHER de l'appartement du dessus (16,00 × 0,40 × 10,00 m) à 3,18 m, la dalle de la
+  //     coursive du dessus (21,20 × 0,35 × 2,00 m) à 3,34 m, un trumeau de la façade sud à 3,18 m,
+  //     et jusqu'à une CHAISE posée au premier étage (0,50 × 0,90 × 0,50 m) à 3,65 m.
+  // TROIS EMPRISES, ET PAS UNE. La cage est adossée à la façade est, la coursive longe la façade
+  // sud, et l'immeuble est entre les deux : leur boîte commune engloberait l'appartement, dont la
+  // caméra est déjà réglée (city.batiments, relevé témoin 5,23 m). On énumère donc les emprises.
+  // ÊTRE SUR L'ESCALIER D'UN IMMEUBLE, C'EST ÊTRE DANS L'IMMEUBLE : la maison de poupée rend déjà
+  // ses murs traversables à qui se tient DEDANS, et le palier extérieur est de plain-pied avec la
+  // coursive et avec les appartements.
+  // LES DEUX SEUILS, ET POURQUOI CEUX-LÀ.
+  //   · L'OBJECTIF (P.pos.y + 1,50 m) pour tout le reste : la caméra est toujours au-dessus de ce
+  //     point (l'inclinaison est positive dans une pièce), donc rien dont le DESSOUS est plus haut
+  //     ne peut se glisser entre elle et l'enfant. Un seuil plus bas (la poitrine, + 1,40 m)
+  //     basculait d'un relevé à l'autre : le joueur monté d'une marche (1,48 → 1,80 m) faisait
+  //     repasser le plancher du dessus du côté des murs et la perche retombait de 4,95 à 0,93 m.
+  //   · LA CEINTURE (P.pos.y + 0,45 m) pour les VRAIES DALLES, minces et larges dans les deux
+  //     sens : c'est le seuil que camLibres emploie lui-même pour dire « ceci est un plancher ».
+  //     Une dalle plus haute que ma ceinture est un plancher ou un plafond, jamais un mur. On la
+  //     cherche jusqu'à NEUF MÈTRES (la perche n'est jamais plus longue) parce que la dalle qui
+  //     gêne appartient souvent au voisin — l'appartement, la coursive du dessus.
+  // CE QUI CONTINUE DE FERMER LA VUE : tout ce qui est à HAUTEUR D'HOMME dans la cage. Une marche
+  // devant soi, le limon, une carcasse garée au pied de l'escalier, un meuble du même étage. La
+  // caméra ne peut donc pas passer sous l'escalier, ni traverser une volée par le flanc.
+  if (r.cage) {
+    const yObj = P.pos.y + 1.5, yCeint = P.pos.y + 0.45;
+    const emprises = [{ x: r.x, z: r.z, w: r.w, d: r.d }].concat(r.emprises || []);
+    for (const o of solids) {
+      if (!o.mesh || o.h > 30 || o.veh || o.xray) continue;
+      const bas = o.y - o.h / 2;
+      let ouvre = o.h <= 0.8 && Math.max(o.w, o.d) >= 2.5 && Math.min(o.w, o.d) >= 1.2 && bas >= yCeint
+        && Math.abs(o.x - r.x) <= r.w / 2 + 9 && Math.abs(o.z - r.z) <= r.d / 2 + 9;
+      if (!ouvre) for (const e2 of emprises) {
+        if (Math.abs(o.x - e2.x) > e2.w / 2 + marge || Math.abs(o.z - e2.z) > e2.d / 2 + marge) continue;
+        if (o.rambarde || bas >= yObj || (o.h >= 2.2 && bas <= yTete)) { ouvre = true; break; }
+      }
+      if (ouvre) { o.xray = true; interieur.murs.push(o); }
+    }
+  } else for (const o of solids) {
     if (!o.mesh || o.h > 30 || o.veh) continue;
     if (Math.abs(o.x - r.x) > r.w / 2 + marge || Math.abs(o.z - r.z) > r.d / 2 + marge) continue;
     if (o.y - o.h / 2 > yTete) continue;
@@ -26672,7 +26794,7 @@ const DATES_JEU = new Set([
     'ambuT', 'anim', 'annonce', 'apprT', 'armeT', 'arrestT', 'attaqueT', 'attenteFin', 'avertPietT', 'avertT',
     'avoidT', 'babilT', 'bagarre', 'balaiT', 'ballT', 'bipT', 'birdT', 'biteT', 'blesse', 'bond',
     'bondT', 'boomT', 'boostT', 'botT', 'bubbleT', 'bumpT', 'casinoT', 'casseT', 'cd', 'chasse',
-    'clignFin', 'clignT', 'clocheT', 'cogneT', 'constatT', 'coteT', 'coupT', 'criT', 'crime',
+    'clignFin', 'clignT', 'clocheT', 'cogneT', 'coinceMsgT', 'constatT', 'coteT', 'coupT', 'criT', 'crime',
     'crimeTir', 'crisT', 'crisT2', 'dTourFin', 'dTourStop', 'danse', 'dead', 'debT', 'debarqueDit', 'debut',
     'decayT', 'dechargeT', 'decolle', 'dedansT', 'defense', 'degageFin', 'degageRepos', 'demiTour',
     'demoT', 'departNonT', 'derniere', 'destT', 'diraT', 'doute', 'drive', 'eatCd', 'eauT', 'ecl',
@@ -27102,6 +27224,18 @@ function readInput(sansStickY) {
 // court chemin pour l'en SORTIR ; `conduire` applique ce dégagement, ajoute un vrai rebond et
 // finit par braquer la caisse vers l'échappée si ça dure.
 const DEGAGE_VITESSE = 3.4;   // m/s : on se dégage vite, mais on le voit — pas de téléportation
+// ============ LA SORTIE D'UN POTEAU EST DE CÔTÉ, JAMAIS EN ARRIÈRE (n° 112, round 83) ============
+// « le plus court chemin vers l'air libre » est le bon pour un MUR : on ressort par le côté le
+// plus proche et l'on repart. Contre un POTEAU planté devant le nez, c'est un piège : le côté le
+// plus proche est presque toujours l'ARRIÈRE (la pénétration y est plus faible que dans le
+// travers), donc le dégagement recule la caisse, les gaz la ramènent aussitôt sur le poteau, et
+// la voiture fait la navette sans jamais gagner un centimètre — pied au plancher.
+// Un poteau, on le CONTOURNE : on pousse la caisse EN TRAVERS d'elle-même, du côté où le poteau
+// n'est pas. C'est la même idée que « un poteau ne cale pas la caméra » (n° 32) et que « les
+// rayons de côté contournent un poteau » (round 83) : ce qui est fin dans les deux sens au sol ne
+// ferme pas un passage, il suffit de passer à côté. 0,90 m est la frontière déjà mesurée par le
+// jeu entre « on le contourne » et « il ferme le passage » (CAM_POTEAU).
+const DEGAGE_POTEAU = 0.9;   // m : au-delà, ce n'est plus un poteau mais un mur
 function degageVehicule(c, r, L) {
   // On sort la caisse du MÊME volume que celui qui la déclare bloquée (`carBlocked` gonfle le
   // véhicule de sa demi-diagonale) : dégager moins que ça la laissait au contact, donc encore
@@ -27111,14 +27245,25 @@ function degageVehicule(c, r, L) {
   // la caisse recevait 1,5 m vers le nord et 1,5 m vers le sud, on n'en gardait qu'une, et
   // elle faisait la navette de l'un à l'autre sans jamais avancer. Additionnées, elles
   // s'annulent — cet axe-là est bouché, c'est l'autre qui la sortira.
-  let xp = 0, xm = 0, zp = 0, zm = 0;
+  let xp = 0, xm = 0, zp = 0, zm = 0, surUnPoteau = false, surUnMur = false;
   const y = c.y || 0, sn = Math.sin(c.h) * L, cs = Math.cos(c.h) * L;
   // le nez, le milieu et l'arrière : une caisse longue se coince par un bout, pas par son centre
   const points = [[c.x, c.z], [c.x + sn, c.z + cs], [c.x - sn, c.z - cs]];
-  const juge = (ox0, oz0, ow, od) => {
+  const tvx = Math.cos(c.h), tvz = -Math.sin(c.h);   // le TRAVERS de la caisse (voir DEGAGE_POTEAU)
+  const juge = (ox0, oz0, ow, od, fin) => {
     for (const [x, z] of points) {
       const ox = ow / 2 + R - Math.abs(x - ox0), oz = od / 2 + R - Math.abs(z - oz0);
       if (ox <= 0 || oz <= 0) continue;   // ce point-là ne mord pas dans cet obstacle
+      if (fin) {   // UN POTEAU : on le contourne, on pousse la caisse en travers d'elle-même
+        const lat = (x - ox0) * tvx + (z - oz0) * tvz;
+        const p = ow / 2 + R - Math.abs(lat);
+        if (p <= 0) continue;
+        const s = (Math.sign(lat) || 1) * p, px = tvx * s, pz = tvz * s;
+        if (px > xp) xp = px; else if (px < xm) xm = px;
+        if (pz > zp) zp = pz; else if (pz < zm) zm = pz;
+        surUnPoteau = true; continue;
+      }
+      surUnMur = true;
       // on ressort par le côté le plus proche : c'est le chemin le plus court vers l'air libre
       if (ox < oz) { const d = (Math.sign(x - ox0) || 1) * ox; if (d > xp) xp = d; else if (d < xm) xm = d; }
       else { const d = (Math.sign(z - oz0) || 1) * oz; if (d > zp) zp = d; else if (d < zm) zm = d; }
@@ -27128,10 +27273,12 @@ function degageVehicule(c, r, L) {
     if (o === c.solid || o.decor) continue;
     if (o.y + o.h / 2 < y + 0.56) continue;            // marche franchissable : on roule dessus
     const top = o.y + o.h / 2; if (top < 0.45 || o.y - o.h / 2 > 1.6) continue;   // au-dessus / en dessous de la caisse
-    juge(o.x, o.z, o.w, o.d);
+    juge(o.x, o.z, o.w, o.d, o.w < DEGAGE_POTEAU && o.d < DEGAGE_POTEAU);
   }
-  for (const b of (city.batiments || [])) juge(b.x, b.z, b.w, b.d);   // l'intérieur d'un bâtiment est interdit aux véhicules
-  return { x: xp + xm, z: zp + zm };
+  for (const b of (city.batiments || [])) juge(b.x, b.z, b.w, b.d, false);   // l'intérieur d'un bâtiment est interdit aux véhicules
+  // `poteau` : RIEN QUE des poteaux nous retiennent. Le rebond et le pivot vers l'échappée sont
+  // faits pour un mur ; sur un poteau ils annulent le contournement qu'on vient de calculer.
+  return { x: xp + xm, z: zp + zm, poteau: surUnPoteau && !surUnMur };
 }
 function vehHalf(c) {
   const A = (c && c.baseD ? c.baseD : 4.4) / 2, B = (c && c.baseW ? c.baseW : 2.4) / 2;
@@ -28229,6 +28376,9 @@ function conduire(c, cmd, dt) {
   const pas = Math.abs(V.speed) * dt;
   if (pas > 0.9 && dt > 0.005) { const n = Math.min(6, Math.ceil(pas / 0.9)); let r = null; for (let i = 0; i < n && !c.heli; i++) r = conduire(c, cmd, dt / n); return r; }
   const sp = c.spec || { max: 19, rev: -7, accel: 15, turn: 2.1, seat: 0 };
+  // OÙ LA CAISSE ÉTAIT EN ENTRANT : c'est ce qui permet au compteur de dire la vérité même quand
+  // un autre mécanisme que le moteur déplace le véhicule (voir le compteur, tout en bas).
+  const depX = c.x, depZ = c.z;
   // ACCIDENTÉ : il ne repart pas. Le pied au plancher ne change rien tant que le constat
   // n'est pas fait — sinon on redémarrait tranquillement en laissant la police derrière.
   if (c.accidente) {
@@ -28373,13 +28523,25 @@ function conduire(c, cmd, dt) {
       // sens soixante fois par seconde et la caisse tremblait sur place à quatre centimètres
       // d'amplitude — elle n'allait nulle part. Espacé, le rebond décolle vraiment la voiture
       // du mur, et le joueur a le temps de reprendre la main entre deux.
-      if (Math.abs(vAvant) > 0.4 && simTime > (c.rebondT || 0)) {
+      // ... MAIS PAS SUR UN POTEAU (n° 112). Le dégagement vient de pousser la caisse EN TRAVERS
+      // pour la faire passer à côté : inverser la marche par-dessus annulerait ce travail et
+      // rendrait la navette d'avant. On garde donc l'élan et on laisse la caisse longer le poteau.
+      if (sortie.poteau) V.speed *= 0.97;
+      else if (Math.abs(vAvant) > 0.4 && simTime > (c.rebondT || 0)) {
         c.rebondT = simTime + 0.28;
         V.speed = -Math.sign(vAvant) * Math.min(3.4, Math.abs(vAvant) * 0.35 + 1.1);
       } else V.speed *= 0.82;
+      // ON LE DIT (n° 112 : « 0 dégât, 0 choc, 0 message »). Un enfant de huit ans qui n'avance
+      // plus, pied au plancher, doit savoir pourquoi et quoi faire. Une fois toutes les six
+      // secondes au plus, et seulement au bout d'une seconde et demie de vrai blocage.
+      if (pilote && c.coinceT > 1.5 && simTime > (c.coinceMsgT || 0)) {
+        c.coinceMsgT = simTime + 6;
+        msg(sortie.poteau ? '🚧 Tu es contre un poteau — braque pour le contourner'
+          : '🧱 Tu es coincé — recule ou braque pour te dégager', 1800);
+      }
       // et si ça dure (le nez dans un angle), la caisse pivote vers l'échappée : le joueur
       // ressort en marche arrière au lieu de faire vingt aller-retours contre la pierre.
-      if (c.coinceT > 0.45 && norme > 0.0005) {
+      if (!sortie.poteau && c.coinceT > 0.45 && norme > 0.0005) {
         let dh = Math.atan2(sortie.x, sortie.z) - c.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
         c.h += dh * Math.min(1, dt * 1.6);
       }
@@ -28450,7 +28612,17 @@ function conduire(c, cmd, dt) {
   P.pos.set(c.x, c.y + (c.rider ? sp.seat - 0.55 : 0.3), c.z); P.facing = c.h; P.vel.set(Math.sin(c.h) * V.speed, 0, Math.cos(c.h) * V.speed); P.grounded = true;
   if (Math.abs(V.speed) > 1 && !timerOn) timerOn = true;
   for (const r of net.remotes.values()) if (Math.abs(V.speed) > 4 && !r.dead && !r.car && simTime > (r.hitT || 0) && Math.abs(r.cur.x - c.x) < rr + 0.6 && Math.abs(r.cur.z - c.z) < (c.baseD || 4) / 2 + 0.6) { r.hitT = simTime + 3; netSend({ t: 'tag', id: r.id, by: myCfg.name, car: 1 }); infraction('renverser ' + r.name, 1, 1); }
-  if (race.state !== 'running' && !hrace.on) $('act').textContent = `⚙️ ${c.kind === 'bike' ? '🚲' : 'A' + gear} · ${Math.round(Math.abs(V.speed) * 3.6)} km/h${c.dmg ? ` · 🔧 ${Math.round(c.dmg)}%` : ''}`;
+  // ============ LE COMPTEUR NE MENT PAS (défaut n° 112) ============
+  // Il affichait `V.speed`, la vitesse du MOTEUR. Or la caisse est parfois déplacée par autre
+  // chose : le dégagement (`degageVehicule`, 3,4 m/s) pousse la voiture coincée sans passer par
+  // la vitesse, et pendant ce temps le compteur annonçait beaucoup moins que ce que l'enfant
+  // voyait défiler — jusqu'à zéro quand la vitesse était tuée à chaque image par le blocage.
+  // On affiche donc la plus grande des deux : la vitesse du moteur, et celle que la caisse a
+  // VRAIMENT parcourue cette image. En conduite ordinaire les deux sont la même (le moteur est
+  // le seul à la déplacer) et rien ne change ; dès qu'un dégagement joue, le compteur le dit.
+  const vSol = Math.hypot(c.x - depX, c.z - depZ) / Math.max(dt, 1e-4);
+  const vMontre = Math.max(Math.abs(V.speed), vSol);
+  if (race.state !== 'running' && !hrace.on) $('act').textContent = `⚙️ ${c.kind === 'bike' ? '🚲' : 'A' + gear} · ${Math.round(vMontre * 3.6)} km/h${c.dmg ? ` · 🔧 ${Math.round(c.dmg)}%` : ''}`;
   cityCommon(dt);
   return c.cmd;
 }
@@ -39023,6 +39195,32 @@ function buildMetiers() {
   // second passage d'elargissement. 7 m d'entraxe pour 7 m + 5,40 m de caisses : 0,80 m entre
   // les deux, quelle que soit la largeur de la rue.
   const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, benne.z - 7, 0));
+  // ---------- SA PLACE DOIT ÊTRE LIBRE, ET ON LE VÉRIFIE (défaut n° 113, round 83) ----------
+  // MESURE : garé en (18,20 ; 121,50), le bulldozer avait la première BENNE À GRAVATS
+  // (1,20 × 1,40 × 1,20 m, rangée à dz − 4) à 20 cm de son arrière. Son gabarit de collision
+  // n'est pas sa tôle mais une CHAÎNE DE QUATRE DISQUES de 1,573 m de rayon (sa demi-largeur de
+  // 1,40 m plus le débord de la chaîne) : le disque arrière mordait donc dessus. Résultat,
+  // `carBlocked` répondait VRAI SUR SA PROPRE PLACE DE PARKING, `conduire` le déclarait « buté »
+  // à chaque image, tuait sa vitesse et ne lui laissait que le dégagement : 1,70 m en dix
+  // secondes, pointe 12 km/h pour une fiche à 36, et la marche arrière n'y changeait rien
+  // (480 images immobiles sur 600, 17 s de `coinceT`). Les autres engins du même chantier sont
+  // garés dans la cour, sans ce voisinage : ils roulent tous à leur fiche (benne 65, grue 50,
+  // pelle 40, tracteur 53 km/h).
+  // POURQUOI ON LE DÉCALE VERS L'EST ET PAS AILLEURS : au ras du mur ouest il n'y a pas de place
+  // (les bennes à gravats interdisent x 16,83 à 21,17 et le mur du hangar x 14,43 à 17,97), et en
+  // z il est pris entre les bennes (son centre doit être au nord de z 122,20) et la benne garée
+  // devant lui (au sud de z 122,20) — un millimètre de jeu. La rangée arrière du hangar, elle,
+  // est vide à l'est des bennes à gravats. On avance donc d'un mètre à la fois jusqu'à la
+  // première place où son gabarit ne mord sur rien ; s'il n'y en a aucune, on le laisse où il
+  // était plutôt que de le déplacer pour rien.
+  {
+    const [br, bL] = vehHalf(bull);
+    const libre = () => !carBlocked(bull.x, bull.z, bull.solid, br, { garde: bull.garde || 0 }, bull.y, bull.h, bL);
+    const x0 = bull.x;
+    for (let i = 1; i <= 18 && !libre(); i++) { bull.x = x0 + i; bull.g.position.x = bull.x; vehicleSolid(bull); }
+    if (!libre()) { bull.x = x0; bull.g.position.x = x0; vehicleSolid(bull); }
+    settleVehicle(bull); bull.home0 = [bull.x, bull.z, bull.h];
+  }
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);
   // ---- LES ÉQUIPES (dix travailleurs : on ne dépasse jamais la douzaine) ----
   const E1 = creerTravailleur('employe', 'Marcel', dx - 5, dz + 3, { orange: true });

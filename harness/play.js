@@ -24340,7 +24340,7 @@ test('un delit perime ne rend pas l\'enfant provocateur, et une vraie provocatio
     && r.apresGo.avance > 5000
     && r.propre.essais >= 5 && r.propre.surJoueur === 0 && r.propre.surBot > 0
     && r.provoque.provoque && r.provoque.surJoueur === r.provoque.essais;
-  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours · une horloge cassee ne met plus le feu a un immeuble : prochainFeu posee a ${r.feu.posee}, reposee a +${r.feu.ecart} s, ${r.feu.incendies} incendie apres 120 pas (la version d'avant ce correctif la mettait a zero et allumait 1 incendie)`
+  return { ok, detail: `defaut 84, deux fois declare BLOQUANT : l'enfant qui ne touche a rien se faisait battre (961 images ou un habitant lui courait dessus, coeur a 19) parce que \`P.crime\`, une DATE ABSOLUE, etait restee dans l'AVENIR — un delit pose tres haut dans la suite, puis une horloge rembobinee par un test plus bas · piege monte a la main ici : le delit etait en avance de ${r.apresGo.avance} s sur l'horloge a l'entree · apres __SHOT.go : delit frais ${r.apresGo.crime}, delit de tir ${r.apresGo.crimeTir}, provocateur=${r.apresGo.provoque} · tirage force sur ${r.propre.essais} habitants, enfant sans histoire : ${r.propre.surJoueur} s'en prennent a lui et ${r.propre.surBot} a un autre habitant · le meme tirage avec un delit VRAIMENT frais (provocateur=${r.provoque.provoque}) : ${r.provoque.surJoueur}/${r.provoque.essais} s'en prennent a lui — la provocation marche toujours`
     + ` · horloge rendue a ${r.horloge} s, jamais en arriere` };
 });
 
@@ -25343,4 +25343,155 @@ test('un passant renverse par l\'enfant porte plainte, et l\'etoile tombe quand 
     + ` · ${r.grave.nom} — au volant=${r.grave.choc.auVolant}, temoin=${r.grave.choc.temoin}, ${r.grave.choc.touches} touche, ❤️ ${r.grave.choc.hp}, ★${r.grave.choc.wanted}, ambulance=${r.grave.choc.ambulance}, il git ${r.grave.choc.aTerre} s → etoile a l'image ${r.grave.fin.images} (${r.grave.fin.secondes} s), ★${r.grave.fin.wanted} : PLUS ON FAIT MAL, PLUS TARD ON PAIE (${r.leger.fin.secondes} s contre ${r.grave.fin.secondes} s), et la victime reste soignee`
     + ` · ${r.policier.nom} — au volant=${r.policier.choc.auVolant}, temoin=${r.policier.choc.temoin}, ${r.policier.choc.touches} touche, ★${r.policier.choc.wanted} DES LE CHOC (image ${r.policier.fin.images}), aucune plainte a venir (${r.policier.choc.plainteDans}) : la regle « pas de temoin policier, pas d'etoile » est entiere, on lui a seulement ajoute le temoin qui manquait`
     + ` · \`porteplainte\` est au registre DATES_JEU (${r.registre}) — la lecon du test 525` };
+});
+// ============ LA CAMERA DANS LES CAGES D'ESCALIER DE LA ZONE (defaut n° 109, round 83) ============
+// « Sur sa capture, le visage de l'enfant remplit l'ecran : plus une marche, plus un garde-corps. »
+// La Zone est un des huit territoires et sa conquete se joue dans ces CINQ immeubles, a TROIS
+// niveaux chacun. Un enfant qui ne voit pas ses pieds dans un escalier a deux demi-tours n'y monte pas.
+// MESURE AVANT (six points de l'escalier, quatre caps chacun, 150 images sur place, seuil de
+// confort que le jeu se fixe lui-meme : 4,60 m). Perche objectif <-> tete, le PIRE de chaque point :
+//   palier du rez 0,48 · 1re volee 0,52 · palier de demi-tour 0,88 · 2e volee 0,59 ·
+//   palier du 1er 0,48 · coursive du 1er 0,48 m.  Vingt-quatre releves, dix-huit sous deux metres.
+//   Temoin au meme instant, la rue a dix metres de la : 5,09 / 9,10 / 9,10 / 7,81 m.
+// TROIS CAUSES, RELEVEES RAYON PAR RAYON (l'axe et les deux rayons ouverts a +/-0,4 rad) :
+//   1. `cam.pmax` = 0,04 rad AUX VINGT-QUATRE RELEVES. Une cage d'escalier a, par definition, une
+//      dalle au-dessus de la tete : `cam.plafond` vaut 1,05 m sur les paliers et 0,44 m sur les
+//      volees, donc la loi « un plafond bas n'interdit que de MONTER » ecrase la visee a son
+//      minimum. Or LA MONTEE EST LE SEUL SECOURS du jeu quand il n'y a pas de place derriere :
+//      `cam.hausse` valait 0 partout dans la cage, contre 0,717 rad dans la rue. La camera restait
+//      clouee a hauteur de poitrine — exactement la hauteur des garde-corps.
+//   2. LES GARDE-CORPS (0,22 x 1,15 m d'appui, plus les 0,30 m de garde de la camera : une paroi
+//      de 1,45 a 1,97 m) fermaient les TROIS rayons dans huit caps sur vingt-quatre, a 0,67 a
+//      1,38 m. Sur la volee descendante, qui en porte un de chaque cote, l'est et l'ouest
+//      tombaient tous les deux a 0,71 m.
+//   3. LE PLAFOND, traite comme un mur : la volee et le palier de l'etage du dessus (1,38 / 1,80 m),
+//      la facade est porteuse a 1,30 m du milieu de la volee (0,97 m), les deux piliers porteurs
+//      (2,87 m) ; et, une fois la facade traversee, le PLANCHER de l'appartement du dessus (3,18 m),
+//      la dalle de la coursive du dessus (3,34 m) et jusqu'a une CHAISE du premier etage (3,65 m).
+// LA PLACE DISPONIBLE, MESUREE AVANT DE CHOISIR (garde-corps, murs et plafond de l'etage du dessus
+// rendus traversables) : 4,64 a 9,30 m sur les paliers, 4,47 m en pleine volee a 0,55 rad de visee,
+// 9,30 m sur la volee descendante. Il y a donc la place : la vue a hauteur d'yeux que l'entree 106
+// gardait en seconde piste n'etait pas necessaire.
+// LA REPARATION : un volume de camera PAR NIVEAU (city.camPieces, camPieceDe) pour chacune des cinq
+// cages et pour leur coursive, vingt-cinq en tout. `cage: true` dit deux choses, et rien d'autre :
+// RIEN n'est efface (l'escalier reste entier a l'image — « CORRIGE ON VOIT NI ESCALIER NI PLANCHER
+// NI MUR » est le defaut qu'on ne reveille pas), et LE PLAFOND N'EST PAS UN MUR, symetrique de la
+// regle que camLibres appliquait deja au plancher.
+// CE TEST mesure la perche aux six points du controleur dans les quatre caps, puis quatre points
+// par immeuble dans les quatre autres (les trois niveaux y passent) ; il exige que l'enfant VOIE
+// DEVANT LUI, qu'aucun mur ne coupe la ligne de vue, que la camera ne soit jamais DANS un solide,
+// et que pas une marche ni un garde-corps n'ait ete efface. Douze lieux temoins ferment la marche.
+// POURQUOI IL N'APPELLE PAS step() : le joueur ne bouge pas d'un pouce (on le repose a chaque
+// image), et la camera n'est placee QUE par camPerche. Une image de simulation complete coute ici
+// cinquante fois le prix de la mesure, et la version qui appelait step() demandait plus de quinze
+// minutes en suite chargee. On avance donc l'horloge a la main — camPerche en a besoin, ses mesures
+// de piece ne se font que cinq fois par seconde — et on appelle camPerche puis interieurTick.
+// Contre-epreuve faite : les memes points mesures avec step() et sans donnent les memes chiffres.
+test('dans les cages d\'escalier de La Zone, la camera recule assez pour que l\'enfant voie ses pieds', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, cam = G.cam;
+    __SHOT.go({ world: 4, x: -152, y: 1, z: 20, hour: 12, frais: true });
+    const tourne = (n, ou) => { for (let i = 0; i < n; i++) {
+      P.pos.set(ou.x, ou.y, ou.z); P.vel.set(0, 0, 0);
+      G.simTime += 1 / 60; G.camPerche(1 / 60, false); G.interieurTick(); } };
+    const dansUnSolide = (c) => {
+      for (const o of G.solids) {
+        if (o.glass || o.h > 30 || o.veh || o.xray) continue;
+        if (o.mesh && !o.mesh.visible) continue;
+        if (Math.abs(c.x - o.x) < o.w / 2 && Math.abs(c.y - o.y) < o.h / 2 && Math.abs(c.z - o.z) < o.d / 2) return true;
+      }
+      return false;
+    };
+    // `continu: true` : LE MONDE EST REBATI UNE SEULE FOIS, au premier appel. Par defaut le banc
+    // reconstruit la ville a CHAQUE __SHOT.go (__SHOT.fraisDefaut), et ce test en fait
+    // soixante-huit : c'est d'abord tres cher, mais surtout la reconstruction retire un tirage
+    // au sort de plus a chaque fois (carcasses, habitants, vehicules gares) et deux releves du
+    // MEME point ne portaient plus sur la meme ville — mesure a l'appui, la volee descendante
+    // rendait 4,95 m seule et 2,76 m en serie. Ici la geometrie mesuree ne bouge pas d'un pouce
+    // d'un releve a l'autre, et les gabarits publies (city.zoneImmeubles) restent valides.
+    const mesure = (nom, x, y, z, yaw, images) => {
+      __SHOT.go({ world: 4, x, y, z, yaw, pitch: 0.32, dist: 9, hour: 12, hideHud: true, continu: true });
+      // ON POSE D'ABORD LE JOUEUR, avec de VRAIES images : les lieux temoins sont donnes a
+      // « laisse-moi tomber ici » (y = 1 au-dessus d'un plancher a 0,20 m), et mesurer la camera
+      // d'un joueur suspendu en l'air ne veut rien dire — le petit appartement rendait 0,55 m au
+      // lieu de 4,12 m, la tete dans son propre plafond. On s'arrete des qu'il touche le sol.
+      for (let i = 0; i < 40; i++) { P.vel.x = 0; P.vel.z = 0; G.step(1 / 60, true); if (P.grounded && i > 3) break; }
+      tourne(images, { x: P.pos.x, y: P.pos.y, z: P.pos.z });
+      const c = G.camera.position, t = cam.target, q = P.pos;
+      const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, L = Math.hypot(dx, dy, dz) || 1;
+      const mur = G.murEntreVue(t.x, t.y, t.z, dx / L, dy / L, dz / L, L - 0.15, null);
+      // CE QUE L'ENFANT A DEVANT LUI : la place libre dans la direction OPPOSEE a la perche,
+      // a hauteur de poitrine (la meme mesure que dans la cabane de l'arbre).
+      const devant = G.murEntreVue(q.x, q.y + 1.2, q.z, -dx / L, 0, -dz / L, 12, null);
+      return { nom, y: +q.y.toFixed(2), d: +Math.hypot(c.x - q.x, c.y - (q.y + 1.2), c.z - q.z).toFixed(2),
+        piece: cam.interieur ? (cam.interieur.nom || 'batiment') : null,
+        pitch: +cam.pitch.toFixed(2), plafond: cam.plafond == null ? null : +cam.plafond.toFixed(2),
+        coupe: mur >= 0, dans: dansUnSolide(c), devant: devant < 0 ? 12 : +devant.toFixed(2) };
+    };
+    const CAPS = [['sud', Math.PI], ['est', -Math.PI / 2], ['nord', 0], ['ouest', Math.PI / 2]];
+    const caps = (nom, x, y, z, quels, images) => {
+      const v = quels.map(([cn, yaw]) => mesure(nom + ' ' + cn, x, y, z, yaw, images));
+      return { nom, y: +y.toFixed(2), pire: Math.min(...v.map(s => s.d)),
+        devant: Math.min(...v.map(s => s.devant)), coupe: v.some(s => s.coupe), dans: v.some(s => s.dans),
+        piece: v[0].piece, pitch: Math.max(...v.map(s => s.pitch)), caps: v.map(s => s.d) };
+    };
+    // ---- 1. LES SIX POINTS DU CONTROLEUR, premier immeuble, quatre caps chacun ----
+    const im0 = G.city.zoneImmeubles[0], e0 = im0.esc;
+    const cage = [
+      caps('palier du rez', e0.palX, 0.2, e0.zS - e0.pal / 2, CAPS, 150),
+      caps('1re volee', e0.b0, 0.2 + 4 * e0.monte, e0.zS - e0.pal - e0.giron * 3.5, CAPS, 150),
+      caps('palier de demi-tour', e0.palX, 0.2 + im0.h / 2, (e0.zM0 + e0.zM1) / 2, CAPS, 150),
+      caps('2e volee', e0.b1, 0.2 + im0.h / 2 + 4 * e0.monte, e0.zS - e0.pal - e0.nm * e0.giron + e0.giron * 3.5, CAPS, 150),
+      caps('palier du 1er', e0.palX, im0.h + 0.2, e0.zS - e0.pal / 2, CAPS, 150),
+      caps('coursive du 1er', im0.x + im0.w / 4, im0.h + 0.2, (e0.courZ0 + e0.courZ1) / 2, CAPS, 150)
+    ];
+    // ---- 2. LES QUATRE AUTRES IMMEUBLES, LEURS TROIS NIVEAUX ----
+    // deux caps par point : l'EST, ou la camera part dans l'immeuble, et le SUD, ou elle part
+    // sous la volee de l'etage du dessus — les deux qui tombaient le plus bas au releve.
+    const DEUX = [CAPS[0], CAPS[1]];
+    const imms = [];
+    for (let k = 1; k < G.city.zoneImmeubles.length; k++) {
+      const im = G.city.zoneImmeubles[k], e = im.esc, rel = [];
+      rel.push(caps('palier du rez', e.palX, 0.2, e.zS - e.pal / 2, DEUX, 120));
+      rel.push(caps('volee descendante du rez', e.b1, 0.2 + im.h / 2 + 4 * e.monte, e.zS - e.pal - e.nm * e.giron + e.giron * 3.5, DEUX, 120));
+      rel.push(caps('palier du 1er', e.palX, im.h + 0.2, e.zS - e.pal / 2, DEUX, 120));
+      rel.push(caps('palier du 2e', e.palX, 2 * im.h + 0.2, e.zS - e.pal / 2, DEUX, 120));
+      imms.push({ k, x: im.x, z: im.z, niveaux: im.etages, pire: Math.min(...rel.map(s => s.pire)),
+        devant: Math.min(...rel.map(s => s.devant)),
+        mauvais: rel.filter(s => s.pire < G.CAM_CONFORT || s.coupe || s.dans || !/cage|coursive/.test(s.piece || '')).map(s => s.nom + ' ' + s.pire) });
+    }
+    // ---- 3. RIEN N'EST EFFACE : l'escalier reste entier a l'image ----
+    mesure('temoin escalier entier', e0.palX, 0.2, e0.zS - e0.pal / 2, Math.PI, 120);
+    const dansCage = o => o.x > e0.xE - 0.5 && o.x < e0.xE + e0.palW + 1
+      && o.z > e0.zM0 - 0.5 && o.z < e0.courZ1 + 0.5;
+    const marches = G.solids.filter(o => o.mesh && dansCage(o) && o.h <= 0.4 && o.w >= 2 && o.y < 10);
+    const entier = { rails: im0.rails.length, railsCaches: im0.rails.filter(o => o.mesh && !o.mesh.visible).length,
+      marches: marches.length, marchesCachees: marches.filter(o => !o.mesh.visible).length,
+      piece: cam.interieur ? cam.interieur.nom : null };
+    // ---- 4. LES LIEUX TEMOINS ----
+    const temoin = (nom, x, y, z) => mesure(nom, x, y, z, 0, 150);
+    const temoins = [temoin('rue degagee', 0, 1, 50), temoin('petite boutique', 60, 1, 40),
+      temoin('salle de classe', -79, 1, 213.2), temoin('petit appartement', -143, 1, 10),
+      temoin('etage de la banque', -52, 5.6, 70), temoin('passerelle du parcours', 135, 5.46, 300),
+      temoin('plancher de la cabane', 128, 6.86, 300), temoin('hall de la banque', -52, 1, 70),
+      temoin('hopital', 16, 1, 208), temoin('garage', -45, 1, 90),
+      temoin('show-room', -140, 1, 103), temoin('halle du marche', -142.5, 1, 159)];
+    return { cage, imms, entier, temoins, confort: G.CAM_CONFORT,
+      nbPieces: (G.city.camPieces || []).length,
+      // la cage n'entre PAS dans city.interieurs : cette liste-la commande aussi le bruit des pas
+      // et la pose du mobilier urbain, et le sol sous l'escalier n'est l'interieur de rien.
+      pasDansInterieurs: !(G.city.interieurs || []).some(b => Math.abs(b.x - e0.palX) < b.w / 2 && Math.abs(b.z - (e0.zS - 1)) < b.d / 2) };
+  });
+  const C = r.confort;
+  const SEUILS = { 'rue degagee': 8.5, 'petite boutique': 4.5, 'salle de classe': 5, 'petit appartement': 4,
+    'etage de la banque': 6, 'passerelle du parcours': 8.5, 'plancher de la cabane': 3.5,
+    'hall de la banque': 6, 'hopital': 6, 'garage': 6, 'show-room': 6, 'halle du marche': 6 };
+  const ok = r.cage.length === 6
+    && r.cage.every(s => s.pire >= C && s.devant >= 1.5 && !s.coupe && !s.dans && /cage|coursive/.test(s.piece || ''))
+    && r.imms.length === 4 && r.imms.every(s => s.niveaux === 3 && s.mauvais.length === 0 && s.pire >= C && s.devant >= 1.5)
+    && r.entier.railsCaches === 0 && r.entier.marchesCachees === 0 && r.entier.rails >= 40 && r.entier.marches >= 24
+    && r.nbPieces >= 26 && r.pasDansInterieurs
+    && r.temoins.every(s => s.d >= SEUILS[s.nom] && !s.coupe && !s.dans);
+  const l = s => `${s.nom} (y ${s.y}) ${s.pire} m`;
+  return { ok, detail: `« le visage de l'enfant remplit l'ecran : plus une marche, plus un garde-corps » — et La Zone, c'est CINQ immeubles a TROIS niveaux · AVANT, six points de l'escalier et quatre caps chacun, pour un confort que le jeu se fixe a ${C} m : palier du rez 0,48 · 1re volee 0,52 · palier de demi-tour 0,88 · 2e volee 0,59 · palier du 1er 0,48 · coursive du 1er 0,48 m (18 releves sur 24 sous deux metres), la rue a dix metres de la donnant 5,09 a 9,10 m au meme instant · TROIS CAUSES mesurees rayon par rayon : cam.pmax ecrase a 0,04 rad AUX VINGT-QUATRE RELEVES (cam.plafond 1,05 m sur les paliers, 0,44 m sur les volees — une cage d'escalier a une dalle au-dessus de la tete, et la montee, seul secours du jeu quand il n'y a pas de place derriere, s'en trouvait interdite : hausse 0 partout, contre 0,717 rad dans la rue) ; les GARDE-CORPS fermant les trois rayons a 0,67 m ; et le PLAFOND traite comme un mur (volee et palier du dessus 1,38 / 1,80 m, plancher de l'appartement du dessus 3,18 m, dalle de la coursive 3,34 m, jusqu'a une chaise du premier a 3,65 m) · APRES, memes points, memes caps : ${r.cage.map(l).join(' · ')} — et de ${Math.min(...r.cage.map(s => s.devant))} a ${Math.max(...r.cage.map(s => s.devant))} m de degage devant l'enfant · LES QUATRE AUTRES IMMEUBLES, leurs trois niveaux : ${r.imms.map(s => `(${s.x} ; ${s.z}) pire ${s.pire} m${s.mauvais.length ? ' MAUVAIS ' + s.mauvais.join(', ') : ''}`).join(' · ')} · rien n'est efface : ${r.entier.railsCaches}/${r.entier.rails} garde-corps et ${r.entier.marchesCachees}/${r.entier.marches} marches ou paliers caches, piece « ${r.entier.piece} » · ${r.nbPieces} volumes de camera declares, et la cage n'entre PAS dans city.interieurs (${r.pasDansInterieurs}) — le sol sous l'escalier n'est l'interieur de rien · lieux temoins inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}` };
 });

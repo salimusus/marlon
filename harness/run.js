@@ -58,6 +58,12 @@ globalThis.__G = {
   bitumeSous: typeof bitumeSous === 'function' ? bitumeSous : null,
   chaineDisques: typeof chaineDisques === 'function' ? chaineDisques : null,
   setTrafficTime(v) { simTime = v; flotteT = -1; }, cheminAretes, projVoie, pietonDevant,
+  sortDeStationnement: typeof sortDeStationnement === 'function' ? sortDeStationnement : null,
+  pointDePortiere: typeof pointDePortiere === 'function' ? pointDePortiere : null,
+  cheminPieton: typeof cheminPieton === 'function' ? cheminPieton : null,
+  botPrendVoiture: typeof botPrendVoiture === 'function' ? botPrendVoiture : null,
+  npcBlocked: typeof npcBlocked === 'function' ? npcBlocked : null,
+  ecraseAuSol: typeof ecraseAuSol === 'function' ? ecraseAuSol : null,
 };
 `;
 

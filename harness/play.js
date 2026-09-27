@@ -16303,6 +16303,28 @@ test('les voitures du parking du centre regardent la rue et partent au premier R
     const G = __G, P = G.P;
     __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
     const autos = G.city.cars.filter(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14);
+    // ON NE MESURE PAS LA CIRCULATION DES PIETONS, ON MESURE LE PARKING. Le sujet de ce test
+    // est la GEOMETRIE : les places regardent la rue, et le couloir de sortie est libre de tout
+    // SOLIDE — c'est ce que compte `genes`, qui ignore d'ailleurs et les vehicules et les
+    // passants. Or un passant ecrase coute EXACTEMENT 4 % de tole (`vehicleDamage(c, 4)` de
+    // l'ecrasement) : le test annoncait alors « 0 obstacle, degats +4 », c'est-a-dire deux
+    // mesures qui se contredisent. La cause : le placement de depart des habitants est
+    // DETERMINISTE — `pans[(k * 7 + 3) % pans.length]`, un pan de trottoir par habitant. La
+    // recoupe des trottoirs du round 83 decoupe la bande de 1,80 m en 374 pans au lieu de 311 :
+    // tout le monde change de pan, et Tom_le_ouf passe de (-18,7 ; -30,9) au CENTRE du pan
+    // (-13 ; 5,4) — le trottoir que les quatre voitures doivent franchir pour sortir. Mesure :
+    // la 2e voiture l'ecrase a 8,78 m/s (+4 %, une ambulance part), la 3e le reecrase au
+    // freinage alors qu'il gisait sur la chaussee (+4 %). Le jeu a raison. On ecarte donc les
+    // passants du couloir avant de mesurer, et on DIT combien — le seuil de degats, lui, ne
+    // bouge pas d'un pouce : un banc dans le couloir remet le test au rouge.
+    const ecartes = [];
+    const loin = (G.city.wander || []).find(w => Math.hypot(w[0] + 13) + Math.abs(w[2] - 8) > 80) || [0, 0.3, 70];
+    for (const b of G.bots) {
+      if (!b.av || !b.av.group.visible || b.drive || b.enVoiture) continue;
+      if (b.pos.x < -25 || b.pos.x > -1 || b.pos.z < 0 || b.pos.z > 17) continue;
+      ecartes.push([b.name, +b.pos.x.toFixed(1), +b.pos.z.toFixed(1)]);
+      b.pos.set(loin[0], loin[1], loin[2]); b.av.group.position.copy(b.pos); b.target = null; b.tgt = null;
+    }
     const res = [];
     for (const c of autos) {
       // ce qui se trouve dans l'emprise de la voiture et sur 3 m devant elle (vers la rue) : rien de solide
@@ -16319,10 +16341,10 @@ test('les voitures du parking du centre regardent la rue et partent au premier R
       res.push({ x: +x0.toFixed(1), z: +z0.toFixed(1), cap: +c.h.toFixed(2), genes, parcouru: +parcouru.toFixed(1), versLaRue: zMin < z0 - 3, degats: +((c.dmg || 0) - dmg0).toFixed(2), y: +c.y.toFixed(2) });
       G.exitCar(); for (let i = 0; i < 30; i++) G.step(1 / 60, true);
     }
-    return { n: autos.length, res };
+    return { n: autos.length, res, ecartes };
   });
   const ok = r.n === 4 && r.res.every(q => q.genes === 0 && q.parcouru > 3 && q.versLaRue && q.degats < 1 && q.y < 0.5);
-  return { ok, detail: `elles étaient garées cap au sud, le nez sur les bancs et la terrasse du snack (posés à z = 13,5, DANS le parking) : R2 = 2 m/s et 10 % de dégâts · ` + r.res.map(q => `(${q.x}, ${q.z}) cap ${q.cap} : ${q.genes} obstacle, ${q.parcouru} m vers la rue=${q.versLaRue}, dégâts +${q.degats}, y ${q.y}`).join(' · ') };
+  return { ok, detail: `elles étaient garées cap au sud, le nez sur les bancs et la terrasse du snack (posés à z = 13,5, DANS le parking) : R2 = 2 m/s et 10 % de dégâts · ${r.ecartes.length} passant(s) écarté(s) du couloir de sortie avant la mesure${r.ecartes.length ? ' (' + r.ecartes.map(q => `${q[0]} en ${q[1]} ; ${q[2]}`).join(', ') + ') — un passant écrasé coûte 4 % de tôle, et ce test ne parle pas des passants' : ''} · ` + r.res.map(q => `(${q.x}, ${q.z}) cap ${q.cap} : ${q.genes} obstacle, ${q.parcouru} m vers la rue=${q.versLaRue}, dégâts +${q.degats}, y ${q.y}`).join(' · ') };
 });
 
 test('écraser un passant : l\'ambulance vient pour le blessé, et la police arrête sans tirer (elle ne tire que pour un crime grave)', async p => {

@@ -1,0 +1,172 @@
+{
+ "balancoire": {
+  "avant": {
+   "swing": true,
+   "ride": false,
+   "bench": false,
+   "tramp": false,
+   "classe": false,
+   "shop": false,
+   "pet": false,
+   "near": false,
+   "consigne": null
+  },
+  "assis": true,
+  "amplitudeMax": 1.05,
+  "battement_m": 1.43,
+  "hpAssis": 100,
+  "hpFin": 100,
+  "descendu": true,
+  "rider": null,
+  "msg": "🎠 E : s'asseoir sur la balançoire"
+ },
+ "carrousel": {
+  "avant": {
+   "swing": false,
+   "ride": false,
+   "bench": false,
+   "tramp": false,
+   "classe": false,
+   "shop": false,
+   "pet": false,
+   "near": false,
+   "consigne": null
+  },
+  "dessus": false,
+  "hpMinSurLeManege": 100,
+  "ySurLeManege": 0.12,
+  "descendu": true,
+  "hpFin": 100,
+  "msg": "🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons"
+ },
+ "trampoline": {
+  "avant": {
+   "swing": false,
+   "ride": false,
+   "bench": false,
+   "tramp": true,
+   "classe": false,
+   "shop": false,
+   "pet": false,
+   "near": false,
+   "consigne": null
+  },
+  "hauteurMax_m": 19.14,
+  "hpMin": 100,
+  "hpFin": 100,
+  "mort": false,
+  "msg": "🤸 E : rebondir plus haut !"
+ },
+ "banc": {
+  "avant": {
+   "swing": false,
+   "ride": false,
+   "bench": true,
+   "tramp": false,
+   "classe": false,
+   "shop": false,
+   "pet": false,
+   "near": false,
+   "consigne": "🪑 E : s'asseoir"
+  },
+  "assis": true,
+  "debout": true,
+  "msg": "🪑 E : s'asseoir"
+ },
+ "cityStade": {
+  "ballonDepart": [
+   -13,
+   -13
+  ],
+  "ballonFin": [
+   -11.3,
+   -13
+  ],
+  "deplace_m": 1.71,
+  "buts": 0,
+  "hp": 100
+ },
+ "ecole": {
+  "avant": {
+   "swing": false,
+   "ride": false,
+   "bench": true,
+   "tramp": false,
+   "classe": true,
+   "shop": false,
+   "pet": false,
+   "near": false,
+   "consigne": "🏫 E : la leçon"
+  },
+  "ui": null,
+  "question": null,
+  "texte": " 🏫 Classe 🔊 RelireSortir "
+ },
+ "chien": {
+  "avant": {
+   "swing": false,
+   "ride": false,
+   "bench": false,
+   "tramp": false,
+   "classe": true,
+   "shop": false,
+   "pet": false,
+   "near": false,
+   "consigne": null
+  },
+  "adopte": false,
+  "nom": null,
+  "msg": "➕ Classe de Maths : assieds-toi à une table (E) pour les exercices"
+ },
+ "salleDeSport": {
+  "err": "salle de sport introuvable dans city.buildings",
+  "exemples": "uuid,name,type,fog,blending,side,vertexColors,opacity,transparent,blendSrc,blendDst,blendEquation,blendSrcAlpha,blendDstAlpha,blendEquationAlpha,depthFunc,depthTest,depthWrite,stencilWriteMask,stencilFunc,stencilRef,stencilFuncMask,stencilFail,stencilZFail,stencilZPass,stencilWrite,clippingPlanes,clipIntersection,clipShadows,shadowSide,colorWrite,precision,polygonOffset,polygonOffsetFactor,polygonOffsetUnits,dithering,alphaTest,alphaToCoverage,premultipliedAlpha,visible,toneMapped,userData,version,color,specular,shininess,map,lightMap,lightMapIntensity,aoMap,aoMapIntensity,emissive,emissiveIntensity,emissiveMap,bumpMap,bumpScale,normalMap,normalMapType,normalScale,displacementMap,displacementScale,displacementBias,specularMap,alphaMap,envMap,combine,reflectivity,refractionRatio,wireframe,wireframeLinewidth,wireframeLinecap,wireframeLinejoin,skinning,morphTargets,morphNormals,flatShading,_listeners | uuid,name,type,fog,blending,side,vertexColors,opacity,transparent,blendSrc,blendDst,blendEquation,blendSrcAlpha,blendDstAlpha,blendEquationAlpha,depthFunc,depthTest,depthWrite,stencilWriteMask,stencilFunc,stencilRef,stencilFuncMask,stencilFail,stencilZFail,stencilZPass,stencilWrite,clippingPlanes,clipIntersection,clipShadows,shadowSide,colorWrite,precision,polygonOffset,polygonOffsetFactor,polygonOffsetUnits,dithering,alphaTest,alphaToCoverage,premultipliedAlpha,visible,toneMapped,userData,version,color,specular,shininess,map,lightMap,lightMapIntensity,aoMap,aoMapIntensity,emissive,emissiveIntensity,emissiveMap,bumpMap,bumpScale,normalMap,normalMapType,normalScale,displacementMap,displacementScale,displacementBias,specularMap,alphaMap,envMap,combine,reflectivity,refractionRatio,wireframe,wireframeLinewidth,wireframeLinecap,wireframeLinejoin,skinning,morphTargets,morphNormals,flatShading,_listeners | uuid,name,type,fog,blending,side,vertexColors,opacity,transparent,blendSrc,blendDst,blendEquation,blendSrcAlpha,blendDstAlpha,blendEquationAlpha,depthFunc,depthTest,depthWrite,stencilWriteMask,stencilFunc,stencilRef,stencilFuncMask,stencilFail,stencilZFail,stencilZPass,stencilWrite,clippingPlanes,clipIntersection,clipShadows,shadowSide,colorWrite,precision,polygonOffset,polygonOffsetFactor,polygonOffsetUnits,dithering,alphaTest,alphaToCoverage,premultipliedAlpha,visible,toneMapped,userData,version,color,specular,shininess,map,lightMap,lightMapIntensity,aoMap,aoMapIntensity,emissive,emissiveIntensity,emissiveMap,bumpMap,bumpScale,normalMap,normalMapType,normalScale,displacementMap,displacementScale,displacementBias,specularMap,alphaMap,envMap,combine,reflectivity,refractionRatio,wireframe,wireframeLinewidth,wireframeLinecap,wireframeLinejoin,skinning,morphTargets,morphNormals,flatShading,_listeners | uuid,name,type,fog,blending,side,vertexColors,opacity,transparent,blendSrc,blendDst,blendEquation,blendSrcAlpha,blendDstAlpha,blendEquationAlpha,depthFunc,depthTest,depthWrite,stencilWriteMask,stencilFunc,stencilRef,stencilFuncMask,stencilFail,stencilZFail,stencilZPass,stencilWrite,clippingPlanes,clipIntersection,clipShadows,shadowSide,colorWrite,precision,polygonOffset,polygonOffsetFactor,polygonOffsetUnits,dithering,alphaTest,alphaToCoverage,premultipliedAlpha,visible,toneMapped,userData,version,color,specular,shininess,map,lightMap,lightMapIntensity,aoMap,aoMapIntensity,emissive,emissiveIntensity,emissiveMap,bumpMap,bumpScale,normalMap,normalMapType,normalScale,displacementMap,displacementScale,displacementBias,specularMap,alphaMap,envMap,combine,reflectivity,refractionRatio,wireframe,wireframeLinewidth,wireframeLinecap,wireframeLinejoin,skinning,morphTargets,morphNormals,flatShading,_listeners | uuid,name,type,fog,blending,side,vertexColors,opacity,transparent,blendSrc,blendDst,blendEquation,blendSrcAlpha,blendDstAlpha,blendEquationAlpha,depthFunc,depthTest,depthWrite,stencilWriteMask,stencilFunc,stencilRef,stencilFuncMask,stencilFail,stencilZFail,stencilZPass,stencilWrite,clippingPlanes,clipIntersection,clipShadows,shadowSide,colorWrite,precision,polygonOffset,polygonOffsetFactor,polygonOffsetUnits,dithering,alphaTest,alphaToCoverage,premultipliedAlpha,visible,toneMapped,userData,version,color,specular,shininess,map,lightMap,lightMapIntensity,aoMap,aoMapIntensity,emissive,emissiveIntensity,emissiveMap,bumpMap,bumpScale,normalMap,normalMapType,normalScale,displacementMap,displacementScale,displacementBias,specularMap,alphaMap,envMap,combine,reflectivity,refractionRatio,wireframe,wireframeLinewidth,wireframeLinecap,wireframeLinejoin,skinning,morphTargets,morphNormals,flatShading,_listeners"
+ },
+ "standDeTir": {
+  "cibles": [
+   {
+    "x": 62,
+    "y": 2.15,
+    "z": 11.4,
+    "hit": false
+   },
+   {
+    "x": 67,
+    "y": 2.15,
+    "z": 11.4,
+    "hit": false
+   },
+   {
+    "x": 72,
+    "y": 2.15,
+    "z": 11.4,
+    "hit": false
+   }
+  ],
+  "essais": [
+   {
+    "recul_m": 3,
+    "yJoueur": 0.29,
+    "verrou": null,
+    "points": 0,
+    "etoiles": 0
+   },
+   {
+    "recul_m": 6,
+    "yJoueur": 0.29,
+    "verrou": null,
+    "points": 0,
+    "etoiles": 0
+   },
+   {
+    "recul_m": 9,
+    "yJoueur": 0.29,
+    "verrou": null,
+    "points": 0,
+    "etoiles": 0
+   }
+  ],
+  "STAND_RAYON": null
+ },
+ "erreurs": []
+}

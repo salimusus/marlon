@@ -25618,3 +25618,77 @@ test('un habitant contourne le joueur plante sur son chemin au lieu d\'y rester 
     + ` joueur et l'habitant ne tourne pas autour — ${V.images} images, il finit a ${V.dButMin} m de son`
     + ` but et a ${V.dJoueurMin} m du joueur, ${V.travers} image dans lui` };
 });
+// ====== UN FUYARD NE FUIT PAS UN FANTOME (round 83, la regression du test 378) ======
+// `b.fuitDe` nomme l'agresseur de la bagarre EN COURS. Il n'etait efface qu'a l'EXPIRATION de
+// cette bagarre, dans `combatTick` — jamais a son OUVERTURE. Or il commande deux choses : la
+// direction de la fuite (on RECULE a 2,6 m/s devant un habitant, on DETALE a 5,5 m/s devant le
+// joueur) et surtout LE DEMI-TOUR, car `combatTick` n'autorise le fuyard a se retourner que si
+// `b.fuitDe` est vide : `if (b.fight === 'flee' && simTime > b.fuiteFin && !(b.fuitDe && b.fuitDe.pos))`.
+// Un habitant frappe par l'enfant fuyait donc POUR TOUJOURS a cause d'une vieille rancune
+// contre un voisin. C'est ce qui rendait le test 378 rouge en suite complete et vert dans son
+// lot : le champ survit a `b.fight = null`, que le test remet pourtant a zero.
+// ON MONTE LA POLLUTION A LA MAIN au lieu d'attendre qu'un voisin la laisse, et on garde le
+// temoin : quand c'est un AUTRE HABITANT qui frappe, `fuitDe` est bel et bien pose et le
+// fuyard ne se retourne pas — on n'a pas desarme la regle, on l'a seulement empechee de survivre
+// a la bagarre qui l'avait posee.
+test('un habitant frappe par l\'enfant se retourne meme s\'il gardait une vieille rancune contre un voisin', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const vivants = G.bots.filter(x => x.av && x.av.group && !x.dead && !x.prison);
+    if (vivants.length < 2) return { erreur: 'il faut deux habitants vivants' };
+    const b = vivants[0], voisin = vivants[1];
+    // les autres sont ranges au loin : ce test juge UN frappeur et UN frappe
+    G.bots.forEach((o, i) => { if (o === b) return; o.rdv = null; o.ordre = null; o.activite = null;
+      o.drive = null; o.sport = null; o.bagarre = null; o.fight = null; o.fuitDe = null; o.ko = 0;
+      o.dead = 0; o.hp = 100; o.wait = 9999; o.target = null;
+      o.pos.set(400 + i * 3, 0.4, 400); o.av.group.position.copy(o.pos); });
+    (G.gangs || []).forEach(Gg => (Gg.membres || []).forEach(m => { m.x += 600; m.z += 600;
+      if (m.av) m.av.group.position.set(m.x, m.y || 0, m.z); }));
+    (G.police.agents || []).slice().forEach(a => { a.x += 600; a.z += 600; });
+    // ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS (le banc rend une image par seconde).
+    const essai = (rancune) => {
+      b.hp = 100; b.ko = 0; b.dead = 0; b.prison = false; b.fight = null; b.garde = false;
+      b.bagarre = null; b.rdv = null; b.activite = null; b.wait = 0; b.fuiteFin = 0;
+      b.pos.set(0, 0.3, 6); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+      b.fuitDe = rancune ? voisin : null;   // LA POLLUTION : une bagarre finie avec un voisin
+      const vrai = Math.random; Math.random = () => 0.9;   // le tirage tombe sur « fuite »
+      const coups = []; let ko = false, retourne = -1;
+      try {
+        for (let i = 0; i < 14 && !ko; i++) {
+          P.pos.set(b.pos.x, b.pos.y, b.pos.z + 1.1); P.facing = Math.PI; P.vel.set(0, 0, 0);
+          P.punchCd = 0; P.poingT = 0;
+          G.punch();
+          for (let k = 0; k < 40; k++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }
+          coups.push({ hp: +b.hp.toFixed(0), etat: b.fight, fuitDe: b.fuitDe ? (b.fuitDe.name || 'joueur') : null });
+          if (b.fight === 'fight' && retourne < 0) retourne = i + 1;
+          if (b.hp <= 0 || b.ko) ko = true;
+        }
+      } finally { Math.random = vrai; }
+      return { coups: coups.length, ko, retourne, suite: coups.map(c => c.hp + (c.etat === 'flee' ? '↗' : c.etat === 'fight' ? '⚔' : '')).join(' '),
+        fuitDeFin: coups.length ? coups[coups.length - 1].fuitDe : null };
+    };
+    const R = { sansRancune: essai(false), avecRancune: essai(true) };
+    // TEMOIN : quand c'est un AUTRE HABITANT qui frappe, `fuitDe` est pose et le fuyard ne se
+    // retourne pas — la regle mord toujours.
+    b.hp = 100; b.ko = 0; b.fight = null; b.fuitDe = null; b.fuiteFin = 0; b.wait = 0;
+    b.pos.set(0, 0.3, 6); b.av.group.position.copy(b.pos);
+    voisin.hp = 100; voisin.ko = 0; voisin.dead = 0; voisin.wait = 0;
+    voisin.pos.set(0, 0.3, 7.2); voisin.av.group.position.copy(voisin.pos); voisin.av.group.visible = true;
+    P.pos.set(40, 0.3, 40);            // le joueur est AILLEURS : la bagarre ne le regarde pas
+    G.botTape(voisin, b);
+    let etatT = null, fuitDeT = null;
+    for (let k = 0; k < 600; k++) { G.step(1 / 60, true); etatT = b.fight; fuitDeT = b.fuitDe ? (b.fuitDe.name || 'joueur') : null; if (!b.fight) break; }
+    R.parUnVoisin = { etat: etatT, fuitDe: fuitDeT, nom: voisin.name };
+    return R;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const A = r.sansRancune, B = r.avecRancune, T = r.parUnVoisin;
+  const ok = A.ko && A.retourne > 0 && B.ko && B.retourne > 0 && B.coups <= 14
+    && T.fuitDe === T.nom;
+  return { ok, detail: `\`b.fuitDe\` nomme l'agresseur de la bagarre EN COURS, et il n'etait efface qu'a son EXPIRATION, jamais a son OUVERTURE`
+    + ` · il commande le DEMI-TOUR : \`combatTick\` n'autorise le fuyard a tenir tete que si le champ est vide — un habitant frappe par l'enfant fuyait donc POUR TOUJOURS a cause d'une vieille rancune contre un voisin (test 378 rouge en suite, vert dans son lot : « il revient se battre=false », KO en 7 coups)`
+    + ` · SANS RANCUNE : il se retourne au coup ${A.retourne}, KO en ${A.coups} coups (${A.suite})`
+    + ` · AVEC LA VIEILLE RANCUNE MONTEE A LA MAIN (b.fuitDe = un voisin, une bagarre finie) : il se retourne au coup ${B.retourne}, KO en ${B.coups} coups (${B.suite}) — AVANT, jamais`
+    + ` · TEMOIN, la regle mord toujours : frappe par un AUTRE HABITANT (${T.nom}, le joueur a 40 m), le fuyard garde son agresseur (fuitDe = ${T.fuitDe}) et ne se retourne pas contre l'enfant` };
+});

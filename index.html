@@ -17667,7 +17667,17 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
     // revenait jamais : les coups suivants frappaient le vide et il recuperait 100 ❤️ hors de
     // vue — jamais de KO, jamais le ralenti du coup final. Un sur trois recule encore, mais
     // trois secondes seulement : il revient, furieux, et tient tete.
-    if (!b.fight) { b.fight = Math.random() < 0.68 ? 'fight' : 'flee'; if (b.fight === 'flee') b.fuiteFin = simTime + 3; }
+    // UN FUYARD NE FUIT PAS UN FANTOME (round 83). `b.fuitDe` nomme l'agresseur de la bagarre EN
+    // COURS, et il n'est efface qu'a l'EXPIRATION de cette bagarre, dans `combatTick`. Quand une
+    // NOUVELLE bagarre commence il survivait donc a l'ancienne — et il commande DEUX choses : la
+    // direction de la fuite (on RECULE a 2,6 m/s devant un habitant au lieu de DETALER a 5,5 m/s
+    // devant le joueur) et surtout LE DEMI-TOUR, car `combatTick` n'autorise le fuyard a se
+    // retourner et a tenir tete que si `b.fuitDe` est vide. Un habitant frappe par l'enfant
+    // pouvait donc fuir POUR TOUJOURS a cause d'une vieille rancune contre un voisin. C'est ce
+    // qui rendait le test 378 rouge en suite complete alors qu'il etait vert dans son lot :
+    // « il revient se battre=false », KO en 7 coups sans un seul retournement.
+    // ICI L'AGRESSEUR EST LE JOUEUR : on efface le nom de l'ancien.
+    if (!b.fight) { b.fight = Math.random() < 0.68 ? 'fight' : 'flee'; if (b.fight === 'flee') b.fuiteFin = simTime + 3; b.fuitDe = null; }
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
     sonAie(b.pos.x, b.pos.y + 1.5, b.pos.z, hauteurVoix(b.name, !!b.girl));   // il crie de SA voix (tirée de son nom)
     if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; botSay(b, ['ouille…', 'KO…', 'j\'abandonne']); msg(`😵 ${b.name} est KO ! Frappe encore pour lui prendre ses pièces`, 1800); sfx.tone(300, 0, .5, 'sawtooth', .08, 60);
@@ -17743,6 +17753,7 @@ function coupCouteau(av, duree) {
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
     b.rancune = simTime + 45;   // (n° 84) le joueur l'a frappé : il a le droit de riposter, même une fois `P.crime` retombé
+    if (!b.fight) b.fuitDe = null;   // nouvelle bagarre, agresseur = le joueur (voir `fuitDe` dans punch)
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * 0.6; b.pos.z += fz * 0.6; b.av.group.position.copy(b.pos);
     avDegats(b.av, niveauDegats(Math.max(0, b.hp)), b.hp);
@@ -23238,7 +23249,7 @@ function chienTick(dt) {
       }
       if (d < 1.6 && simTime > (chien.morsT || 0)) {
         chien.morsT = simTime + 1.1;
-        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
+        if (b) { b.hp = (b.hp ?? 100) - 9; if (!b.fight) b.fuitDe = null; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
           impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sonSouffle(b.pos.x, b.pos.y + 1.1, b.pos.z, .08, 500, .07, { portee: 30 });
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
@@ -32147,7 +32158,9 @@ function shotsTick(dt) {
       if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte — mais seulement si c'est NOTRE balle (n° 85)
     } else if (quoi === 'bot') {
       const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
-      b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
+      b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8;
+      if (!b.fight) b.fuitDe = null;   // nouvelle bagarre : pas d'ancien agresseur (voir `fuitDe` dans punch)
+      b.fight = b.fight || 'flee';
       if (s.mine) b.rancune = simTime + 45;   // (n° 84) touché par LA balle du joueur : il garde sa rancune
       b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
       if (b.hp <= 0) {

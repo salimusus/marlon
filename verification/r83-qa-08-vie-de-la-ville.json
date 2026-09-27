@@ -1,0 +1,29 @@
+{
+ "immobile": {
+  "pas": 14400,
+  "secondesSimulees": 240,
+  "hpFin": 100,
+  "hpMin": 100,
+  "etoilesMax": 0,
+  "morts": 0,
+  "habitantsLancesSurLui": 0,
+  "quiSestLance": [],
+  "imagesOuUnHabitantEstLance": 0,
+  "imagesAPorteeDeCoup": 0,
+  "chatFin": "endre 💥\n💥 Nathan_pro attaque Chloe_mia !\nChloe_mia : aïe !\nChloe_mia : laisse-moi !\nChloe_mia : arrête !\n🚩 Les Requins Rouges s'en prennent à une boutique !\nChloe_mia : arrête !\nChloe_mia : aïe !\nChloe_mia : aïe !\nChloe_mia : laisse-moi !\nChloe_mia : laisse-moi !\n💀 Chloe_mia a été éliminé par Nathan_pro\nSarah_bee : Lea_star va comprendre 💥\n💥 Sarah_bee attaque Lea_star !\nLea_star : au secours !\nLea_star : laisse-moi !\nLea_star : au secours !\nLea_star : police !!\nChloe_mia : tu vas voir la prochaine fois\nLea_star : au secours !\nKarim_flash : Momo_king va comprendre 💥\n💥 Karim_flash attaque Momo_king !\nLea_star : police !!\nLea_star : aïe !\nMomo_king : arrête !\nMomo_king : au secours !\n🎤"
+ },
+ "provocation": {
+  "cible": "Chloe_mia",
+  "distance": 5.33,
+  "apres60s": {
+   "hpJoueur": 100,
+   "hpMin": 37,
+   "etoiles": 0,
+   "habitantsLances": 0,
+   "noms": [],
+   "mort": false
+  },
+  "chat": "quins Rouges !\nChloe_mia : tiens !\nMomo_king : police !!\nMomo_king : arrête !\nMomo_king : police !!\nChloe_mia : tiens !\nMomo_king : au secours !\nChloe_mia : tu l'as cherché !\nMomo_king : police !!\nMomo_king : police !!\nMomo_king : laisse-moi !\nSarah_bee : je vais aller à la plage 🏖️\nEnzo_turbo : direction Tennis !\n🚩 Les Requins Rouges attaquent Les Frelons Jaunes !\nInes_gg : direction Plage !\nZoe_rider : direction Plage !\nChloe_mia : je prends le vélo 🚲\nLucas_2014 : je vais jouer au foot ⚽\n🎤"
+ },
+ "erreurs": []
+}

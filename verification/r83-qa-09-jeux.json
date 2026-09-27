@@ -1,0 +1,89 @@
+{
+ "balancoire": {
+  "act": "🎯 Boules : 0 pt",
+  "assis": false,
+  "amplitudeMax": 0,
+  "battement_m": 0,
+  "hpAssis": 100,
+  "hpApresSaut": 100,
+  "descendu": true,
+  "rider": null,
+  "msg": "🎠 E : s'asseoir sur la balançoire"
+ },
+ "carrousel": {
+  "act": "🎡 Fête foraine",
+  "dessus": false,
+  "hpMinSurLeManege": 100,
+  "hpSurLeManege": 100,
+  "hpMinApresSaut": 100,
+  "hpFin": 100,
+  "descendu": true,
+  "y": 0.85,
+  "msg": "🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons"
+ },
+ "trampoline": {
+  "hauteurMax_m": 8.48,
+  "hpMin": 100,
+  "hpFin": 100,
+  "mort": false,
+  "rebonds": 0,
+  "x": 45,
+  "z": 156,
+  "tramp": [
+   45,
+   156
+  ],
+  "msg": "🤸 E : rebondir plus haut !"
+ },
+ "cityStade": {
+  "err": "ballon sans position",
+  "cles": "mesh pos vel r kind hitCd state bounces ground bounds id tgt home lastHit"
+ },
+ "ecole": {
+  "classe": [
+   -79,
+   213.2
+  ],
+  "act": "🏫 E : la leçon",
+  "ui": null,
+  "texte": "\n  \n    🏫 Classe\n    \n    \n    \n    \n      \n      \n      \n    \n    🔊 RelireSortir\n  \n"
+ },
+ "salleDeSport": {
+  "err": "gym sans position",
+  "cles": "bench run"
+ },
+ "chien": {
+  "act": "🎬 Cinéma",
+  "adopte": false,
+  "nom": null
+ },
+ "cinemaDuParc": {
+  "cinema": [
+   0,
+   98
+  ],
+  "act": "🏙️ Balade · 0 pts",
+  "film": null,
+  "cles": "x z cv g tex scr i t next sac video essaiVideo"
+ },
+ "piscine": {
+  "nage": true,
+  "hpMin": 100,
+  "hp": 100,
+  "y": -0.36,
+  "mort": false
+ },
+ "standDeTir": {
+  "cible": [
+   62,
+   11.4
+  ],
+  "verrouSurUneCible": null,
+  "tirs": 20,
+  "pointsGagnes": 0,
+  "etoiles": 0,
+  "hp": 100,
+  "msg": "🔥 AU FEU ! La caserne envoie le camion"
+ },
+ "erreurs": []
+}

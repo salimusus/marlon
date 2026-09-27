@@ -1022,6 +1022,85 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Le n° 87 n'est PAS atteignable par un recul d'horloge, et c'est vérifié** : le siège de la balançoire est `P.swing`, un **objet sans date**, et `sw.rider` une chaîne — un saut libère l'enfant quelle que soit l'horloge (`descendu = true` dans les deux versions). `P.swingT`, qu'on donnait pour le siège, est le coup de **raquette** (un drapeau d'animation envoyé au réseau, `m.sw`). La seule date de la balançoire est `sw.diraT`, et c'est le **rappel à l'écran** qu'elle faisait taire.
 - **Test** : `harness/play.js` n° **525**, en deux moitiés. (1) **Le recenseur vit dans le test** : il relit le texte du jeu, cherche mécaniquement toute pose de date tirée de l'horloge (en écartant les PHASES d'animation — l'horloge doit rester un terme additif de premier niveau, donc `Math.sin(simTime * 1.8)` ne compte pas), ne garde que les champs relus contre l'horloge, et les recoupe avec `DATES_JEU`. Le jour où un poste écrit `X = simTime + 5` sans inscrire `X` au registre, **le test passe au rouge et NOMME la variable**. (2) **La preuve par le symptôme** : le piège est monté en page, `step()` doit trouver le recul tout seul, et l'enfant ne doit être ni provocateur, ni paralysé, ni à terre, ni endormi, ni accroupi — **et** un marqueur vraiment frais doit continuer de faire son travail.
 
+### 109. Dans la cage d'escalier des immeubles de La Zone, la caméra entre dans le dos de l'enfant : l'écran est bouché par sa tête, on ne voit plus une seule marche
+- **Gravité** : MAJEUR — c'est exactement le n° 106, réparé à la cabane des arbres au round 83, et resté entier dans un endroit où l'enfant passe dix fois plus souvent (cinq immeubles, trois niveaux chacun, la conquête de La Zone se joue dedans). Un écran bouché est ce que le carnet range dans « ça fait mal ».
+- **Reproduire** : La Zone, immeuble (−169 ; 10). Monter l'escalier extérieur depuis le trottoir (−158,4 ; 17) et tourner la caméra sur les quatre côtés à chaque palier. Reproduit 2/2.
+- **On voit** : distance objectif ↔ tête (`cam.dJoueur`), quatre caps par point, recul demandé 7,00 m, seuil de confort du jeu `CAM_CONFORT` = **4,60 m** :
+
+  | point | y | sud | est | nord | ouest | pire |
+  |---|---:|---:|---:|---:|---:|---:|
+  | trottoir devant l'immeuble | 0,06 | 6,85 | 4,98 | 3,37 | 4,17 | 3,37 |
+  | palier du rez-de-chaussée | 0,20 | 7,02 | 1,96 | **0,47** | 1,81 | **0,47** |
+  | 1ʳᵉ volée | 1,48 | 0,96 | 0,71 | 1,92 | 0,75 | **0,71** |
+  | palier de demi-tour | 1,80 | 1,51 | 1,14 | 1,96 | 0,75 | **0,75** |
+  | 2ᵉ volée | 3,08 | 1,44 | 5,35 | 0,92 | 0,71 | **0,71** |
+  | palier du 1ᵉʳ étage | 3,40 | 1,72 | 0,80 | 1,86 | 1,23 | **0,80** |
+  | coursive du 1ᵉʳ | 3,40 | 6,52 | 0,64 | 0,48 | 0,64 | **0,48** |
+  | *contre-épreuve, en pleine rue (0 ; 20)* | 0,73 | 4,68 | 3,55 | 4,88 | 4,91 | 3,55 |
+
+  Dans toute la cage, **trois caps sur quatre restent sous 2 mètres**, et six des sept points descendent sous **1 mètre** : l'objectif est DANS le personnage. Sur la capture, le visage de l'enfant remplit l'écran : on ne voit ni la marche suivante, ni le garde-corps, ni le palier.
+- **Ce que ça coûte à l'enfant, et c'est mesuré** : le chemin du 2ᵉ étage est tortueux (deux demi-volées, deux demi-tours dans un couloir de moins de 2 m — relevé du sol : montante x = −159,7 de 0,52 à 1,80 m, demi-tour à 1,80 m, descendante x = −157,1 de 2,12 à 3,40 m, puis la même chose de 3,72 à 6,60 m). Il est franchissable — la géométrie est bonne, marches de 32 cm, je l'ai relevée au décimètre — mais **il se parcourt les yeux bouchés**. Trois autopilotes différents ne l'ont pas trouvé ; un enfant non plus, s'il ne voit pas ses pieds.
+- **On devrait voir** : l'escalier devant soi. La cage fait 5,20 m de large sur trois niveaux : c'est un volume, comme la cabane. La recette du n° 106 s'applique telle quelle — un volume `city.camPieces` par cage (avec ses deux altitudes) — ou, à défaut de place pour reculer, le passage en vue première personne que le carnet donnait déjà comme repli.
+- **Captures** : `verification/s2-13-camera-cage-escalier.png` (palier du 1ᵉʳ, cap nord, 1,86 m), `verification/s2-10-immeuble-zone-2e.png` (en pleine montée : l'écran est un aplat de peau).
+- **Mesures brutes** : `verification/r83-qa-02-escaliers-camera.json`, `verification/r83-qa-02-profil-escaliers.json`
+
+### 110. La caméra de la cabane des arbres est réparée, mais la cabane, elle, ne se voit toujours pas : son toit est effacé et son enseigne est dehors
+- **Gravité** : GÊNANT — c'est la récompense du Bois des Aventuriers ; le n° 106 demandait « la cabane, le drapeau et le panneau », et on n'a que le drapeau.
+- **Reproduire** : monter le parcours à pied du sol (125,1 ; 283,5) au plancher de la cabane (128 ; 7,14 ; 300), puis tourner la caméra sur les quatre côtés.
+- **Ce qui EST réparé, et je le confirme** : recul voulu 4,85 m, recul RÉEL 4,85 m, caméra ↔ tête **4,92 m aux quatre caps**, `cam.interieur` VRAI, `camPieceDe` VRAI. Avant : 1,15 / 1,33 / 1,43 / 1,48 m. L'objectif n'est plus dans le dos de l'enfant, et la montée se fait en 441 images de marche sans un saut ni un blocage.
+- **On voit malgré tout** : le mode maison de poupée (`tout: true`) efface le TOIT — `box(128, 9.7, 300, 5,4 × 0,9 × 5,4)`, la seule pièce rouge de l'ensemble — et l'enseigne « 🏕️ LA CABANE » est vissée DEHORS en z = 302,2, donc derrière la caméra quand on regarde vers le sud et hors champ le reste du temps. Il reste à l'écran un plancher pâle, quatre panneaux de bois beiges et des troncs : rien qui dise « cabane ».
+- **On devrait voir** : quelque chose qui se lit comme une cabane depuis l'intérieur — garder le toit tant que l'objectif est DEHORS du volume et ne l'effacer qu'au-dessus d'une certaine hauteur, ou poser une seconde enseigne à l'intérieur, ou un objet de récompense en volume (drapeau planté, coffre, lanterne).
+- **Captures** : `verification/s3-10-cabane-cap-ouest.png`, `verification/s3-11-cabane-cap-sud.png`
+- **Mesures brutes** : `verification/r83-qa-03-parcours-arbres.json`
+
+### 111. L'enfant apparaît au milieu de la chaussée, sur un passage piéton, à huit mètres du premier trottoir
+- **Gravité** : MINEUR, mais c'est la toute première seconde de la partie et la première leçon qu'on lui donne.
+- **Reproduire** : lancer une partie neuve, passer l'introduction, ne rien toucher.
+- **On voit** : le point d'apparition est (0 ; 3). `surLaChaussee(0 ; 3)` rend **vrai** ; le trottoir le plus proche est à **8,0 m**. Sur la capture, l'enfant est planté sur les bandes blanches au milieu du carrefour, et le trafic y passe. Effet de bord mesuré : pendant un de mes essais une voiture du trafic s'est garée sur ce point, et le personnage n'a plus avancé que de 0,33 m/s pendant trois secondes, le temps que `desincarcere` le sorte.
+- **On devrait voir** : l'enfant apparaît sur le trottoir ou sur la place, jamais sur le bitume.
+- **Capture** : `verification/s1-09-dix-secondes.png`
+
+### 112. La première voiture du parking du centre est arrêtée par un poteau de 36 cm : pied au plancher, elle n'avance plus, sans un choc, sans une bosse, sans un mot — et le compteur affiche 0 pendant qu'elle se dégage
+- **Gravité** : GÊNANT, et c'est la première minute au volant d'un enfant de huit ans.
+- **Reproduire** : prendre la voiture garée en (43 ; −13) au parking du centre, pousser « avancer » et ne plus toucher au volant.
+- **On voit**, 20 s de gaz à fond, passants écartés pour ne juger que la conduite :
+
+  | t | position de la caisse | au volant | compteur |
+  |---:|---|---|---:|
+  | 0 s | (43,0 ; −13,0) | oui | 0 km/h |
+  | 1 s | (43,0 ; −9,1) | oui | 0 km/h *(16 km/h réels, mesurés à la position)* |
+  | 2 s | (43,0 ; −8,2) | oui | 0 km/h |
+  | 3 → 20 s | (43,0 ; −8,2) — **plus un centimètre** | oui | 0 km/h |
+
+  **0 dégât, 0 choc, 0 message.** Ce qui l'arrête : un **poteau de 0,36 × 0,36 m et 2,40 m de haut en (43,9 ; −5,3)**, relevé dans la scène. Le point n'est même pas une chaussée (`surLaChaussee(43 ; −6)` faux) : c'est le tablier du parking.
+  En BRAQUANT on s'en sort — 155,8 m en 30 s à coups de volant, 6 points de dégât — mais le compteur reste à **0 km/h pendant tout ce trajet** : c'est le dégagement (`degageVehicule`, 3,4 m/s) qui déplace la caisse, et il ne passe pas par la vitesse. Contre-épreuve sur cinq autres véhicules : vélo 50 / 50, vélo 50 / 50, vélo 59 / 50, jet-ski 90 / 90, jet-ski 90 / 90 km/h (réel / annoncé) — **partout ailleurs le compteur dit vrai**.
+- **On devrait voir** : soit la voiture recule ou glisse le long du poteau comme le fait `degageVehicule` ailleurs, soit le jeu le dit (un choc, une bosse, « tu es contre un poteau, braque »). Et le compteur ne doit pas afficher 0 pendant que la caisse avance.
+- **Captures** : `verification/s5-10-balade.png`, `verification/s5-11-balade-dirigee.png`
+- **Mesures brutes** : `verification/r83-qa-05-conduire-obstacle.json`, `verification/r83-qa-05-conduire-engins.json`, `verification/r83-qa-05-compteur.json`
+
+### 113. Le bulldozer ne roule pas : 1,70 m en dix secondes, cinq km/h pour une fiche à trente-six, et la marche arrière ne le sort pas
+- **Gravité** : GÊNANT — c'est un engin qu'un enfant repère de loin, dans lequel il monte, et qui ne fait rien.
+- **Reproduire** : chantier du nord, bulldozer garé en (18,2 ; 121,5). Monter, pousser « avancer » dix secondes, puis « reculer » sept secondes.
+- **On voit** : **1,70 m** parcourus en 10 s, pointe **5 km/h** alors que sa propre fiche annonce **36 km/h** (`spec.max` = 10 m/s) ; la marche arrière ne change rien (1,70 m au total). Il a un solide de 0,40 × 4,60 m à **2,06 m** de son nez. Les trois autres engins du même chantier, testés dans la foulée, roulent tous à leur fiche : grue 68,5 m / 50 km/h (fiche 50), pelle 40,3 m / 40 (fiche 40), tracteur 23,6 m / 53 (fiche 54).
+- **On devrait voir** : ou bien le bulldozer roule à sa fiche, ou bien il n'est pas montable.
+- **Capture** : `verification/s5-12-engin-de-chantier.png`
+- **Mesures brutes** : `verification/r83-qa-05-conduire-engins.json`
+
+### 114. Le carrousel de la fête foraine ne se monte pas en s'en approchant : le panneau dit « E pour monter », mais rien ne se propose
+- **Gravité** : GÊNANT (une attraction annoncée par son propre panneau et qu'on n'atteint pas). **À CONFIRMER** : `rideEnter()` appelée à la main fonctionne, donc c'est la mise à portée qui ne s'arme pas, et je n'ai essayé qu'une seule approche.
+- **Reproduire** : fête foraine, marcher jusqu'au carrousel (`city.rides[0]`) en venant de l'est, attendre 1,5 s à l'arrêt, appuyer sur E.
+- **On voit** : `city.rideNear` reste **faux**, aucune consigne ne s'affiche (`consigneProche()` rend null), E ne fait rien, le joueur reste au sol (y 0,12). Le panneau de zone dit pourtant « 🎡 Fête foraine : grande roue et carrousel (**E pour monter**), stands et ballons ». À titre de comparaison, au même essai et de la même façon, la balançoire arme `swingNear`, le banc arme `benchNear` et le trampoline arme `trampNear` — les trois répondent à E du premier coup.
+- **On devrait voir** : « 🎠 E : monter sur le carrousel » quand on est à côté, et E qui fait monter.
+- **Capture** : `verification/s9-11-activites-reprise.png`
+- **Mesures brutes** : `verification/r83-qa-09-jeux-reprise.json`
+
+### 115. Frapper un passant en pleine rue, devant témoins, ne donne aucune étoile — alors qu'un coup de feu en donne une tout de suite
+- **Gravité** : MINEUR, et c'est peut-être voulu pour un enfant de huit ans. Je le note parce que c'est une asymétrie, pas parce que je sais qu'elle est fausse.
+- **Reproduire** : au centre de la ville, donner un coup de poing à l'habitant le plus proche, puis attendre 60 s sans rien faire.
+- **On voit** : l'habitant riposte tout de suite (« tiens ! », « tu l'as cherché ! »), le cœur de l'enfant descend à **37 PV** puis remonte seul à 100, et **★ reste à 0** pendant toute la minute. Le même enfant qui tire cinq coups de pistolet au même endroit passe à **★1 en moins d'une seconde**, est poursuivi, puis « arrêté et mis en prison » à t+25 s.
+- **On devrait voir** : si le coup de poing doit rester gratuit, très bien — mais alors ce n'est pas la police qui fait la différence, c'est l'arme, et il vaut mieux que ce soit un choix écrit qu'un oubli.
+- **Mesures brutes** : `verification/r83-qa-08-vie-de-la-ville.json`, `verification/r83-qa-07-armes-et-09-jeux.json`
+
 ### CE QUI EST ACQUIS — round 81 : les seize défauts du round 77, vérifiés un par un dans le jeu
 Tout ce qui suit est **mesuré à la manette DualSense sur `95ad841`**, monde neuf à chaque essai.
 Les seize défauts du contrôleur du round 77 sont **tous réparés pour de bon** ; je les ai rejoués

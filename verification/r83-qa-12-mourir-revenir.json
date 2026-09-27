@@ -1,0 +1,87 @@
+{
+ "reveil": {
+  "x": 22,
+  "z": 205.9,
+  "y": null
+ },
+ "morts": [
+  {
+   "nom": "chute de 25 m",
+   "etaitMort": true,
+   "pasAvantDebout": 95,
+   "secondesAvantDebout": 1.58,
+   "hpQuandDebout": 100,
+   "hpFin": 100,
+   "mortEncore": false,
+   "x": 22,
+   "y": 0.36,
+   "z": 205.9,
+   "assis": false,
+   "surBanc": false,
+   "swing": false,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+   "chat": "quins Rouges s'en prennent à une boutique !\nTom_le_ouf : quelqu'un a vu le glacier ? 🍦\nSarah_bee : Joueur96, On va a la piscine ?\n☀️ Le beau temps revient\n💀 Joueur96 s'est écrasé après une chute de 25 m\nL'infirmière : Bonjour, comment puis-je vous aider ?\n🎤"
+  },
+  {
+   "nom": "coups repetes (hurt)",
+   "etaitMort": true,
+   "pasAvantDebout": 95,
+   "secondesAvantDebout": 1.58,
+   "hpQuandDebout": 100,
+   "hpFin": 100,
+   "mortEncore": false,
+   "x": 22,
+   "y": 0.36,
+   "z": 205.9,
+   "assis": false,
+   "surBanc": false,
+   "swing": false,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied · −7 🪙 — repars tranquille !",
+   "chat": "après une chute de 25 m\nL'infirmière : Bonjour, comment puis-je vous aider ?\nSarah_bee : qui vient à la piscine ?\n😵 Joueur96 a été mis KO par Un voyou\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\n🚩 Les Requins Rouges attaquent Les Frelons Jaunes !\n🎤"
+  },
+  {
+   "nom": "die() direct",
+   "etaitMort": true,
+   "pasAvantDebout": 95,
+   "secondesAvantDebout": 1.58,
+   "hpQuandDebout": 100,
+   "hpFin": 100,
+   "mortEncore": false,
+   "x": 22,
+   "y": 0.36,
+   "z": 205.9,
+   "assis": false,
+   "surBanc": false,
+   "swing": false,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+   "chat": "ient à la piscine ?\n😵 Joueur96 a été mis KO par Un voyou\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\n🚩 Les Requins Rouges attaquent Les Frelons Jaunes !\nMomo_king : je vais au parc, qui vient ?\nL'infirmière : Bonjour, comment puis-je vous aider ?\n🎤"
+  },
+  {
+   "nom": "explosion",
+   "etaitMort": false,
+   "pasAvantDebout": -1,
+   "secondesAvantDebout": null,
+   "hpQuandDebout": null,
+   "hpFin": 100,
+   "mortEncore": false,
+   "x": 0,
+   "y": 0,
+   "z": 8,
+   "assis": false,
+   "surBanc": false,
+   "swing": false,
+   "msg": "🔥 AU FEU ! La caserne envoie le camion",
+   "chat": " parc, qui vient ?\nZoe_rider : Joueur96, Tu preferes le foot ou le tennis ?\nMomo_king : direction Tennis !\n🔥 Un incendie s'est déclaré en ville — les pompiers arrivent !\nZoe_rider : je vais aller à la plage 🏖️\nTom_le_ouf : direction Hameau de la Ferme 🏍️\n🎤"
+  }
+ ],
+ "koBalancoire": {
+  "assisAvant": true,
+  "riderAvant": "me",
+  "riderApres": null,
+  "swingApres": false,
+  "marche_m": 1.24,
+  "hp": 100,
+  "mort": false
+ },
+ "erreurs": []
+}

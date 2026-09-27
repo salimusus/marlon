@@ -1,0 +1,308 @@
+{
+ "vitesses": {
+  "marche_m_s": 5.91,
+  "course_m_s": 0.33,
+  "hauteurSaut_m": 2.3,
+  "souffleApres3s": 84
+ },
+ "arbres": {
+  "depart": {
+   "x": 125.1,
+   "y": 0.14,
+   "z": 283.5,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 26
+  },
+  "etapes": [
+   {
+    "nom": "pied de l'escalier T1",
+    "cible": [
+     125.1,
+     288.2
+    ],
+    "y": 2.6,
+    "x": 125.1,
+    "z": 287.39,
+    "bloque": 0,
+    "ymax": 2.6,
+    "traces": [
+     [
+      125.1,
+      0.14,
+      283.51
+     ],
+     "ARRIVE i=41"
+    ]
+   },
+   {
+    "nom": "plancher T1 (2,6 m)",
+    "cible": [
+     128,
+     288
+    ],
+    "y": 2.6,
+    "x": 127.14,
+    "z": 288.03,
+    "bloque": 0,
+    "ymax": 2.6,
+    "traces": [
+     [
+      125.11,
+      2.6,
+      287.48
+     ],
+     "ARRIVE i=25"
+    ]
+   },
+   {
+    "nom": "passerelle vers T2",
+    "cible": [
+     136,
+     288
+    ],
+    "y": 2.6,
+    "x": 135.2,
+    "z": 288,
+    "bloque": 0,
+    "ymax": 2.6,
+    "traces": [
+     [
+      127.24,
+      2.6,
+      288.03
+     ],
+     [
+      132.41,
+      2.6,
+      288.01
+     ],
+     "ARRIVE i=77"
+    ]
+   },
+   {
+    "nom": "plancher T2 (4,0 m)",
+    "cible": [
+     142,
+     288
+    ],
+    "y": 4,
+    "x": 141.19,
+    "z": 288,
+    "bloque": 0,
+    "ymax": 4,
+    "traces": [
+     [
+      135.3,
+      2.6,
+      288
+     ],
+     "ARRIVE i=57"
+    ]
+   },
+   {
+    "nom": "passerelle vers T3",
+    "cible": [
+     142,
+     295
+    ],
+    "y": 4.35,
+    "x": 141.98,
+    "z": 294.17,
+    "bloque": 0,
+    "ymax": 4.35,
+    "traces": [
+     [
+      141.29,
+      4,
+      288.01
+     ],
+     [
+      141.95,
+      4,
+      292.62
+     ],
+     "ARRIVE i=65"
+    ]
+   },
+   {
+    "nom": "plancher T3 (5,4 m)",
+    "cible": [
+     142,
+     300
+    ],
+    "y": 5.4,
+    "x": 142,
+    "z": 299.13,
+    "bloque": 0,
+    "ymax": 5.4,
+    "traces": [
+     [
+      141.98,
+      4.35,
+      294.28
+     ],
+     "ARRIVE i=47"
+    ]
+   },
+   {
+    "nom": "passerelle vers T4",
+    "cible": [
+     134,
+     300
+    ],
+    "y": 5.4,
+    "x": 134.89,
+    "z": 299.97,
+    "bloque": 0,
+    "ymax": 5.4,
+    "traces": [
+     [
+      141.99,
+      5.4,
+      299.43
+     ],
+     [
+      137.26,
+      5.4,
+      299.88
+     ],
+     "ARRIVE i=73"
+    ]
+   },
+   {
+    "nom": "la cabane (6,8 m)",
+    "cible": [
+     128,
+     300
+    ],
+    "y": 7.14,
+    "x": 128.81,
+    "z": 300,
+    "bloque": 0,
+    "ymax": 7.14,
+    "traces": [
+     [
+      134.57,
+      5.4,
+      299.98
+     ],
+     "ARRIVE i=56"
+    ]
+   }
+  ],
+  "camQuatrePoints": [
+   {
+    "cap": 0,
+    "voulu": 4.85,
+    "reel": 4.85,
+    "dJoueur": 4.92,
+    "interieur": true,
+    "piece": true
+   },
+   {
+    "cap": 1.57,
+    "voulu": 4.85,
+    "reel": 4.85,
+    "dJoueur": 4.92,
+    "interieur": true,
+    "piece": true
+   },
+   {
+    "cap": 3.14,
+    "voulu": 4.85,
+    "reel": 4.85,
+    "dJoueur": 4.92,
+    "interieur": true,
+    "piece": true
+   },
+   {
+    "cap": -1.57,
+    "voulu": 4.85,
+    "reel": 4.85,
+    "dJoueur": 4.92,
+    "interieur": true,
+    "piece": true
+   }
+  ],
+  "fin": {
+   "x": 128.44,
+   "y": 7.14,
+   "z": 300,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 29
+  }
+ },
+ "escaliers": {
+  "zone": {
+   "fin": {
+    "x": -157,
+    "y": 0,
+    "z": 6.63,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 29
+   },
+   "ymax": 0.29,
+   "bloque": 151,
+   "traces": [
+    [
+     -157,
+     0.29,
+     7.99
+    ],
+    [
+     -157,
+     0,
+     6.63
+    ],
+    [
+     -157,
+     0,
+     6.63
+    ],
+    "BLOQUE i=182"
+   ]
+  },
+  "banque": {
+   "fin": {
+    "x": -52,
+    "y": 0.36,
+    "z": 62,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 29
+   },
+   "ymax": 0.36,
+   "bloque": 201,
+   "traces": [
+    [
+     -52,
+     0.36,
+     62
+    ],
+    [
+     -52,
+     0.36,
+     62
+    ],
+    [
+     -52,
+     0.36,
+     62
+    ],
+    "BLOQUE i=200"
+   ]
+  }
+ },
+ "erreurs": []
+}

@@ -1,0 +1,198 @@
+{
+ "poteau": {
+  "depart": "voiture la plus proche",
+  "ejecteA_s": null,
+  "auVolantALaFin": true,
+  "releve": [
+   {
+    "s": 0,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -13,
+    "degats": 0,
+    "joueur": [
+     43,
+     -13
+    ]
+   },
+   {
+    "s": 1,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -9.1,
+    "degats": 0,
+    "joueur": [
+     43,
+     -9.1
+    ]
+   },
+   {
+    "s": 2,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 3,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 4,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 5,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 6,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 7,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 8,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   },
+   {
+    "s": 9,
+    "auVolant": true,
+    "v_kmh": 0,
+    "x": 43,
+    "z": -8.2,
+    "degats": 0,
+    "joueur": [
+     43,
+     -8.2
+    ]
+   }
+  ],
+  "degats": 0,
+  "msg": "🚁 F : course d'anneaux"
+ },
+ "avecVolant": {
+  "depart": [
+   43,
+   -8.2
+  ],
+  "arrivee": [
+   72.7,
+   144.7
+  ],
+  "parcouru_m": 155.8,
+  "vmax_kmh": 0,
+  "ejecteA_s": null,
+  "auVolantALaFin": true,
+  "degats": 6,
+  "etoiles": 0
+ },
+ "engins": [
+  {
+   "kind": "grue",
+   "place": [
+    24.4,
+    128
+   ],
+   "avant10s_m": 68.5,
+   "totalApresArriere_m": 42.5,
+   "vmax_kmh": 50,
+   "specMax_kmh": 50,
+   "auVolant": true
+  },
+  {
+   "kind": "pelle",
+   "place": [
+    29.6,
+    129
+   ],
+   "avant10s_m": 40.3,
+   "totalApresArriere_m": 15.5,
+   "vmax_kmh": 40,
+   "specMax_kmh": 40,
+   "auVolant": true
+  },
+  {
+   "kind": "tracteur",
+   "place": [
+    14,
+    128.5
+   ],
+   "avant10s_m": 23.6,
+   "totalApresArriere_m": 2.4,
+   "vmax_kmh": 53,
+   "specMax_kmh": 54,
+   "auVolant": true
+  },
+  {
+   "kind": "bulldozer",
+   "place": [
+    18.2,
+    121.5
+   ],
+   "avant10s_m": 1.7,
+   "totalApresArriere_m": 1.7,
+   "vmax_kmh": 5,
+   "specMax_kmh": 36,
+   "auVolant": true
+  }
+ ],
+ "erreurs": []
+}

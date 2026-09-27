@@ -1,0 +1,46 @@
+{
+ "connexion": {
+  "classeManette": true,
+  "msg": "🎮 Manette connectée !",
+  "padActive": true
+ },
+ "triangleVoiture": {
+  "avant": false,
+  "bascullesPendantAppuiTenu": 1,
+  "auVolantApresAppuiTenu": true,
+  "apresSecondAppui": false
+ },
+ "manettePosee": {
+  "deplacement_m": 0,
+  "rotationCamera_rad": 0,
+  "menuOuvertToutSeul": null,
+  "armeSortieTouteSeule": false,
+  "montéEnVoitureToutSeul": false,
+  "etoiles": 0,
+  "hp": 100
+ },
+ "appuiLong": {
+  "appuiCourtHaut": "ordres",
+  "appuiLongHaut": "guerre",
+  "gaucheMaintenu": "store",
+  "droiteMaintenu": "missions"
+ },
+ "traverseeMenu": {
+  "sautPendantAppui": true,
+  "menuOuvert": true,
+  "imagesEnLairApresFermetureAvecBoutonTenu": 0,
+  "nouvelAppuiSaute": true
+ },
+ "sticks": {
+  "marche_3s_m": 16.04,
+  "cameraTournee_2s_rad": 11,
+  "cameraTournee_deg_s": 315
+ },
+ "l3r3": {
+  "marche_m_s": 0.5,
+  "course_m_s": 0,
+  "runApresL3": true,
+  "ecartApresR3_rad": 0
+ },
+ "erreurs": []
+}

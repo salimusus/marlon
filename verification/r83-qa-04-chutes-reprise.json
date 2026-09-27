@@ -1,0 +1,73 @@
+{
+ "grandesChutes": [
+  {
+   "hauteur": 17,
+   "pas": 64,
+   "hpApresImpact": 10,
+   "degats": 90,
+   "mort": false,
+   "msg": "🤕 Aïe ! Chute de 17 m · −90 PV"
+  },
+  {
+   "hauteur": 17.9,
+   "pas": 66,
+   "hpApresImpact": 1,
+   "degats": 99,
+   "mort": false,
+   "msg": "🤕 Aïe ! Chute de 18 m · −99 PV"
+  },
+  {
+   "hauteur": 18.5,
+   "pas": 67,
+   "hpApresImpact": 0,
+   "degats": 100,
+   "mort": true,
+   "msg": "💀 Chute mortelle ! 19 m de haut…"
+  },
+  {
+   "hauteur": 20,
+   "pas": 70,
+   "hpApresImpact": 0,
+   "degats": 100,
+   "mort": true,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !"
+  },
+  {
+   "hauteur": 25,
+   "pas": 80,
+   "hpApresImpact": 0,
+   "degats": 100,
+   "mort": true,
+   "msg": "💀 Chute mortelle ! 25 m de haut…"
+  },
+  {
+   "hauteur": 45,
+   "pas": 120,
+   "hpApresImpact": 0,
+   "degats": 100,
+   "mort": true,
+   "msg": "💀 Chute mortelle ! 45 m de haut…"
+  }
+ ],
+ "ascenseurVilla": {
+  "course": 4.75,
+  "attente_s": 1.22,
+  "montee_s": 2.73,
+  "ecartMontee_m": 5.07,
+  "descente_s": 50.02,
+  "ecartDescente_m": 0,
+  "hp": 100,
+  "mort": false,
+  "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !"
+ },
+ "ascenseurLePlusLong": {
+  "course": 21.85,
+  "attente_s": 1.22,
+  "montee_s": 7.02,
+  "ecart_m": 0.008,
+  "hp": 100,
+  "msg": "🔥 AU FEU ! La caserne envoie le camion",
+  "y": 22.27
+ },
+ "erreurs": []
+}

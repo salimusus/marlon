@@ -1,0 +1,77 @@
+{
+ "compteur": [
+  {
+   "place": [
+    43,
+    -13
+   ],
+   "kind": "voiture",
+   "parcouru_6s_m": 4.8,
+   "vitesseREELLE_kmh": 16,
+   "vitesseANNONCEE_kmh": 0,
+   "compteurHUD": null,
+   "degats": 0
+  },
+  {
+   "place": [
+    -22,
+    51
+   ],
+   "kind": "bike",
+   "parcouru_6s_m": 74.8,
+   "vitesseREELLE_kmh": 50,
+   "vitesseANNONCEE_kmh": 50,
+   "compteurHUD": null,
+   "degats": 0
+  },
+  {
+   "place": [
+    -20.4,
+    51
+   ],
+   "kind": "bike",
+   "parcouru_6s_m": 50.9,
+   "vitesseREELLE_kmh": 50,
+   "vitesseANNONCEE_kmh": 50,
+   "compteurHUD": null,
+   "degats": 12.15
+  },
+  {
+   "place": [
+    -18.8,
+    51
+   ],
+   "kind": "bike",
+   "parcouru_6s_m": 73.7,
+   "vitesseREELLE_kmh": 59,
+   "vitesseANNONCEE_kmh": 50,
+   "compteurHUD": null,
+   "degats": 1.74
+  },
+  {
+   "place": [
+    125,
+    42
+   ],
+   "kind": "jetski",
+   "parcouru_6s_m": 73.2,
+   "vitesseREELLE_kmh": 90,
+   "vitesseANNONCEE_kmh": 90,
+   "compteurHUD": null,
+   "degats": 6
+  },
+  {
+   "place": [
+    125,
+    48
+   ],
+   "kind": "jetski",
+   "parcouru_6s_m": 73.2,
+   "vitesseREELLE_kmh": 90,
+   "vitesseANNONCEE_kmh": 90,
+   "compteurHUD": null,
+   "degats": 6
+  }
+ ],
+ "erreurs": []
+}

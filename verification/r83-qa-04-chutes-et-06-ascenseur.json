@@ -1,0 +1,441 @@
+{
+ "chutes": [
+  {
+   "nom": "muret",
+   "hauteurVoulue": 1,
+   "pas": 16,
+   "hp": 100,
+   "degats": 0,
+   "mort": false,
+   "msg": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+   "yFin": 0
+  },
+  {
+   "nom": "toit de garage",
+   "hauteurVoulue": 3,
+   "pas": 27,
+   "hp": 100,
+   "degats": 0,
+   "mort": false,
+   "msg": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+   "yFin": 0
+  },
+  {
+   "nom": "etage de la villa",
+   "hauteurVoulue": 5.3,
+   "pas": 36,
+   "hp": 100,
+   "degats": 0,
+   "mort": false,
+   "msg": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+   "yFin": 0
+  },
+  {
+   "nom": "sous le seuil",
+   "hauteurVoulue": 7,
+   "pas": 41,
+   "hp": 100,
+   "degats": 0,
+   "mort": false,
+   "msg": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+   "yFin": 0
+  },
+  {
+   "nom": "petit immeuble",
+   "hauteurVoulue": 8,
+   "pas": 44,
+   "hp": 95,
+   "degats": 5,
+   "mort": false,
+   "msg": "🤕 Aïe ! Chute de 8 m · −5 PV",
+   "yFin": 0
+  },
+  {
+   "nom": "immeuble",
+   "hauteurVoulue": 10,
+   "pas": 49,
+   "hp": 75,
+   "degats": 25,
+   "mort": false,
+   "msg": "🤕 Aïe ! Chute de 10 m · −25 PV",
+   "yFin": 0
+  },
+  {
+   "nom": "toit de La Zone",
+   "hauteurVoulue": 13.2,
+   "pas": 56,
+   "hp": 45,
+   "degats": 55,
+   "mort": false,
+   "msg": "🤕 Aïe ! Chute de 13 m · −55 PV",
+   "yFin": 0
+  },
+  {
+   "nom": "grande tour",
+   "hauteurVoulue": 15,
+   "pas": 60,
+   "hp": 28,
+   "degats": 72,
+   "mort": false,
+   "msg": "🤕 Aïe ! Chute de 15 m · −72 PV",
+   "yFin": 0
+  },
+  {
+   "nom": "juste sous la mort",
+   "hauteurVoulue": 17.9,
+   "pas": 66,
+   "hp": 0,
+   "degats": 100,
+   "mort": true,
+   "msg": "💀 Chute mortelle ! 18 m de haut…",
+   "yFin": 0
+  },
+  {
+   "nom": "la mort annoncee",
+   "hauteurVoulue": 18,
+   "pas": 66,
+   "hp": 100,
+   "degats": 0,
+   "mort": true,
+   "msg": "💀 Chute mortelle ! 18 m de haut…",
+   "yFin": 0
+  },
+  {
+   "nom": "tres haut",
+   "hauteurVoulue": 25,
+   "pas": 25,
+   "hp": 100,
+   "degats": 0,
+   "mort": false,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+   "yFin": 0.36
+  },
+  {
+   "nom": "gratte-ciel",
+   "hauteurVoulue": 45,
+   "pas": 120,
+   "hp": 0,
+   "degats": 100,
+   "mort": true,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+   "yFin": 0
+  }
+ ],
+ "toits": [
+  {
+   "x": 35.5,
+   "z": -27,
+   "y": 13,
+   "lift": true
+  },
+  {
+   "x": 35.5,
+   "z": -16,
+   "y": 13,
+   "lift": true
+  },
+  {
+   "x": 35.5,
+   "z": 16,
+   "y": 13,
+   "lift": true
+  },
+  {
+   "x": 35.5,
+   "z": 27,
+   "y": 13,
+   "lift": true
+  },
+  {
+   "x": -30,
+   "z": -35.5,
+   "y": 18,
+   "lift": true
+  },
+  {
+   "x": -8,
+   "z": -35.5,
+   "y": 14,
+   "lift": true
+  },
+  {
+   "x": 8,
+   "z": -35.5,
+   "y": 19,
+   "lift": true
+  },
+  {
+   "x": 30,
+   "z": -35.5,
+   "y": 15,
+   "lift": true
+  }
+ ],
+ "constantes": {
+  "seuil": 7.5,
+  "mort": 18
+ },
+ "ascenseurs_liste": [
+  {
+   "i": 0,
+   "x": 71,
+   "z": 166.4,
+   "bas": 0.6,
+   "haut": 5.35,
+   "course": 4.75,
+   "toit": false
+  },
+  {
+   "i": 1,
+   "x": 30.9,
+   "z": -23.7,
+   "bas": 0.35,
+   "haut": 13.2,
+   "course": 12.85,
+   "toit": true
+  },
+  {
+   "i": 2,
+   "x": 30.9,
+   "z": -12.7,
+   "bas": 0.35,
+   "haut": 13.2,
+   "course": 12.85,
+   "toit": true
+  },
+  {
+   "i": 3,
+   "x": 30.9,
+   "z": 19.3,
+   "bas": 0.35,
+   "haut": 13.2,
+   "course": 12.85,
+   "toit": true
+  },
+  {
+   "i": 4,
+   "x": 30.9,
+   "z": 30.3,
+   "bas": 0.35,
+   "haut": 13.2,
+   "course": 12.85,
+   "toit": true
+  },
+  {
+   "i": 5,
+   "x": -26.7,
+   "z": -30.9,
+   "bas": 0.35,
+   "haut": 18.2,
+   "course": 17.85,
+   "toit": true
+  },
+  {
+   "i": 6,
+   "x": -4.7,
+   "z": -40,
+   "bas": 0.35,
+   "haut": 14.2,
+   "course": 13.85,
+   "toit": true
+  },
+  {
+   "i": 7,
+   "x": 11.3,
+   "z": -30.9,
+   "bas": 0.35,
+   "haut": 19.2,
+   "course": 18.85,
+   "toit": true
+  },
+  {
+   "i": 8,
+   "x": 33.3,
+   "z": -40,
+   "bas": 0.35,
+   "haut": 15.2,
+   "course": 14.85,
+   "toit": true
+  },
+  {
+   "i": 9,
+   "x": 7.7,
+   "z": 30.9,
+   "bas": 0.35,
+   "haut": 16.2,
+   "course": 15.85,
+   "toit": true
+  },
+  {
+   "i": 10,
+   "x": 28.7,
+   "z": 30.9,
+   "bas": 0.35,
+   "haut": 12.2,
+   "course": 11.85,
+   "toit": true
+  },
+  {
+   "i": 11,
+   "x": 31.8,
+   "z": 261.9,
+   "bas": 0.35,
+   "haut": 16.2,
+   "course": 15.85,
+   "toit": true
+  },
+  {
+   "i": 12,
+   "x": 45.8,
+   "z": 261.9,
+   "bas": 0.35,
+   "haut": 22.2,
+   "course": 21.85,
+   "toit": true
+  },
+  {
+   "i": 13,
+   "x": 95.8,
+   "z": 261.9,
+   "bas": 0.35,
+   "haut": 16.2,
+   "course": 15.85,
+   "toit": true
+  },
+  {
+   "i": 14,
+   "x": 107.8,
+   "z": 261.9,
+   "bas": 0.35,
+   "haut": 22.2,
+   "course": 21.85,
+   "toit": true
+  },
+  {
+   "i": 15,
+   "x": 94.3,
+   "z": 287.4,
+   "bas": 0.35,
+   "haut": 12.2,
+   "course": 11.85,
+   "toit": true
+  },
+  {
+   "i": 16,
+   "x": 96.5,
+   "z": 310.3,
+   "bas": 0.35,
+   "haut": 20.2,
+   "course": 19.85,
+   "toit": true
+  },
+  {
+   "i": 17,
+   "x": 96.5,
+   "z": 322.3,
+   "bas": 0.35,
+   "haut": 12.2,
+   "course": 11.85,
+   "toit": true
+  },
+  {
+   "i": 18,
+   "x": 96.5,
+   "z": 325.7,
+   "bas": 0.35,
+   "haut": 20.2,
+   "course": 19.85,
+   "toit": true
+  },
+  {
+   "i": 19,
+   "x": -10.7,
+   "z": -139.9,
+   "bas": 0.35,
+   "haut": 17.2,
+   "course": 16.85,
+   "toit": true
+  },
+  {
+   "i": 20,
+   "x": 9.3,
+   "z": -152.1,
+   "bas": 0.35,
+   "haut": 22.2,
+   "course": 21.85,
+   "toit": true
+  },
+  {
+   "i": 21,
+   "x": 28.3,
+   "z": -139.9,
+   "bas": 0.35,
+   "haut": 14.2,
+   "course": 13.85,
+   "toit": true
+  }
+ ],
+ "ascenseurs_trajets": [
+  {
+   "i": 0,
+   "course": 4.75,
+   "attenteAvantDepart_s": -0.02,
+   "montee_s": 50.02,
+   "ecartPlancherMontee_m": 0,
+   "descente_s": 0,
+   "ecartPlancherDescente_m": 0.34,
+   "hpFin": 100,
+   "hpApresMontee": 100,
+   "mort": false,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+   "yJoueur": 0.36,
+   "yCabine": 0.6
+  },
+  {
+   "i": 1,
+   "course": 12.85,
+   "attenteAvantDepart_s": 1.22,
+   "montee_s": 4.77,
+   "ecartPlancherMontee_m": 0.008,
+   "descente_s": 4.77,
+   "ecartPlancherDescente_m": 0.008,
+   "hpFin": 100,
+   "hpApresMontee": 100,
+   "mort": false,
+   "msg": "🛗 Descente…",
+   "yJoueur": 0.46,
+   "yCabine": 0.37
+  },
+  {
+   "i": 2,
+   "course": 12.85,
+   "attenteAvantDepart_s": 1.22,
+   "montee_s": 4.77,
+   "ecartPlancherMontee_m": 0.008,
+   "descente_s": 4.77,
+   "ecartPlancherDescente_m": 0.008,
+   "hpFin": 100,
+   "hpApresMontee": 100,
+   "mort": false,
+   "msg": "🛗 Descente…",
+   "yJoueur": 0.46,
+   "yCabine": 0.37
+  },
+  {
+   "i": 3,
+   "course": 12.85,
+   "attenteAvantDepart_s": 1.22,
+   "montee_s": 4.77,
+   "ecartPlancherMontee_m": 0.008,
+   "descente_s": 4.77,
+   "ecartPlancherDescente_m": 0.008,
+   "hpFin": 100,
+   "hpApresMontee": 100,
+   "mort": false,
+   "msg": "🛗 Descente…",
+   "yJoueur": 0.46,
+   "yCabine": 0.37
+  }
+ ],
+ "erreurs": []
+}

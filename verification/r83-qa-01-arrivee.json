@@ -1,0 +1,56 @@
+{
+ "apresPasser": {
+  "running": true,
+  "cine": false,
+  "start": true,
+  "zone": null,
+  "act": "🏙️ Balade · 0 pts",
+  "hp": 100,
+  "x": 0,
+  "y": 0.1,
+  "z": 3.5
+ },
+ "apres10s": {
+  "act": "🏙️ Balade · 0 pts",
+  "msg": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+  "chat": "❄️ La neige arrive\nLea_star : /e dance\n🎤",
+  "hp": 100,
+  "x": 0,
+  "z": 3.5
+ },
+ "pastilles": {
+  "manette": [
+   {
+    "nom": "en pleine rue",
+    "act": "🏙️ Balade · 0 pts"
+   },
+   {
+    "nom": "devant une voiture garee",
+    "act": "🚗 △ : monter"
+   },
+   {
+    "nom": "devant une balancoire",
+    "act": "🎯 Boules : 0 pt"
+   },
+   {
+    "nom": "devant un banc",
+    "act": "🪑 △ : s'asseoir"
+   }
+  ],
+  "clavier": [
+   {
+    "nom": "devant une voiture garee",
+    "act": "🚗 E : monter"
+   },
+   {
+    "nom": "devant une balancoire",
+    "act": "🎯 Boules : 0 pt"
+   },
+   {
+    "nom": "devant un banc",
+    "act": "🪑 E : s'asseoir"
+   }
+  ]
+ },
+ "erreurs": []
+}

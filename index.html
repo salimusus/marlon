@@ -22172,7 +22172,8 @@ function organiserCoup(b) {
   if (!c) { botSay(b, ['je ne trouve aucune voiture 😬']); return; }
   c.x = bx + 13; c.z = bz + 2; c.h = Math.PI / 2; settleVehicle(c); c.g.rotation.y = c.h; vehicleSolid(c);
   coup.etat = 'attente'; coup.bot = b; coup.car = c; coup.t = simTime;
-  b.rdv = { x: c.x + 2, z: c.z + 2, y: 0.3, nom: 'la voiture de fuite', arrive: false, coup: true };
+  { const port = pointDePortiere(c, b.pos);   // meme regle : on attend du cote ou l'on tient debout
+    b.rdv = { x: port.x, z: port.z, y: 0.3, nom: 'la voiture de fuite', arrive: false, coup: true }; }
   b.wait = 0; b.target = null;
   setBeacon(c.x, c.z);
   botSay(b, [`ok ${myCfg.name} : je t'attends au volant devant la banque, moteur tournant 🚗💨`]);
@@ -22483,6 +22484,28 @@ function vehiculeDeService(v) {
 function voitureEmpruntable(v) {
   return !!v && !v.heli && !v.kart && v.kind !== 'jetski' && !vehiculeDeService(v);
 }
+// OU ATTEND-ON, A COTE D'UNE VOITURE ? Le rendez-vous etait pris EN AVEUGLE, a (c.x + 2,2 ;
+// c.z + 2,2) — toujours au nord-est de la caisse, quoi qu'il y ait la. Une voiture garee avec un
+// mur de ce cote-la donne alors un rendez-vous DERRIERE le mur : l'habitant marche jusqu'a
+// 2,17 m de son but, la porte de montee est a 1,80 m, il ne peut pas aller plus loin et il ne
+// monte JAMAIS. Il fait les cent pas jusqu'a la fin de son activite.
+// MESURE (banc, 1 800 images) : Lucas_2014 pietine en (-32,83 ; 11,05) devant un rendez-vous
+// pose en (-32,90 ; 13,22) ; entre les deux, un mur de 7 m de long et 3,80 m de haut en
+// (-35,50 ; 11,68). Jamais monte, `drive` toujours nul.
+// ON ESSAIE DONC LES HUIT COTES, du plus proche de l'habitant au plus loin, et on garde le
+// premier ou un pieton TIENT DEBOUT (`npcBlocked` ignore les vehicules : la caisse elle-meme
+// n'est pas un obstacle). Si aucun ne convient, on rend l'ancien point : rien n'est perdu.
+function pointDePortiere(c, dep) {
+  const R = 2.2, bons = [];
+  for (const [ux, uz] of [[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const k = (ux && uz) ? 1 : 1.25;    // sur un axe on s'ecarte un peu plus : la caisse est longue
+    const x = c.x + ux * R * k, z = c.z + uz * R * k;
+    if (npcBlocked(x, 0.3, z, 0.42)) continue;
+    bons.push({ x: +x.toFixed(2), z: +z.toFixed(2), d: dep ? Math.hypot(x - dep.x, z - dep.z) : 0 });
+  }
+  bons.sort((u, v) => u.d - v.d);
+  return bons[0] || { x: c.x + 2.2, z: c.z + 2.2 };
+}
 function botPrendVoiture(b, lieu, genre, libre) {
   if (b.drive) { botConduireVers(b, lieu); return; }
   let c = null, dmin = Infinity;
@@ -22497,7 +22520,8 @@ function botPrendVoiture(b, lieu, genre, libre) {
   // même règle qu'au volant : il vient se garer sur la chaussée la plus proche, pas dans un jardin
   const arr = arretVoiture((lieu.auto || lieu).x, (lieu.auto || lieu).z);
   const nomV = genre === 'moto' ? 'une moto' : genre === 'bike' ? 'un vélo' : 'une voiture';
-  b.rdv = { x: c.x + 2.2, z: c.z + 2.2, y: 0.3, nom: nomV, arrive: false, auto: { car: c, tx: arr.x, tz: arr.z, nom: lieu.nom } };
+  const port = pointDePortiere(c, b.pos);
+  b.rdv = { x: port.x, z: port.z, y: 0.3, nom: nomV, arrive: false, auto: { car: c, tx: arr.x, tz: arr.z, nom: lieu.nom } };
   b.wait = 0; b.target = null; b.rdvRoute = null; b.fight = null;
   if (libre) return;   // il l'a déjà dit avec ses mots à lui, et ça ne regarde pas le GPS du joueur
   botSay(b, [`ok ${myCfg.name}, je prends ${nomV} et je te retrouve ${auLieu(lieu.nom)} 🚗`]);

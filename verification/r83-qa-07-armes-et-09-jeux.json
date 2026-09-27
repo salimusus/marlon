@@ -1,0 +1,167 @@
+{
+ "armurerie": {
+  "x": 67,
+  "z": 28.8
+ },
+ "achat": {
+  "avant": [],
+  "apres": [
+   "arme:pistol"
+  ],
+  "arme": "pistol",
+  "err": null
+ },
+ "degainer": {
+  "sorti": {
+   "arme": "pistol",
+   "degainee": true,
+   "munitions": 8,
+   "act": "🔫 Pistolet 8/8"
+  },
+  "rangee": {
+   "degainee": false,
+   "act": "🔫 Pistolet 8/8"
+  }
+ },
+ "stand": {
+  "cible": {
+   "x": 62,
+   "z": 11.4
+  },
+  "tirs": 24,
+  "pointsGagnes": 0,
+  "etoiles": 0,
+  "agents": 0,
+  "hp": 100,
+  "chat": "Zoe_rider : direction Armurerie 🚲\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\n🚩 Les Requins Rouges s'en prennent à une boutique !\nLea_star : trop beau, le coucher de soleil sur la plage\nLucas_2014 : Joueur54, Tu veux faire une course de karts ?\n🌧️ La pluie arrive sur la ville\nNathan_pro : petit tour en moto !\n🎤"
+ },
+ "tirEnVille": {
+  "releves": [
+   {
+    "s": 0,
+    "etoiles": 1,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 100,
+    "prison": false
+   },
+   {
+    "s": 5,
+    "etoiles": 1,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 100,
+    "prison": false
+   },
+   {
+    "s": 10,
+    "etoiles": 1,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 100,
+    "prison": false
+   },
+   {
+    "s": 15,
+    "etoiles": 1,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 100,
+    "prison": false
+   },
+   {
+    "s": 20,
+    "etoiles": 1,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 90,
+    "prison": false
+   },
+   {
+    "s": 25,
+    "etoiles": 0,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 78,
+    "prison": true
+   },
+   {
+    "s": 30,
+    "etoiles": 0,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 88.79999999999939,
+    "prison": true
+   },
+   {
+    "s": 35,
+    "etoiles": 0,
+    "agents": 0,
+    "voitures": 2,
+    "hp": 100,
+    "prison": true
+   }
+  ],
+  "etoilesFin": 0,
+  "prison": true,
+  "hp": 100,
+  "chat": "ve sur la ville\nNathan_pro : petit tour en moto !\nMaxiBloc : qui vient jouer au foot ?\n🚔 La police recherche Joueur54 (tirer sur Karim_flash)\nKarim_flash : police !!\nLea_star : au secours !\nLea_star : police !!\nKarim_flash : au secours !\nKarim_flash : police !!\nSarah_bee : direction Plage !\nLea_star : au secours !\nInes_gg : qui vient aller à la plage ?\n🚔 Joueur54 a été arrêté et mis en prison\n🎤"
+ },
+ "jeux": {
+  "balancoire": {
+   "assis": true,
+   "amplitude": 0,
+   "descendu": true,
+   "rider": null,
+   "hp": 100
+  },
+  "carrousel": {
+   "dessus": true,
+   "descendu": true,
+   "rider": null,
+   "hp": 34,
+   "y": 0.12
+  },
+  "trampoline": {
+   "rebondJusqua_m": 8.48,
+   "hp": 57.600000000001174,
+   "mort": false
+  },
+  "cityStade": {
+   "ballonBouge": null,
+   "buts": 0,
+   "hp": 100
+  },
+  "piscine": {
+   "nage": true,
+   "hp": 100,
+   "y": -0.35,
+   "mort": false
+  },
+  "cinemaDuParc": {
+   "act": "🏙️ Balade · 5 pts",
+   "film": null
+  },
+  "casino": {
+   "ui": "casino",
+   "err": null,
+   "argent": 500
+  },
+  "ecole": {
+   "ui": null,
+   "err": null,
+   "question": null
+  },
+  "salleDeSport": {
+   "err": null,
+   "perf": 10
+  },
+  "chien": {
+   "err": null,
+   "pet": false,
+   "nom": null,
+   "distance": null
+  }
+ },
+ "erreurs": []
+}

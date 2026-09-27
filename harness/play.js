@@ -25162,3 +25162,64 @@ test('les parkings sans place marquee sont proteges par leur rectangle, et le pa
     + ` · ... MAIS ON NE DERANGE PAS CE QUI Y EST DEJA : les ${r.dejaLa} meubles deja dans un rectangle peuvent tous se decaler de 30 cm sans qu'un seul soit refuse pour « parking » (${r.refusDeja})`
     + ` · RANGEMENT INCHANGE : ${r.meubles} meubles, ${r.fautes} fautes (${JSON.stringify(r.parQuoi)}), ${r.deplaces} deplaces, ${r.restants} restant, ${r.ouverts} trottoir ouvert · ${r.atterrissages} meubles atterrissent dans un rectangle de parking, et ${r.venusDeDehors} y entre depuis l'exterieur (avant : 11 et 1)` };
 });
+// ============ ON RENVERSE CE VERS QUOI ON VA, PAS CE DONT ON S'ELOIGNE (round 83) ============
+// `ecraseAuSol` n'etait qu'un RECTANGLE pose autour de la caisse : il ne regardait pas le sens de
+// la marche. MESURE au Parking du centre : la voiture bridee a 2,40 m/s creuse jusqu'a Tom_le_ouf
+// et le TOUCHE sans le blesser (le seuil d'ecrasement est 3 m/s) ; l'enfant passe alors la marche
+// arriere, et Tom — a 2,02 m DEVANT un capot qui S'ELOIGNE — est renverse a 3,17 m/s, 100 -> 81 PV.
+// Le plafond de manoeuvre le neutralisait dans un parking ; le defaut de principe restait partout
+// ailleurs. Ce test se joue donc EN PLEINE RUE (0 ; 60), loin de tout rectangle de parking.
+// AVANT, dix essais dans la boite : NEUF renversements, dans les deux sens indifferemment (le
+// dixieme n'etait epargne que par le plancher des 3 m/s). LA REGLE : le pieton doit avoir encore
+// une demi-largeur de corps du cote ou l'on va — la demi-largeur que tout le jeu donne a un
+// personnage (`hw = 0.4` de npcBlocked), pas un nombre invente pour l'occasion.
+// LA CONTRE-EPREUVE EST LA MOITIE DU TEST : une voiture qui RECULE sur quelqu'un place DERRIERE
+// elle doit toujours le renverser, et un corps pile sous la caisse l'est dans les deux sens. Sans
+// cela, on n'aurait pas repare l'ecrasement, on l'aurait desarme.
+test('on renverse ce vers quoi on va, pas ce dont on s\'eloigne — et reculer sur quelqu\'un le renverse toujours', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 60, hour: 12, frais: true });
+    const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    const b = G.bots.find(x => x.av && x.av.group.visible);
+    const RX = 0, RZ = 60;
+    // le pieton a `lz` metres dans l'axe de la caisse (lz > 0 : devant le capot, cap h = 0 -> +z)
+    const essai = (nom, lz, vitesse) => {
+      car.x = RX; car.z = RZ; car.h = 0; car.dmg = 0;
+      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      b.hp = 100; b.ko = 0; b.hitT = 0; b.enVoiture = null; b.drive = null; b.prison = 0; b.fight = null;
+      b.pos.set(RX, 0.14, RZ + lz); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+      return { nom, lz, vitesse,
+        dansLaBoite: Math.abs(lz) <= (car.baseD || 4.4) / 2 + 0.5,
+        touches: G.ecraseAuSol(car, { speed: vitesse }), hp: +b.hp.toFixed(1) };
+    };
+    const out = {
+      horsParking: !G.sortDeStationnement(car, 12), seuil: G.ECRASE_DOS, baseD: car.baseD,
+      // CE QU'ON DOIT TOUJOURS RENVERSER
+      avantDevant: essai('devant 2,0 m, on AVANCE a 12 m/s', 2.0, 12),
+      arriereDerriere: essai('derriere 2,0 m, on RECULE a 12 m/s', -2.0, -12),
+      milieuAvant: essai('pile sous la caisse, on AVANCE', 0, 12),
+      milieuArriere: essai('pile sous la caisse, on RECULE', 0, -12),
+      bordDedans: essai('0,3 m derriere, on AVANCE (corps encore devant)', -0.3, 12),
+      // CE QU'ON NE DOIT PLUS RENVERSER
+      arriereDevant: essai('devant 2,0 m, on RECULE a 12 m/s', 2.0, -12),
+      mesureDuRound: essai('devant 2,02 m, on RECULE a 3,17 m/s', 2.02, -3.17),
+      avantDerriere: essai('derriere 2,0 m, on AVANCE a 12 m/s', -2.0, 12),
+      bordDehors: essai('0,5 m derriere, on AVANCE (corps entier derriere)', -0.5, 12),
+      // et le plancher des 3 m/s ne bouge pas
+      souLeSeuil: essai('devant 2,0 m, on AVANCE a 2,4 m/s', 2.0, 2.4),
+    };
+    return out;
+  });
+  const doit = [r.avantDevant, r.arriereDerriere, r.milieuAvant, r.milieuArriere, r.bordDedans];
+  const doitPas = [r.arriereDevant, r.mesureDuRound, r.avantDerriere, r.bordDehors, r.souLeSeuil];
+  const ok = r.horsParking && Math.abs(r.seuil - 0.4) < 1e-9
+    && doit.every(q => q.dansLaBoite && q.touches === 1 && q.hp < 70)
+    && doitPas.every(q => q.dansLaBoite && q.touches === 0 && q.hp === 100);
+  const l = q => `${q.nom} : ${q.touches} touche, ❤️ ${q.hp}`;
+  return { ok, detail: `\`ecraseAuSol\` n'etait qu'un RECTANGLE sans direction · AVANT, les dix memes essais, tous DANS la boite : NEUF renversements indifferemment devant ou derriere, en avancant ou en reculant — dont « devant 2,02 m, on RECULE a 3,17 m/s » a ❤️ 81, la mesure exacte du round ; seul « devant, on avance a 2,4 m/s » etait epargne, et par le plancher des 3 m/s, pas par la direction`
+    + ` · APRES, en pleine rue (0 ; 60), hors de tout rectangle de parking (${r.horsParking}), caisse de ${r.baseD} m, seuil = la demi-largeur d'un pieton (${r.seuil} m, le \`hw\` de npcBlocked)`
+    + ` · CE QU'ON RENVERSE TOUJOURS : ${doit.map(l).join(' · ')}`
+    + ` · CE QU'ON NE RENVERSE PLUS : ${doitPas.map(l).join(' · ')}`
+    + ` · la contre-epreuve tient : reculer sur quelqu'un place DERRIERE la caisse le renverse (${r.arriereDerriere.touches} touche, ❤️ ${r.arriereDerriere.hp}), et un corps pile sous la caisse l'est dans les deux sens — on n'a pas desarme l'ecrasement, on lui a donne un sens` };
+});

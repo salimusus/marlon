@@ -1,0 +1,65 @@
+{
+ "eaux": [
+  {
+   "nom": "mer",
+   "bassin": {
+    "x1": 122,
+    "x2": 206,
+    "z1": -75,
+    "z2": 138,
+    "top": 1.6,
+    "depth": null
+   },
+   "nage": true,
+   "hpMin": 0,
+   "mort": true,
+   "secondesAvantMort": 19.6,
+   "yLePlusBas": 0.02,
+   "hpFin": 100,
+   "requinDansLeau": true,
+   "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied · −7 🪙 — repars tranquille !",
+   "chat": "arrive sur la ville\n😵 Joueur65 a été mis KO par le requin\nL'infirmière : Bonjour, comment puis-je vous aider ?\n🚩 Les Requins Rouges attaquent Les Frelons Jaunes !\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\n🎤"
+  },
+  {
+   "nom": "plan d'eau",
+   "bassin": {
+    "x1": -57,
+    "x2": -45,
+    "z1": -20.5,
+    "z2": -11.5,
+    "top": 2,
+    "depth": null
+   },
+   "nage": true,
+   "hpMin": 100,
+   "mort": false,
+   "secondesAvantMort": null,
+   "yLePlusBas": 0.1,
+   "hpFin": 100,
+   "requinDansLeau": true,
+   "msg": "🔥 AU FEU ! La caserne envoie le camion",
+   "chat": "irection Bureau des missions 🚗\nTom_le_ouf : je prends la moto 🏍️\n🔥 Un incendie s'est déclaré en ville — les pompiers arrivent !\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\nEnzo_turbo : je prends le vélo 🚲\n🎤"
+  },
+  {
+   "nom": "piscine de la villa",
+   "bassin": {
+    "x1": 69,
+    "x2": 78.1,
+    "z1": 175,
+    "z2": 183,
+    "top": 1,
+    "depth": 1.35
+   },
+   "nage": true,
+   "hpMin": 100,
+   "mort": false,
+   "secondesAvantMort": null,
+   "yLePlusBas": -0.8,
+   "hpFin": 100,
+   "requinDansLeau": true,
+   "msg": "💧 Feu éteint ! Merci les pompiers 🚒",
+   "chat": "s la moto 🏍️\n🔥 Un incendie s'est déclaré en ville — les pompiers arrivent !\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\nEnzo_turbo : je prends le vélo 🚲\n🚩 Les Frelons Jaunes attaquent Les Requins Rouges !\n🎤"
+  }
+ ],
+ "erreurs": []
+}

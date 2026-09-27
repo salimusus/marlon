@@ -1,0 +1,67 @@
+{
+ "sortieDuReveil": {
+  "reveil": [
+   22,
+   0.36,
+   205.9
+  ],
+  "directions": [
+   {
+    "cap": 0,
+    "parcouru_3s": 1.24
+   },
+   {
+    "cap": 45,
+    "parcouru_3s": 11.28
+   },
+   {
+    "cap": 90,
+    "parcouru_3s": 1.9
+   },
+   {
+    "cap": 135,
+    "parcouru_3s": 15.57
+   },
+   {
+    "cap": 180,
+    "parcouru_3s": 13.44
+   },
+   {
+    "cap": 225,
+    "parcouru_3s": 14.96
+   },
+   {
+    "cap": 270,
+    "parcouru_3s": 2.2
+   },
+   {
+    "cap": 315,
+    "parcouru_3s": 4.65
+   }
+  ],
+  "pire": 1.24,
+  "meilleur": 15.57
+ },
+ "mortAuVolant": {
+  "auVolant": true,
+  "secondesAvantDebout": 1.58,
+  "encoreAuVolant": false,
+  "hp": 100,
+  "x": 22,
+  "z": 205.9,
+  "msg": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !"
+ },
+ "eau": {
+  "hpMin": 0,
+  "mort": true,
+  "nage": false,
+  "hp": 100,
+  "msg": "🔥 AU FEU ! La caserne envoie le camion"
+ },
+ "repos": {
+  "hpMin": 100,
+  "hp": 100,
+  "mort": false
+ },
+ "erreurs": []
+}

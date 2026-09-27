@@ -12153,6 +12153,15 @@ function sortDeStationnement(c, v) {
   if (!c) return false;
   const spd = Math.abs(v != null ? v : (c.speed != null ? c.speed : (c.v || 0)));
   if (spd > SORTIE_V) return false;
+  // ON MANOEUVRE SUR UNE DALLE, ON NE ROULE PAS DANS UNE RUE. Le rectangle d'un parking DEBORDE
+  // souvent sur le bitume : « Parking du centre » couvre z 0,5 a 16,5 et l'avenue du centre
+  // (`road(0, 0, 46, 9)`, z -4,5 a 4,5) le traverse de part en part. Sans ce filtre, toute la
+  // circulation de cette avenue etait « en train de sortir d'une place » des qu'elle ralentissait
+  // sous 4 m/s — et le test 450 l'a vu : une voiture immobile 11,5 s en (-2 ; 5), un point qui est
+  // SUR la chaussee et DANS le rectangle. Le vehicule doit donc etre hors bitume. Cela n'ote rien
+  // au sujet : les quatre voitures du parking sont a z = 10, sur la dalle, et c'est la position du
+  // PIETON qui decide du reste (Tom est sur le trottoir, pas sur la chaussee).
+  if (surLaChaussee(c.x, c.z, 0)) return false;
   for (const q of (city.parkings || []))
     if (Math.abs(c.x - q.x) <= q.w / 2 && Math.abs(c.z - q.z) <= q.d / 2) return true;
   return false;

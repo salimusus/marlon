@@ -1,0 +1,368 @@
+{
+ "apparition": {
+  "point": [
+   0,
+   3
+  ],
+  "surLaChaussee": true,
+  "trottoirLePlusProche": 8
+ },
+ "vitesses": {
+  "marche": {
+   "depart": [
+    -12,
+    60
+   ],
+   "parcouru_3s": 18.15,
+   "vitessePointe": 6.2,
+   "souffle": 100
+  },
+  "course": {
+   "depart": [
+    -12,
+    60
+   ],
+   "parcouru_3s": 20.59,
+   "vitessePointe": 9.61,
+   "souffle": 54
+  },
+  "marche2": {
+   "depart": [
+    0,
+    8
+   ],
+   "parcouru_3s": 18.15,
+   "vitessePointe": 6.2,
+   "souffle": 100
+  },
+  "course2": {
+   "depart": [
+    0,
+    8
+   ],
+   "parcouru_3s": 27.69,
+   "vitessePointe": 9.61,
+   "souffle": 54
+  }
+ },
+ "camEscalier": {
+  "seuilConfort": 4.6,
+  "points": [
+   {
+    "nom": "trottoir devant l'immeuble",
+    "y": 0.06,
+    "voulu": 7,
+    "cameraVersTete": [
+     6.85,
+     4.98,
+     3.37,
+     4.17
+    ],
+    "pire": 3.37,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "palier du rez",
+    "y": 0.2,
+    "voulu": 7,
+    "cameraVersTete": [
+     7.02,
+     1.96,
+     0.47,
+     1.81
+    ],
+    "pire": 0.47,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "1re volee",
+    "y": 1.48,
+    "voulu": 7,
+    "cameraVersTete": [
+     0.96,
+     0.71,
+     1.92,
+     0.75
+    ],
+    "pire": 0.71,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "palier de demi-tour",
+    "y": 1.8,
+    "voulu": 7,
+    "cameraVersTete": [
+     1.51,
+     1.14,
+     1.96,
+     0.75
+    ],
+    "pire": 0.75,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "2e volee",
+    "y": 3.08,
+    "voulu": 7,
+    "cameraVersTete": [
+     1.44,
+     5.35,
+     0.92,
+     0.71
+    ],
+    "pire": 0.71,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "palier du 1er etage",
+    "y": 3.4,
+    "voulu": 7,
+    "cameraVersTete": [
+     1.72,
+     0.8,
+     1.86,
+     1.23
+    ],
+    "pire": 0.8,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "coursive du 1er",
+    "y": 3.4,
+    "voulu": 7,
+    "cameraVersTete": [
+     6.52,
+     0.64,
+     0.48,
+     0.64
+    ],
+    "pire": 0.48,
+    "sousLeSeuilDeConfort": true
+   },
+   {
+    "nom": "en pleine rue (contre-epreuve)",
+    "y": 0.73,
+    "voulu": 4.84,
+    "cameraVersTete": [
+     4.68,
+     3.55,
+     4.88,
+     4.91
+    ],
+    "pire": 3.55,
+    "sousLeSeuilDeConfort": true
+   }
+  ]
+ },
+ "deuxiemeEtage": {
+  "suite": [
+   {
+    "cible": [
+     -158.4,
+     14.2
+    ],
+    "x": -158.4,
+    "y": 0.2,
+    "z": 14.93,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -159.7,
+     13
+    ],
+    "x": -159.25,
+    "y": 0.2,
+    "z": 13.57,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -159.7,
+     10.2
+    ],
+    "x": -159.63,
+    "y": 1.8,
+    "z": 10.94,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -157.1,
+     10.2
+    ],
+    "x": -159.09,
+    "y": 1.8,
+    "z": 10.2,
+    "bloque": 151
+   },
+   {
+    "cible": [
+     -157.1,
+     13.6
+    ],
+    "x": -157.83,
+    "y": 0.2,
+    "z": 13.66,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -159.7,
+     13
+    ],
+    "x": -159.04,
+    "y": 0.47,
+    "z": 13.43,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -159.7,
+     10.2
+    ],
+    "x": -159.77,
+    "y": 1.8,
+    "z": 10.92,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -157.1,
+     10.2
+    ],
+    "x": -159.09,
+    "y": 1.8,
+    "z": 10.2,
+    "bloque": 151
+   },
+   {
+    "cible": [
+     -157.1,
+     13.6
+    ],
+    "x": -157.83,
+    "y": 0.2,
+    "z": 13.66,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -166,
+     15.6
+    ],
+    "x": -165.21,
+    "y": 0.06,
+    "z": 15.58,
+    "bloque": 0
+   }
+  ],
+  "yMax": 1.8,
+  "fin": {
+   "x": -165.21,
+   "y": 0.06,
+   "z": 15.58,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 26
+  }
+ },
+ "coffres": {
+  "suite": [
+   {
+    "cible": [
+     -50,
+     70
+    ],
+    "x": -49.12,
+    "y": 0.36,
+    "z": 70,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -58,
+     68
+    ],
+    "x": -57.18,
+    "y": 0.36,
+    "z": 68.19,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -58,
+     64.2
+    ],
+    "x": -57.94,
+    "y": 1.28,
+    "z": 65.1,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -45,
+     64.2
+    ],
+    "x": -45.89,
+    "y": 5.1,
+    "z": 64.18,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -52,
+     64.2
+    ],
+    "x": -51.12,
+    "y": 3.44,
+    "z": 64.2,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -58,
+     64.2
+    ],
+    "x": -57.12,
+    "y": 1.55,
+    "z": 64.2,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -45,
+     64.2
+    ],
+    "x": -45.9,
+    "y": 5.1,
+    "z": 64.2,
+    "bloque": 0
+   },
+   {
+    "cible": [
+     -55,
+     64.2
+    ],
+    "x": -54.12,
+    "y": 2.5,
+    "z": 64.2,
+    "bloque": 0
+   }
+  ],
+  "yMax": 5.1,
+  "fin": {
+   "x": -54.12,
+   "y": 2.5,
+   "z": 64.2,
+   "hp": 100,
+   "sol": false,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 26
+  }
+ },
+ "erreurs": []
+}

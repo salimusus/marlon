@@ -1,0 +1,220 @@
+{
+ "immeuble": {
+  "depart": [
+   -158.4,
+   0.4,
+   18
+  ],
+  "etapes": [
+   {
+    "cible": [
+     -158.4,
+     15
+    ],
+    "x": -158.4,
+    "y": 0.06,
+    "z": 15.91,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -159.7,
+     13
+    ],
+    "x": -159.29,
+    "y": 0.2,
+    "z": 13.8,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -159.7,
+     9.5
+    ],
+    "x": -159.64,
+    "y": 1.8,
+    "z": 10.48,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -157.1,
+     9.5
+    ],
+    "x": -158,
+    "y": 1.8,
+    "z": 9.5,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -157.1,
+     14.5
+    ],
+    "x": -157.16,
+    "y": 3.4,
+    "z": 13.52,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -159.7,
+     9.5
+    ],
+    "x": -158.77,
+    "y": 1.8,
+    "z": 9.41,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -157.1,
+     14.5
+    ],
+    "x": -158.04,
+    "y": 0.2,
+    "z": 14.27,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -165,
+     15.5
+    ],
+    "x": -164.07,
+    "y": 0.06,
+    "z": 15.49,
+    "bloque": 0,
+    "arrive": true
+   }
+  ],
+  "fin": {
+   "x": -164.45,
+   "y": 0.06,
+   "z": 15.49,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25
+  }
+ },
+ "banque": {
+  "depart": [
+   -38,
+   0.5,
+   70
+  ],
+  "etapes": [
+   {
+    "cible": [
+     -50,
+     70
+    ],
+    "x": -49.02,
+    "y": 0.36,
+    "z": 70,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -58,
+     70
+    ],
+    "x": -57.05,
+    "y": 0.36,
+    "z": 70,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -58,
+     64.2
+    ],
+    "x": -57.94,
+    "y": 1.28,
+    "z": 65.16,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -44,
+     64.2
+    ],
+    "x": -44.95,
+    "y": 5.1,
+    "z": 64.19,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -58,
+     64.2
+    ],
+    "x": -57.05,
+    "y": 1.61,
+    "z": 64.2,
+    "bloque": 0,
+    "arrive": true
+   },
+   {
+    "cible": [
+     -44,
+     64.2
+    ],
+    "x": -44.9,
+    "y": 5.1,
+    "z": 64.2,
+    "bloque": 0,
+    "arrive": true
+   }
+  ],
+  "fin": {
+   "x": -44.53,
+   "y": 5.1,
+   "z": 64.2,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25
+  }
+ },
+ "promenade": {
+  "images": 28000,
+  "etapes": 21,
+  "etapesNonAtteintes": 20,
+  "imagesAuDessusDuPasAutorise": 2,
+  "pireEcart_m": 0.454,
+  "imagesSousLeSol": 0,
+  "hpMin": 100,
+  "morts": 0,
+  "fin": {
+   "x": -32.76,
+   "y": 0.3,
+   "z": -12.26,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25
+  }
+ },
+ "course": {
+  "marche_m_s": 0.5,
+  "course_m_s": 0.5,
+  "souffleApres2s": 69
+ },
+ "erreurs": []
+}

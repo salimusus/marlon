@@ -1,0 +1,164 @@
+{
+ "obstacle": {
+  "autour": [
+   {
+    "x": 43.9,
+    "z": -5.3,
+    "y": 1.2,
+    "w": 0.36,
+    "h": 2.4,
+    "d": 0.36,
+    "ai": false,
+    "rambarde": false
+   },
+   {
+    "x": 38.5,
+    "z": -6,
+    "y": 1.2,
+    "w": 0.38,
+    "h": 0.42,
+    "d": 0.26,
+    "ai": false,
+    "rambarde": false
+   },
+   {
+    "x": 38.5,
+    "z": -4.9,
+    "y": 0.07,
+    "w": 15.2,
+    "h": 0.14,
+    "d": 1.8,
+    "ai": false,
+    "rambarde": false
+   }
+  ],
+  "surLaChaussee": false,
+  "routeIci": [
+   {
+    "x": 54.5,
+    "z": 0,
+    "w": 51,
+    "d": 8
+   },
+   {
+    "x": 52,
+    "z": -9,
+    "w": 11,
+    "d": 72
+   }
+  ]
+ },
+ "baladeDirigee": {
+  "depart": [
+   43,
+   -13
+  ],
+  "arrivee": [
+   55.2,
+   66.7
+  ],
+  "volDOiseau_m": 80.6,
+  "vmax_kmh": 0,
+  "degatsMax": 0,
+  "imagesImmobiles": 3600,
+  "sur3600": 3600,
+  "releve": [
+   {
+    "s": 0,
+    "x": 43,
+    "z": -13,
+    "v_kmh": 0,
+    "degats": 0,
+    "etoiles": 0
+   },
+   {
+    "s": 10,
+    "x": 45.9,
+    "z": -2,
+    "v_kmh": 0,
+    "degats": 0,
+    "etoiles": 0
+   },
+   {
+    "s": 20,
+    "x": 49.2,
+    "z": 33,
+    "v_kmh": 0,
+    "degats": 0,
+    "etoiles": 0
+   },
+   {
+    "s": 30,
+    "x": 52.4,
+    "z": 64.3,
+    "v_kmh": 0,
+    "degats": 0,
+    "etoiles": 0
+   },
+   {
+    "s": 40,
+    "x": 55.2,
+    "z": 66.7,
+    "v_kmh": 0,
+    "degats": 0,
+    "etoiles": 0
+   },
+   {
+    "s": 50,
+    "x": 55.2,
+    "z": 66.7,
+    "v_kmh": 0,
+    "degats": 0,
+    "etoiles": 0
+   }
+  ],
+  "etoiles": 0,
+  "hp": 100
+ },
+ "bulldozer": {
+  "place": [
+   18.2,
+   121.5
+  ],
+  "spec": {
+   "max": 10,
+   "accel": 8
+  },
+  "avant15s_m": 1.7,
+  "apresMarcheArriere_m": 1.7,
+  "vmax_kmh": 5,
+  "voisins": [
+   {
+    "d": 2.06,
+    "w": 0.4,
+    "h": 4.6
+   },
+   {
+    "d": 3.59,
+    "w": 1.2,
+    "h": 1.4
+   },
+   {
+    "d": 4.24,
+    "w": 1.2,
+    "h": 1.4
+   },
+   {
+    "d": 4.73,
+    "w": 0.2,
+    "h": 1.7
+   },
+   {
+    "d": 5.32,
+    "w": 1.2,
+    "h": 1.4
+   },
+   {
+    "d": 6.6,
+    "w": 1.2,
+    "h": 1.4
+   }
+  ]
+ },
+ "erreurs": []
+}

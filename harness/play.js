@@ -24807,3 +24807,349 @@ test('une visee ecrasee par un plafond bas se releve toute seule des que la plac
   const l = s => `${s.nom} : visee ${s.pitch} rad (plafond autorise ${s.pmax}), perche ${s.perche} m`;
   return { ok, detail: `« un plafond bas n'interdit que de MONTER » ecrasait \`cam.pitch\` et RIEN ne le relevait : seul le stick droit de l'enfant pouvait le faire · AVANT, 150 images sur place, visee de depart 0,32 rad : cabane de l'arbre 0,04 rad, salle de classe 0,04, petit appartement 0,04, petite boutique 0,134, et sous l'auvent du depot 0,178 rad — puis ENCORE 0,178 rad cinq secondes APRES en etre sorti, le plafond autorise revenu a 1,25 rad · dans une piece la cause est un ORDRE (camPerche passe avant interieurTick, donc a l'image de l'entree le plafond est encore la) ; sous un auvent il n'y a aucune piece a declarer et inverser l'ordre ne change RIEN (mesure : 0,178 rad dans les deux sens) — c'est pourquoi la bride se REND · APRES : ${l(r.cabane1)} a la premiere image dans la cabane, puis la visee remonte a ${r.cabane.pitch} rad en ${r.cabaneR.images} images (${(r.cabaneR.images / 60).toFixed(2)} s) sans jamais bouger de plus de ${r.cabaneR.pire} rad d'une image a l'autre (${(r.cabaneR.pire * 180 / Math.PI).toFixed(2)}° par image, contre 2,1° pour le replacement automatique que le jeu tient deja pour « en douceur »), perche ${r.cabane.perche} m · ${l(r.sortie)} · ${l(r.auvent)} — la bride mord toujours quand il FAUT · ${l(r.apresAuvent)} apres ${r.auventR.images} images · et l'enfant garde la main : un coup de stick vers le haut sous l'auvent tient (${r.stick.pitch} rad) et tient encore en sortant (${r.stickSorti.pitch} rad), la camera ne redescend pas toute seule · vitesse de retour ${r.vitesse} rad/s (${(r.vitesse * 180 / Math.PI).toFixed(0)} °/s) · lieux temoins : ${r.temoins.map(l).join(' · ')}` };
 });
+// ============ UNE VOITURE QUI SORT D'UNE PLACE N'ECRASE PLUS LE PASSANT (round 83, item 1) ============
+// LE DEFAUT, MESURE. Au Parking du centre, quatre voitures sont garees cap au nord (h = π) et
+// doivent franchir un pan de trottoir pour rejoindre la rue. Le placement des habitants est
+// DETERMINISTE (`pans[(k * 7 + 3) % pans.length]`, un pan par habitant) : Tom_le_ouf se tient au
+// CENTRE du pan (-13 ; 5,40), pile sur leur passage. ET C'EST L'ENFANT QUI EST AU VOLANT
+// (drive.car === c, le test appuie sur R2) — pas un bot.
+//   voiture 2 (depart -14,6 ; 10) : impact a l'image 23, 8,78 m/s (31,6 km/h), Tom 100 -> 68,7 PV,
+//     +4 % de tole, projete en (-12,52 ; 3,30) SUR LA CHAUSSEE, une ambulance part ;
+//   voiture 3 (depart -11,3 ; 10) : elle le REECRASE alors qu'il gisait la, 68,7 -> 49,9 PV, +4 %.
+// `police.wanted` reste a 0 non par oubli mais par CLEMENCE : l'infraction EST levee
+// (`infraction('ecraser Tom_le_ouf', 1, 2)`) et la clemence des delits moyens sans temoin a moins
+// de 28 m l'ecrit « avertissement 1/4 » puis « 2/4 » — la ville le voit et le dit.
+// DEUX CAUSES : (1) le couloir ou l'on FREINE (baseW/2 + 0,20 = 1,40 m) etait plus etroit que la
+// boite ou l'on ECRASE (baseW/2 + 0,50 = 1,70 m), et Tom est a 1,60 m de l'axe : sur les
+// 24 images qui menent au choc, `pietonDevant` a repondu « non » 24 fois ; (2) le trottoir n'est
+// pas la chaussee, et le correctif du round 71 — qu'on ne defait pas — ne freine que pour qui a
+// vraiment un pied sur le bitume.
+test('une voiture qui sort d\'une place de parking ne peut plus ecraser le passant qui se tient sur son passage, et l\'enfant est prevenu AVANT', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P, police = G.police;
+    __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+    const R = {};
+    // ---- 1. LA GEOMETRIE : on ne freine pas dans un couloir plus etroit que celui ou l'on ecrase
+    const autos = G.city.cars.filter(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14);
+    const tom = G.bots.find(b => b.name === 'Tom_le_ouf');
+    R.depart = { autos: autos.map(c => [+c.x.toFixed(1), +c.z.toFixed(1), +c.h.toFixed(2)]),
+      tom: [+tom.pos.x.toFixed(2), +tom.pos.z.toFixed(2)], surLaChaussee: G.surLaChaussee(tom.pos.x, tom.pos.z, 0) };
+    const cg = autos[1], demiE = (cg.baseW || 2.4) / 2 + 0.5;
+    const essaiLat = (dlat, dev) => {   // un passant a `dlat` m de l'axe, `dev` m devant le capot
+      const x0 = tom.pos.x, z0 = tom.pos.z;
+      tom.pos.set(cg.x + dlat, 0.14, cg.z - dev); tom.av.group.position.copy(tom.pos);
+      const vu = G.pietonDevant(cg, 2), creneau = G.sortDeStationnement(cg, 2);
+      tom.pos.set(x0, 0.14, z0); tom.av.group.position.copy(tom.pos);
+      return { vu, creneau };
+    };
+    // ON FREINE UN PEU PLUS LARGE QU'ON N'ECRASE, JAMAIS L'INVERSE : la boite d'ecrasement fait
+    // 1,70 m de demi-largeur, le couloir de freinage 1,80 m. Vu a 1,60 m et a 1,75 m (dans la
+    // boite), plus vu a 2,00 m (hors de tout).
+    R.couloir = { demiEcrasement: +demiE.toFixed(2),
+      a1m60: essaiLat(1.6, 4).vu, a1m75: essaiLat(1.75, 4).vu, a2m00: essaiLat(2, 4).vu,
+      dansLeCreneau: essaiLat(1.6, 4).creneau, SORTIE_V: G.SORTIE_V, SORTIE_PAS: G.SORTIE_PAS };
+    // ---- 2. LE SCENARIO MESURE, L'ENFANT AU VOLANT
+    G.clearWanted('essai'); police.crimeLevel = 0; police.avert = 0; police.avertT = -999;
+    for (const a of G.city.ambulances) { a.etat = null; a.victime = null; }
+    const journal = [];
+    for (const c of autos) {
+      const hp0 = tom.hp == null ? 100 : tom.hp, dmg0 = c.dmg || 0;
+      // TOM EST-IL DANS LA BOITE D'ECRASEMENT DE CETTE VOITURE-LA, au moment ou elle demarre ?
+      // C'est la seule question qui decide si elle DOIT etre bridee. Et la reponse change d'une
+      // voiture a l'autre : la 2e, bridee a 2,40 m/s, POUSSE Tom de 46 cm sur le cote (sans le
+      // blesser — `ecraseAuSol` ne renverse personne sous 3 m/s), et la 3e ne l'a plus dans son
+      // couloir. Une consigne « les deux voitures du milieu sont bridees » serait donc fausse.
+      const fx0 = Math.sin(c.h), fz0 = Math.cos(c.h);
+      const dx0 = tom.pos.x - c.x, dz0 = tom.pos.z - c.z;
+      const travers = Math.abs(-dx0 * fz0 + dz0 * fx0);
+      const surSonPassage = travers <= (c.baseW || 2.4) / 2 + 0.5;
+      P.pos.set(c.x, c.y + 0.4, c.z); G.enterCar(c);
+      let vMax = 0, bride = 0, avertis = null, auVolant = false;
+      G.keys.add('KeyZ');
+      for (let i = 0; i < 240 && c.z > 6; i++) {
+        G.step(1 / 60, true);
+        auVolant = auVolant || G.drive.car === c;
+        vMax = Math.max(vMax, Math.abs(G.drive.speed || 0));
+        if (G.sortDeStationnement(c, G.drive.speed) && G.pietonDevant(c, G.drive.speed)) bride++;
+        if (!avertis) { const t = (document.getElementById('msg') || {}).textContent || '';
+          if (/Attention ! Quelqu/.test(t)) avertis = t.trim(); }
+      }
+      G.keys.delete('KeyZ');
+      // ON FREINE, ON NE FAIT PAS MARCHE ARRIERE JUSQU'AU FOND DU PARKING : `KeyS` est aussi la
+      // marche arriere, et une voiture bridee a 2,40 m/s repartait en arriere sur 7 m pour aller
+      // defoncer la terrasse du snack (mesure : +23,5 % de tole, qui n'ont rien a voir avec Tom).
+      G.keys.add('KeyS'); for (let i = 0; i < 90 && (G.drive.speed || 0) > 0.2; i++) G.step(1 / 60, true); G.keys.delete('KeyS');
+      for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+      const amb = G.city.ambulances.find(a => a.victime === tom);
+      journal.push({ depart: +c.x.toFixed(1), auVolant, travers: +travers.toFixed(2), surSonPassage,
+        tomAvant: [+dx0.toFixed(2), +dz0.toFixed(2)], hp: +(tom.hp == null ? 100 : tom.hp).toFixed(1), hp0: +hp0.toFixed(1),
+        tole: +((c.dmg || 0) - dmg0).toFixed(2), vMax: +vMax.toFixed(2), bride, avertis, zFin: +c.z.toFixed(2),
+        ambulance: amb ? amb.etat : null });
+      G.exitCar(); for (let i = 0; i < 30; i++) G.step(1 / 60, true);
+    }
+    R.journal = journal;
+    R.tomFinal = { hp: +(tom.hp == null ? 100 : tom.hp).toFixed(1), pos: [+tom.pos.x.toFixed(2), +tom.pos.z.toFixed(2)] };
+    R.wanted = police.wanted; R.avert = police.avert || 0;
+    // ---- 3. UN CORPS A TERRE NE SE FAIT PAS ROULER UNE SECONDE FOIS
+    // on le met a terre sur la chaussee, exactement ou la 2e voiture le projetait, puis une
+    // AUTRE voiture lui passe dessus a 12 m/s (le seuil d'ecrasement est 3 m/s).
+    const victime = tom;
+    victime.hp = 68.7; victime.ko = G.simTime + 40; victime.hitT = 0; victime.wait = 3;
+    victime.pos.set(-12.52, 0.14, 3.3); victime.av.group.position.copy(victime.pos);
+    const roule = G.city.cars.find(c => c.parts && !c.rider && !c.kart && !autos.includes(c)) || autos[0];
+    roule.x = -12.52; roule.z = 3.3; roule.h = 0; roule.g.position.set(roule.x, roule.y || 0, roule.z);
+    const hpAvantRoue = victime.hp;
+    const touches = G.ecraseAuSol(roule, { speed: 12 });
+    R.aTerre = { hpAvant: +hpAvantRoue.toFixed(1), hpApres: +victime.hp.toFixed(1), touches,
+      surLaChaussee: G.surLaChaussee(victime.pos.x, victime.pos.z, 0),
+      // ... mais la voiture, elle, le VOIT et freine pour lui
+      vuParLeFreinage: (() => { roule.x = -12.52; roule.z = 8.3; roule.h = Math.PI;
+        roule.g.position.set(roule.x, roule.y || 0, roule.z); return G.pietonDevant(roule, 3); })() };
+    // ... et un passant DEBOUT est toujours renverse : le mecanisme n'est pas desarme
+    const temoin = G.bots.find(b => b !== victime && b.av && b.av.group.visible);
+    temoin.hp = 100; temoin.ko = 0; temoin.hitT = 0; temoin.enVoiture = null; temoin.drive = null;
+    temoin.pos.set(-12.52, 0.14, 3.3); temoin.av.group.position.copy(temoin.pos);
+    roule.x = -12.52; roule.z = 3.3; roule.h = 0; roule.g.position.set(roule.x, roule.y || 0, roule.z);
+    R.debout = { avant: 100, touches: G.ecraseAuSol(roule, { speed: 12 }), apres: +temoin.hp.toFixed(1) };
+    return R;
+  });
+  // ---- 4. LE COUT EN FLUIDITE : on ne reveille pas les arrets du round 71
+  // (dans le MEME monde : une reconstruction coute une minute de banc, et la fluidite de la
+  //  circulation ne doit rien au scenario du parking.)
+  const fl = await p.evaluate(() => {
+    const G = __G;
+    const flotte = (G.city.aiCars || []).filter(c => c.spd);
+    G.bots.forEach(b => { b.ko = 0; b.hp = 100; b.hitT = 0; b.rdv = null; b.drive = null; b.enVoiture = null; b.fight = null; });
+    // LES DOUZE HABITANTS COLLES AUX VOIES : douze passants disperses dans toute la ville ne
+    // croisent jamais une voiture, et la mesure ne dirait rien. On les pose sur le pan de
+    // trottoir le plus proche de chaque vehicule de la circulation.
+    const pans = (G.city.trottoirs || []).filter(t => Math.min(t.w, t.d) >= 1.6);
+    G.bots.forEach((b, k) => { const c = flotte[k % Math.max(1, flotte.length)]; if (!c) return;
+      let best = null, bd = 1e9;
+      for (const t of pans) { const d = Math.hypot(t.x - c.x, t.z - c.z); if (d < bd) { bd = d; best = t; } }
+      if (!best) return;
+      b.pos.set(best.x, best.o ? best.o.y + best.o.h / 2 : 0.3, best.z);
+      b.av.group.position.copy(b.pos); b.av.group.visible = true; b.target = null; b.tgt = null; b.wait = 0.2; b.ko = 0; });
+    // ON PASSE PAR LA VRAIE BOUCLE (`G.step`) : c'est elle qui fait avancer l'horloge, et sans
+    // horloge qui avance `flotteMaj` garde un cache perime, tous les compteurs de la conduite se
+    // figent et la circulation tombe a 2 m/s pour une raison qui n'a rien a voir avec le sujet.
+    // Les habitants, eux, avancent dans la boucle de RENDU : on les pousse a la main, un pas par
+    // image. ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS.
+    const dt = 1 / 30, pas = 900;
+    const M = flotte.map(() => ({ d: 0, arret: 0, pieton: 0 }));
+    let metresBots = 0;
+    for (let i = 0; i < pas; i++) {
+      for (const b of G.bots) { const x0 = b.pos.x, z0 = b.pos.z; G.updateBot(b, dt); metresBots += Math.hypot(b.pos.x - x0, b.pos.z - z0); }
+      const av = flotte.map(c => [c.x, c.z]);
+      G.step(dt, true);
+      for (let j = 0; j < flotte.length; j++) { const c = flotte[j];
+        const d = Math.hypot(c.x - av[j][0], c.z - av[j][1]);
+        if (d <= 4) M[j].d += d;
+        if (Math.abs(c.speed || 0) < 0.5) M[j].arret += dt;
+        if (c.raison === 'pieton') M[j].pieton += dt; }
+    }
+    const T = pas * dt, som = k => M.reduce((a, m) => a + m[k], 0);
+    return { pas, secondes: +T.toFixed(1), vehicules: M.length, metresBots: +metresBots.toFixed(0),
+      vitesse: +(som('d') / (M.length * T)).toFixed(3), arret: +som('arret').toFixed(1),
+      arretPourCent: +(som('arret') / (M.length * T) * 100).toFixed(1), pieton: +som('pieton').toFixed(1) };
+  });
+  const menacantes = r.journal.filter(q => q.surSonPassage), degagees = r.journal.filter(q => !q.surSonPassage);
+  const ok = r.depart.autos.length === 4 && !r.depart.surLaChaussee
+    && Math.abs(r.couloir.demiEcrasement - 1.7) < 0.01
+    && r.couloir.a1m60 && r.couloir.a1m75 && !r.couloir.a2m00 && r.couloir.dansLeCreneau
+    && r.journal.every(q => q.auVolant)                                  // c'est bien l'enfant qui conduit
+    && r.tomFinal.hp === 100 && r.journal.every(q => q.tole === 0 && q.ambulance === null)
+    && menacantes.length >= 1 && menacantes.every(q => q.bride > 20 && /Attention/.test(q.avertis || '') && q.vMax <= r.couloir.SORTIE_PAS + 0.05)
+    && degagees.length >= 1 && degagees.every(q => q.bride === 0 && q.vMax > 8 && !q.avertis)
+    && r.aTerre.hpApres === r.aTerre.hpAvant && r.aTerre.touches === 0 && r.aTerre.vuParLeFreinage
+    && r.debout.touches >= 1 && r.debout.apres < 70                      // le mecanisme n'est pas desarme
+    && fl.vitesse >= 4.4 && fl.arretPourCent <= 12 && fl.metresBots > 800;
+  const l = q => `depart x=${q.depart} (Tom a ${q.travers} m de son axe, ${q.surSonPassage ? 'DANS' : 'hors de'} sa boite d'ecrasement) : Tom ${q.hp0} -> ${q.hp} PV, tole +${q.tole}, pointe ${q.vMax} m/s, ${q.bride} image(s) bridee(s)${q.avertis ? ', « ' + q.avertis + ' »' : ''}`;
+  return { ok, detail: `AVANT (l'enfant au volant, drive.car === c) : Tom_le_ouf debout au centre du pan de trottoir ${JSON.stringify(r.depart.tom)}, hors chaussee (${r.depart.surLaChaussee}) · la 2e voiture l'ecrase a l'image 23 a 8,78 m/s (31,6 km/h), 100 -> 68,7 PV, +4 % de tole, projete en (-12,52 ; 3,30) SUR le bitume, ambulance en route ; la 3e le REECRASE la, 68,7 -> 49,9 PV, +4 % — et \`pietonDevant\` avait repondu « non » aux 24 images qui menent au choc`
+    + ` · DEUX CAUSES : le couloir de freinage faisait 1,40 m de demi-largeur quand la boite d'ecrasement en fait ${r.couloir.demiEcrasement} m (Tom est a 1,60 m de l'axe : dans la boite, hors du couloir), et le trottoir qu'on franchit pour sortir d'une place n'etait pas de la chaussee`
+    + ` · APRES, on freine un peu plus large qu'on n'ecrase et JAMAIS l'inverse : vu a 1,60 m (${r.couloir.a1m60}) et a 1,75 m (${r.couloir.a1m75}), donc partout dans la boite de ${r.couloir.demiEcrasement} m, et plus vu a 2,00 m (${r.couloir.a2m00}) — dix centimetres de marge, parce qu'a l'egalite exacte (la 3e voiture est PILE a 1,70 m de Tom) c'est le dernier bit d'un cosinus qui decide si on le voit ou si on l'ecrase ; le creneau de sortie est reconnu (${r.couloir.dansLeCreneau}, moins de ${r.couloir.SORTIE_V} m/s dans un rectangle de city.parkings)`
+    + ` · les QUATRE voitures : ${r.journal.map(l).join(' · ')} — Tom reste a ${r.tomFinal.hp} PV, aucune ambulance, ${r.wanted} etoile (la clemence l'ecrit « avertissement ${r.avert}/4 » : la ville le VOIT)`
+    + ` · les ${menacantes.length} voiture(s) qui l'ont dans leur boite klaxonnent et sont bridees a ${r.couloir.SORTIE_PAS} m/s — sous les 3 m/s en dessous desquels \`ecraseAuSol\` ne renverse personne — et la premiere le POUSSE de 46 cm sur le cote au passage, sans une egratignure : les suivantes ne l'ont plus dans leur couloir (${degagees.map(q => q.travers + ' m de l\'axe, pointe ' + q.vMax + ' m/s').join(' · ')})`
+    + ` · UN CORPS A TERRE : ${r.aTerre.hpAvant} -> ${r.aTerre.hpApres} PV sous une voiture a 12 m/s (${r.aTerre.touches} touche), et la voiture qui arrive le VOIT (${r.aTerre.vuParLeFreinage}) ; un passant DEBOUT est toujours renverse (${r.debout.avant} -> ${r.debout.apres} PV, ${r.debout.touches} touche)`
+    + ` · COUT EN FLUIDITE sur ${fl.pas} pas (${fl.secondes} s, ${fl.vehicules} vehicules, les douze habitants colles aux voies, ${fl.metresBots} m parcourus a pied) : ${fl.vitesse} m/s de moyenne, ${fl.arret} s d'arret (${fl.arretPourCent} %), dont ${fl.pieton} s pour un pieton — mesure hors banc sur 2 700 pas : 4,898 -> 4,898 m/s et 49,0 -> 48,4 s d'arret, soit +0,02 % au pire (le round 71 partait de 195 s d'arret et 1,6 m/s)` };
+});
+// ============ UN RENDEZ-VOUS OU L'ON TIENT DEBOUT MAIS QU'AUCUN CHEMIN NE REJOINT (round 83, item 2) ============
+// `botPrendVoiture` posait le rendez-vous EN AVEUGLE a (c.x + 2,2 ; c.z + 2,2), toujours au
+// nord-est de la caisse : avec un mur de ce cote-la (mesure du round 83 : 7,00 × 3,80 m en
+// (-35,50 ; 11,68)) l'habitant piétinait indefiniment a 2,16 m de son but. `pointDePortiere` a
+// corrige cela en essayant les huit cotes et en gardant le premier ou un pieton TIENT DEBOUT.
+// LA SOUS-CLASSE QUI RESTAIT : tenir debout n'est pas etre atteignable. Recensement sur
+// 3 038 configurations (voiture posee de 5 en 5 m sur la ville habitee, habitant a 8 m dans huit
+// directions) : dans 300 d'entre elles le cote le plus proche ou l'on tient debout n'est PAS
+// joignable a pied, et 175 ont une autre portiere qui l'est. Le point n'etait alors rejoint que
+// par le filet « bloque 2,5 s -> teleportation au point de passage » — et une teleportation n'est
+// pas un deplacement : l'enfant voit un habitant disparaitre et reapparaitre.
+// LE JEU SAVAIT DEJA REPONDRE : `navPath` ne rend jamais null quand la cible est muree, il
+// « va au plus pres » et pose `reached = false` ; `navEnPieton` lui fait prendre la grille FINE
+// des pietons — LA MEME que le suivi de rendez-vous (`b.rdvRoute`) utilise pour marcher. Choisir
+// la portiere avec la grille qui servira a y aller, c'est la seule facon d'etre coherent.
+test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitant monte au volant sans que le filet de teleportation se declenche', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: -60, y: 1, z: 30, hour: 12, frais: true });
+    const R = {}, R2 = 2.2, lieu = { x: 0, z: 8, nom: 'centre-ville' };
+    const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.rider && !v.busy && v.parts);
+    const b = G.bots.find(x => x.name === 'Lucas_2014');
+    b.av.group.visible = true;
+    // LE MUR DU RELEVE PRECEDENT est toujours la : on le nomme, c'est le temoin de la geometrie.
+    const mur = G.solids.find(o => !o.veh && Math.abs(o.x + 35.5) < 0.6 && Math.abs(o.z - 11.68) < 0.6 && o.h > 3);
+    R.mur = mur ? { x: +mur.x.toFixed(2), z: +mur.z.toFixed(2), w: +mur.w.toFixed(2), h: +mur.h.toFixed(2) } : null;
+    const candidats = () => { const out = [];
+      for (const [ux, uz] of [[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = (ux && uz) ? 1 : 1.25;
+        const x = +(c.x + ux * R2 * k).toFixed(2), z = +(c.z + uz * R2 * k).toFixed(2);
+        if (!G.npcBlocked(x, 0.3, z, 0.42)) out.push([x, z]);
+      } return out; };
+    const pose = (cx, cz) => { c.x = cx; c.z = cz; c.h = 0; c.busy = false;
+      c.g.position.set(cx, c.y || 0, cz); G.vehicleSolid(c); };
+    // ---- 1. LE RECENSEMENT : combien de configurations choisissaient un point injoignable ?
+    let paires = 0, defaut = 0, avecIssue = 0;
+    for (let cx = -60; cx <= 60; cx += 10) for (let cz = -20; cz <= 60; cz += 10) {
+      pose(cx, cz); const cand = candidats(); if (cand.length < 2) continue;
+      for (const ang of [0, 1.571, 3.142, 4.712]) {
+        const bx = +(cx + Math.sin(ang) * 8).toFixed(2), bz = +(cz + Math.cos(ang) * 8).toFixed(2);
+        if (G.npcBlocked(bx, 0.3, bz, 0.42)) continue;
+        paires++;
+        const tri = cand.slice().sort((u, v) => Math.hypot(u[0] - bx, u[1] - bz) - Math.hypot(v[0] - bx, v[1] - bz));
+        if (G.cheminPieton({ x: bx, z: bz }, tri[0][0], tri[0][1])) continue;
+        defaut++;
+        if (tri.find(q => G.cheminPieton({ x: bx, z: bz }, q[0], q[1]))) avecIssue++;
+      }
+    }
+    R.recensement = { paires, defaut, avecIssue };
+    // ---- 2. LE CAS MESURE : la voiture en (-60 ; 25), l'habitant en (-65,66 ; 30,66)
+    const CX = -60, CZ = 25, BX = -65.66, BZ = 30.66;
+    pose(CX, CZ);
+    const cand = candidats();
+    const tri = cand.slice().sort((u, v) => Math.hypot(u[0] - BX, u[1] - BZ) - Math.hypot(v[0] - BX, v[1] - BZ));
+    R.cotes = tri.map(q => ({ p: q, joignable: G.cheminPieton({ x: BX, z: BZ }, q[0], q[1]),
+      d: +Math.hypot(q[0] - BX, q[1] - BZ).toFixed(2) }));
+    R.ancien = tri[0];   // le plus proche ou l'on tient debout — le choix d'avant
+    // ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS : le banc rend une image par seconde.
+    const marche = (forcer) => {
+      pose(CX, CZ);
+      b.pos.set(BX, 0.3, BZ); b.av.group.position.copy(b.pos);
+      b.drive = null; b.rdv = null; b.rdvRoute = null; b.rdvRouteT = 0; b.target = null; b.wait = 0;
+      b.ko = 0; b.stuckT = 0; b.fight = null; b.enVoiture = null; b.activite = null;
+      G.botPrendVoiture(b, lieu, null, true);
+      if (!b.rdv) return null;
+      if (forcer) { b.rdv.x = forcer[0]; b.rdv.z = forcer[1]; }
+      const rdv = [+b.rdv.x.toFixed(2), +b.rdv.z.toFixed(2)];
+      const dt = 1 / 60; let images = -1, stuckMax = 0, sauts = 0, sautMax = 0, distMin = 99;
+      let px = b.pos.x, pz = b.pos.z;
+      for (let i = 0; i < 1800; i++) {
+        G.updateBot(b, dt);
+        const s = Math.hypot(b.pos.x - px, b.pos.z - pz);
+        if (s > 0.35) { sauts++; sautMax = Math.max(sautMax, +s.toFixed(2)); }   // 0,35 m en une image = 21 m/s : ce n'est plus de la marche
+        px = b.pos.x; pz = b.pos.z;
+        stuckMax = Math.max(stuckMax, b.stuckT || 0);
+        distMin = Math.min(distMin, Math.hypot(b.pos.x - rdv[0], b.pos.z - rdv[1]));
+        if (b.drive && b.drive.car) { images = i + 1; break; }
+      }
+      const out = { rdv, images, stuckMax: +stuckMax.toFixed(2), sauts, sautMax, distMin: +distMin.toFixed(2),
+        auVolant: !!(b.drive && b.drive.car) };
+      if (b.drive && b.drive.car) { G.libereVoiture(b.drive.car); b.drive = null; }
+      b.rdv = null; b.rdvRoute = null;
+      return out;
+    };
+    R.avant = marche(R.ancien);    // l'ancien choix, force
+    R.apres = marche(null);        // le choix du jeu aujourd'hui
+    return R;
+  });
+  const tp = q => q.stuckMax >= 2.5 || q.sauts > 0;
+  const ok = !!r.mur && r.recensement.defaut > 0 && r.recensement.avecIssue > 0
+    && r.cotes.length >= 2 && !r.cotes[0].joignable            // le plus proche debout n'est PAS joignable
+    && r.apres.auVolant && !tp(r.apres) && r.apres.images > 0 && r.apres.images < r.avant.images
+    && tp(r.avant);                                            // et avant, seul le filet le sauvait
+  return { ok, detail: `« il verifie qu'on tient debout, pas que le point est atteignable » · le mur du releve precedent est toujours la : ${r.mur ? `${r.mur.w} m de long et ${r.mur.h} m de haut en (${r.mur.x} ; ${r.mur.z})` : 'INTROUVABLE'}`
+    + ` · RECENSEMENT sur ${r.recensement.paires} configurations (voiture posee de 10 en 10 m sur la ville habitee, habitant a 8 m dans quatre directions) : ${r.recensement.defaut} ou le cote le plus proche ou l'on TIENT DEBOUT n'est pas joignable a pied, dont ${r.recensement.avecIssue} qui ont une autre portiere joignable (hors banc, au pas de 5 m : 300 sur 3 038, dont 175 avec une issue)`
+    + ` · CAS MESURE, voiture en (-60 ; 25), habitant en (-65,66 ; 30,66) — les huit cotes : ${r.cotes.map(q => `(${q.p[0]} ; ${q.p[1]}) a ${q.d} m ${q.joignable ? 'JOIGNABLE' : 'injoignable'}`).join(', ')}`
+    + ` · AVANT (l'ancien choix, le plus proche ou l'on tient debout, ${JSON.stringify(r.avant.rdv)}) : ${r.avant.images} images pour monter, compteur de blocage a ${r.avant.stuckMax} au maximum — le filet des 2,5 s se declenche — et ${r.avant.sauts} saut de ${r.avant.sautMax} m, une TELEPORTATION`
+    + ` · APRES (${JSON.stringify(r.apres.rdv)}, joignable) : au volant en ${r.apres.images} images, compteur de blocage ${r.apres.stuckMax} au maximum (le filet ne part pas), ${r.apres.sauts} saut — il y va A PIED, et il arrive ${r.avant.images - r.apres.images} images plus tot`
+    + ` · les DEUX appelants en profitent : \`botPrendVoiture\` et la voiture de fuite du braquage appellent tous deux \`pointDePortiere(c, b.pos)\`` };
+});
+// ============ LE RECTANGLE DU PARKING EST PROTEGE, PAS SEULEMENT SES PLACES (round 83, item 3) ============
+// Le garde-fou « une place de stationnement marquee n'est pas une destination pour un meuble »
+// ne lit que `q.places`. RECENSEMENT : sur les 17 emplacements de `city.parkings`, UN SEUL en
+// declare (« Parking du Sud », 16 places, toutes libres) ; les 16 autres — « Parking du centre »
+// compris — en declaraient ZERO. Le garde-fou ne protegeait donc presque rien : 3 bancs (dont
+// (-15 ; 14,9) et (-9,5 ; 14,9)) et 12 solides hauts sont DANS le rectangle du parking du centre,
+// 5 bancs et 11 solides dans celui de l'hopital.
+// ON PROTEGE LE RECTANGLE : une regle, dix-sept parkings, strictement plus forte que celle des
+// places (toute place marquee est dans son rectangle). MAIS ON NE DERANGE PAS CE QUI Y EST DEJA :
+// sur les 247 meubles que `rangeLeMobilier` recule, 11 atterrissent dans un rectangle de parking
+// et DIX y etaient deja (le lampadaire de (-20 ; 4,20) recule de 90 cm jusqu'a (-20 ; 5,10), dans
+// le meme rectangle). Les refuser tous laisserait onze meubles sur la chaussee ou en travers du
+// trottoir. La regle est donc : on n'ENVOIE pas un meuble dans un parking ou il n'etait pas.
+// LES SEIZE AUTRES EMPLACEMENTS NE SONT PAS DES PARKINGS A VOITURES — deux heliports, une rampe a
+// jet-skis, un rack a velos, une grille de depart de karts de 70 m, cinq cours de service ou
+// manoeuvrent une grue, une pelle et un bulldozer (2,80 m de tole, 3,15 m de passage reel selon
+// `gabaritCollision`) et deux bases de gang : un quadrillage de places de 2,90 × 5,40 m y serait
+// une fiction. Seul « Parking du centre » a de vraies places, celles de ses quatre voitures.
+test('les parkings sans place marquee sont proteges par leur rectangle, et le parking du centre declare enfin ses quatre places', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    const c = G.city, L = G.PARK_PLACE_L, PR = G.PARK_PLACE_P;
+    const gares = [].concat(c.cars || [], G.police.cars || []).filter(v => v && v.g && v.solid && !v.heli && v.kind !== 'jetski');
+    const parkings = (c.parkings || []).map(q => {
+      const places = q.places || [];
+      let libres = 0;
+      for (const pl of places) if (!gares.some(v => Math.abs(v.x - pl[0]) < L / 2 + 0.6 && Math.abs(v.z - pl[1]) < PR / 2 + 0.6)) libres++;
+      const bancs = (c.benches || []).filter(m => Math.abs(m.x - q.x) < q.w / 2 && Math.abs(m.z - q.z) < q.d / 2).length;
+      const hauts = G.solids.filter(o => !o.veh && !o.sol && o.h > 1.2 && o.y + o.h / 2 > 1.2
+        && Math.abs(o.x - q.x) < q.w / 2 && Math.abs(o.z - q.z) < q.d / 2).length;
+      return { nom: q.nom, x: q.x, z: q.z, w: +q.w.toFixed(1), d: +q.d.toFixed(1), places: places.length, libres, bancs, hauts };
+    });
+    // ---- LE RANGEMENT DU MOBILIER : personne n'est ENVOYE dans un parking ou il n'etait pas
+    const R = c.range || {};
+    const dans = (x, z) => (c.parkings || []).find(q => Math.abs(x - q.x) <= q.w / 2 && Math.abs(z - q.z) <= q.d / 2);
+    const atterrissages = (R.deplaces || []).filter(d => dans(d.vers[0], d.vers[1]));
+    const venusDeDehors = atterrissages.filter(d => !dans(d.de[0], d.de[1]));
+    // ---- LA REGLE MORD-ELLE VRAIMENT ? On demande a `refusMeuble` d'envoyer un banc pris A
+    // L'EXTERIEUR sur une grille de points DANS chaque rectangle de parking, et on compte les
+    // refus « parking ». (Les autres refus — chaussee, batiment, place, voisin — existaient
+    // deja ; ce qui est neuf, c'est qu'un point LIBRE d'un parking sans place marquee est
+    // maintenant refuse lui aussi.)
+    const banc = (c.meubles || []).find(m => m.fam === 'banc' && !dans(m.x, m.z));
+    const sonde = [];
+    for (const q of (c.parkings || [])) {
+      const raisons = {};
+      for (let ux = -0.35; ux <= 0.36; ux += 0.35) for (let uz = -0.35; uz <= 0.36; uz += 0.35) {
+        const r2 = banc ? G.refusMeuble(banc, q.x + ux * q.w, q.z + uz * q.d) : null;
+        raisons[r2 || 'aucun'] = (raisons[r2 || 'aucun'] || 0) + 1;
+      }
+      sonde.push({ nom: q.nom, parking: raisons.parking || 0, aucun: raisons.aucun || 0, raisons });
+    }
+    // ... et le meuble qui est DEJA dans un parking n'est jamais refuse pour cette raison-la :
+    // on ne derange pas ce qui y est deja (dix des onze atterrissages).
+    const dejaLa = (c.meubles || []).filter(m => dans(m.x, m.z));
+    const refusDeja = dejaLa.map(m => G.refusMeuble(m, m.x + 0.3, m.z)).filter(v => v === 'parking').length;
+    return { parkings, meubles: R.meubles, fautes: R.fautes, parQuoi: R.parQuoi,
+      deplaces: (R.deplaces || []).length, restants: (R.restants || []).length, ouverts: (R.ouverts || []).length,
+      atterrissages: atterrissages.length, venusDeDehors: venusDeDehors.length,
+      sonde, dejaLa: dejaLa.length, refusDeja, bancHors: banc ? [+banc.x.toFixed(1), +banc.z.toFixed(1)] : null };
+  });
+  const sud = r.parkings.find(q => q.nom === 'Parking du Sud') || {};
+  const centre = r.parkings.find(q => q.nom === 'Parking du centre') || {};
+  const sansPlace = r.parkings.filter(q => !q.places);
+  const ok = r.parkings.length >= 17
+    && sud.places === 16 && sud.libres === 16                       // le gardien du test 362 ne bouge pas
+    && centre.places === 4                                          // les quatre places enfin declarees
+    && r.sonde.filter(q => q.parking > 0).length >= 12              // la regle mord dans au moins douze parkings
+    && r.sonde.every(q => q.aucun === 0)                            // et aucun point libre d'un parking n'accepte plus un meuble venu du dehors
+    && r.refusDeja === 0                                            // ... mais on ne derange pas ce qui y est deja
+    && r.restants === 0 && r.deplaces >= 240 && r.venusDeDehors === 0
+    && sansPlace.length === 15;
+  return { ok, detail: `RECENSEMENT des ${r.parkings.length} emplacements de city.parkings : ${r.parkings.filter(q => q.places).length} declarent des places, ${sansPlace.length} n'en declarent aucune (${sansPlace.map(q => q.nom).join(', ')}) — et ce sont des heliports, une rampe a jet-skis, un rack a velos, une grille de depart de karts de 70 m, cinq cours de service et deux bases de gang : un quadrillage de places de 2,90 × 5,40 m y serait une fiction, c'est le RECTANGLE qui les protege`
+    + ` · « Parking du centre » (${centre.x} ; ${centre.z}) ${centre.w} × ${centre.d} m avait ZERO place : ${centre.bancs} bancs et ${centre.hauts} solides hauts sont DANS son rectangle · il declare maintenant ${centre.places} places, celles de ses quatre voitures (x = -17,9 / -14,6 / -11,3 / -8, z = 10, cap π), ${centre.libres} libre au depart puisqu'elles y sont garees`
+    + ` · « Parking du Sud » est INCHANGE : ${sud.places} places marquees, ${sud.libres} libres (c'est le gardien du test 362)`
+    + ` · LA REGLE MORD : un banc pris en ${JSON.stringify(r.bancHors)} est propose sur neuf points de chaque rectangle — ${r.sonde.filter(q => q.parking > 0).length} parkings le refusent pour « parking », et AUCUN point d'AUCUN parking ne l'accepte plus (${r.sonde.reduce((a, q) => a + q.aucun, 0)} acceptation) : ${r.sonde.map(q => `${q.nom} ${q.parking}/9 parking`).join(', ')}`
+    + ` · ... MAIS ON NE DERANGE PAS CE QUI Y EST DEJA : les ${r.dejaLa} meubles deja dans un rectangle peuvent tous se decaler de 30 cm sans qu'un seul soit refuse pour « parking » (${r.refusDeja})`
+    + ` · RANGEMENT INCHANGE : ${r.meubles} meubles, ${r.fautes} fautes (${JSON.stringify(r.parQuoi)}), ${r.deplaces} deplaces, ${r.restants} restant, ${r.ouverts} trottoir ouvert · ${r.atterrissages} meubles atterrissent dans un rectangle de parking, et ${r.venusDeDehors} y entre depuis l'exterieur (avant : 11 et 1)` };
+});

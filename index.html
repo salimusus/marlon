@@ -12174,10 +12174,13 @@ function pietonDevant(c, v) {
   // MESURE : Tom_le_ouf se tient a 1,60 m de l'axe d'une voiture de 2,40 m de large, donc DANS la
   // boite d'ecrasement (1,70 m) et HORS du couloir de freinage (1,40 m) ; sur les 24 images qui
   // menent au choc, `pietonDevant` a repondu « non » 24 fois, et il est renverse a 8,78 m/s.
-  // Le couloir reprend donc la largeur EXACTE de la boite d'ecrasement. Le garde-fou du round 71
-  // n'y touche pas : c'est `surLaChaussee` qui protege la fluidite, pas ces 30 cm (cout mesure
-  // sur 1 800 pas avec les douze habitants colles aux voies : voir le rapport).
-  const portee = avant + 1 + spd * 0.7, lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.5);
+  // Le couloir CONTIENT donc la boite d'ecrasement, avec dix centimetres de marge : « on freine un
+  // peu plus large qu'on n'ecrase, JAMAIS l'inverse ». La marge n'est pas un luxe — la 3e voiture
+  // du Parking du centre est a 1,70 m de Tom, PILE sur le bord de la boite, et a l'egalite exacte
+  // c'est le dernier bit d'un cosinus qui decide si on le voit ou si on l'ecrase. Le garde-fou du
+  // round 71 n'y touche pas : c'est `surLaChaussee` qui protege la fluidite, pas ces 40 cm
+  // (cout mesure sur 2 700 pas avec les douze habitants colles aux voies : voir le rapport).
+  const portee = avant + 1 + spd * 0.7, lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.6);
   const creneau = sortDeStationnement(c, v);   // sortie de place : le trottoir compte comme la chaussee
   const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, al = dx * fx + dz * fz;
     if (!(Math.abs(y - (c.y || 0)) < 2.4) || al <= 0 || Math.abs(-dx * fz + dz * fx) >= lat) return false;
@@ -12194,9 +12197,10 @@ function pietonDevant(c, v) {
 // court (on ne recule que d'un mètre ou deux).
 function pietonDerriere(c) {
   const fx = Math.sin(c.h), fz = Math.cos(c.h);
-  // MEME LARGEUR QUE LA BOITE D'ECRASEMENT (voir pietonDevant) : `ecraseAuSol` ne regarde pas
-  // le sens de la marche, il renverse dans un rectangle de (baseW/2 + 0,50) de demi-largeur.
-  const lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.5);
+  // MEME COULOIR QUE DEVANT (voir pietonDevant) : `ecraseAuSol` ne regarde pas le sens de la
+  // marche, il renverse dans un rectangle de (baseW/2 + 0,50) de demi-largeur — on freine donc
+  // dix centimetres plus large, derriere comme devant.
+  const lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.6);
   const gene = (x, y, z) => { const dx = x - c.x, dz = z - c.z, ar = -(dx * fx + dz * fz);
     return Math.abs(y - (c.y || 0)) < 2.4 && ar > 0 && ar < 4 && Math.abs(-dx * fz + dz * fx) < lat; };
   if (joueurAPied() && P.hp > 0 && gene(P.pos.x, P.pos.y, P.pos.z)) return true;
@@ -28264,12 +28268,18 @@ function conduire(c, cmd, dt) {
   // L'AIDE EST ETROITE : seulement le pilote, seulement dans un rectangle de `city.parkings`, et
   // seulement sous SORTIE_V m/s (`sortDeStationnement`). Dans la rue, un accident reste un
   // accident — c'est le drame du jeu, l'ambulance et les etoiles, et on n'y touche pas.
-  if (pilote && !c.kart && sortDeStationnement(c, V.speed)
-    && (V.speed > 0 ? pietonDevant(c, V.speed) : V.speed < 0 && pietonDerriere(c))) {
-    const recule = V.speed < 0;
-    V.speed = clamp(V.speed, -SORTIE_PAS, SORTIE_PAS);
-    if (simTime > (c.avertPietT || 0)) { c.avertPietT = simTime + 2.4; klaxonne(c);
-      msg(recule ? '🚸 Attention ! Quelqu\'un est juste derrière la voiture' : '🚸 Attention ! Quelqu\'un est juste devant la voiture', 1800); }
+  // LE PLAFOND NE REGARDE PAS LE SENS DE LA MARCHE, PARCE QUE `ecraseAuSol` NE LE REGARDE PAS.
+  // Mesure : la voiture bridee CREUSE jusqu'au passant (elle le touche a 2,40 m/s, sans le blesser),
+  // puis l'enfant passe la marche arriere — et `ecraseAuSol`, qui n'est qu'un RECTANGLE autour de la
+  // caisse, renverse a 3,17 m/s celui qui est pourtant devant un capot qui s'eloigne : Tom 100 -> 81 PV.
+  // On bride donc des que quelqu'un est dans la boite, d'un cote OU de l'autre.
+  if (pilote && !c.kart && sortDeStationnement(c, V.speed)) {
+    const devant = pietonDevant(c, V.speed), derriere = pietonDerriere(c);
+    if (devant || derriere) {
+      V.speed = clamp(V.speed, -SORTIE_PAS, SORTIE_PAS);
+      if (simTime > (c.avertPietT || 0)) { c.avertPietT = simTime + 2.4; klaxonne(c);
+        msg(devant ? '🚸 Attention ! Quelqu\'un est juste devant la voiture' : '🚸 Attention ! Quelqu\'un est juste derrière la voiture', 1800); }
+    }
   }
   const accLong = (V.speed - v0) / Math.max(dt, 1e-3);
   if (pilote && P.jumpBuf > 0) { P.jumpBuf = 0; if (c.kind === 'buggy') { if (!c.airborne && (c.vy || 0) <= 0.01 && simTime > (c.hopT || 0)) { c.hopT = simTime + 0.9; c.vy = 9.5; c.airborne = true; c.susp = -0.2; sfx.jump(); burst(c.x, c.y + 0.3, c.z, 0xc9a86a, 6); } } else horn(c.kind); }   // SAUT : le buggy bondit, les autres klaxonnent

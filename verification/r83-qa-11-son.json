@@ -1,0 +1,277 @@
+{
+ "audio": {
+  "etat": "running",
+  "taux": 44100
+ },
+ "distance": [
+  {
+   "distance_m": 0,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.7445
+  },
+  {
+   "distance_m": 2,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.6256
+  },
+  {
+   "distance_m": 5,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.44
+  },
+  {
+   "distance_m": 10,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.2878
+  },
+  {
+   "distance_m": 20,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.1691
+  },
+  {
+   "distance_m": 30,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.1196
+  },
+  {
+   "distance_m": 40,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.0711
+  },
+  {
+   "distance_m": 55,
+   "joue": 1,
+   "refuse": 0,
+   "attenuation": 0.0132
+  },
+  {
+   "distance_m": 70,
+   "joue": 0,
+   "refuse": 1,
+   "attenuation": null
+  }
+ ],
+ "pas": {
+  "sols": [
+   "bitume",
+   "trottoir",
+   "herbe",
+   "sable",
+   "carrelage",
+   "eau",
+   "neige",
+   "bois"
+  ],
+  "mesures": [
+   {
+    "sol": "bitume",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "trottoir",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "herbe",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "sable",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "carrelage",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "eau",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "neige",
+    "joue": 1,
+    "att": 0.6393
+   },
+   {
+    "sol": "bois",
+    "joue": 1,
+    "att": 0.6393
+   }
+  ]
+ },
+ "bouillie": {
+  "joues": 9,
+  "refuses": 31,
+  "pic": 16,
+  "vivants": 16,
+  "max": 16
+ },
+ "purge": {
+  "avant": 16,
+  "apres": 0,
+  "retires": 16
+ },
+ "ambiance": [
+  {
+   "nom": "centre",
+   "x": 0,
+   "z": 8,
+   "quartier": {
+    "k": "centre",
+    "n": "centre animé",
+    "vol": 0.01,
+    "coupe": 1300,
+    "foule": 1
+   },
+   "zone": null,
+   "ambiance": null
+  },
+  {
+   "nom": "La Zone",
+   "x": -157,
+   "z": 12,
+   "quartier": {
+    "k": "zone",
+    "n": "La Zone",
+    "vol": 0.0068,
+    "coupe": 380,
+    "foule": 0.5
+   },
+   "zone": "Territoire Les Frelons Jaunes",
+   "ambiance": null
+  },
+  {
+   "nom": "Bois des Aventuriers",
+   "x": 128,
+   "z": 290,
+   "quartier": {
+    "k": "campagne",
+    "n": "les environs",
+    "vol": 0.0034,
+    "coupe": 700,
+    "foule": 0.15,
+    "oiseaux": 0.5
+   },
+   "zone": "Bois des Aventuriers",
+   "ambiance": null
+  },
+  {
+   "nom": "Banque",
+   "x": -52,
+   "z": 70,
+   "quartier": {
+    "k": "banque",
+    "n": "quartier d'affaires",
+    "vol": 0.0068,
+    "coupe": 1000,
+    "foule": 0.6
+   },
+   "zone": "Banque",
+   "ambiance": null
+  },
+  {
+   "nom": "Hopital",
+   "x": 22,
+   "z": 206,
+   "quartier": {
+    "k": "campagne",
+    "n": "les environs",
+    "vol": 0.0034,
+    "coupe": 700,
+    "foule": 0.15,
+    "oiseaux": 0.5
+   },
+   "zone": "Hôpital",
+   "ambiance": null
+  },
+  {
+   "nom": "Port ou plage",
+   "x": 60,
+   "z": -60,
+   "quartier": {
+    "k": "campagne",
+    "n": "les environs",
+    "vol": 0.0034,
+    "coupe": 700,
+    "foule": 0.15,
+    "oiseaux": 0.5
+   },
+   "zone": null,
+   "ambiance": null
+  }
+ ],
+ "ambianceCles": {
+  "cles": [
+   "set",
+   "stop",
+   "duck",
+   "duckActif",
+   "duckInfo",
+   "etat"
+  ],
+  "AMBIANCES": [
+   "auto",
+   "matin",
+   "midi",
+   "couchant",
+   "nuit"
+  ],
+  "SFX_MONDE": [
+   "jump",
+   "coin",
+   "check",
+   "die",
+   "hit",
+   "kick",
+   "win",
+   "pok",
+   "clack",
+   "whoosh",
+   "cheer",
+   "register",
+   "bird"
+  ]
+ },
+ "niveau": {
+  "proche": {
+   "etat": "running",
+   "niveau": 0.001
+  },
+  "loin": {
+   "etat": "running",
+   "niveau": 0.014
+  },
+  "silence": {
+   "etat": "running",
+   "niveau": 0.002
+  }
+ },
+ "pluie": {
+  "pendant": {
+   "etat": "running",
+   "niveau": 0.007
+  },
+  "meteo": {
+   "intensite": null
+  },
+  "apresArret": {
+   "etat": "running",
+   "niveau": 0.007
+  }
+ },
+ "erreurs": []
+}

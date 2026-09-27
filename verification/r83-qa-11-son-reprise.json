@@ -1,0 +1,76 @@
+{
+ "niveauReel": {
+  "silence": 0.007,
+  "proche_1m5": 0.069,
+  "moyen_20m": 0.02,
+  "loin_45m": 0.008
+ },
+ "ambianceCoupe": {
+  "avant": {
+   "cle": "centre",
+   "gain": 0.01,
+   "coupe": 1300,
+   "volCible": 0.01,
+   "coupeCible": 1300,
+   "duck": 21.76
+  },
+  "apres": [
+   {
+    "ms": 100,
+    "etat": {
+     "cle": "centre",
+     "gain": 0.0001,
+     "coupe": 1300,
+     "volCible": 0.0001,
+     "coupeCible": 1300,
+     "duck": 21.76
+    }
+   },
+   {
+    "ms": 300,
+    "etat": {
+     "cle": "centre",
+     "gain": 0.0001,
+     "coupe": 1300,
+     "volCible": 0.0001,
+     "coupeCible": 1300,
+     "duck": 21.76
+    }
+   },
+   {
+    "ms": 900,
+    "etat": {
+     "cle": "centre",
+     "gain": 0.0001,
+     "coupe": 1300,
+     "volCible": 0.0001,
+     "coupeCible": 1300,
+     "duck": 21.76
+    }
+   }
+  ],
+  "niveauApresStop": 0
+ },
+ "pluie": {
+  "err": null,
+  "avant": 0,
+  "pendant": 0.006,
+  "etat": {
+   "kind": "pluie",
+   "force": 0.017
+  },
+  "apres": 0.007,
+  "kindFin": "clair"
+ },
+ "timbrePas": {
+  "bitume": "{\"f\":145,\"n\":1300,\"vn\":0.075,\"vt\":0.03,\"q\":1}",
+  "trottoir": "{\"f\":195,\"n\":2300,\"vn\":0.07,\"vt\":0.028,\"q\":1.8}",
+  "herbe": "{\"f\":105,\"n\":620,\"vn\":0.055,\"vt\":0.012,\"q\":0.6}",
+  "sable": "{\"f\":85,\"n\":780,\"vn\":0.062,\"vt\":0.008,\"q\":0.4}",
+  "carrelage": "{\"f\":250,\"n\":3400,\"vn\":0.072,\"vt\":0.038,\"q\":4.5}",
+  "eau": "{\"f\":130,\"n\":480,\"vn\":0.09,\"vt\":0.018,\"q\":0.5}",
+  "neige": "{\"f\":115,\"n\":950,\"vn\":0.05,\"vt\":0.014,\"q\":0.9}",
+  "bois": "{\"f\":175,\"n\":1050,\"vn\":0.068,\"vt\":0.034,\"q\":1.4}"
+ },
+ "erreurs": []
+}

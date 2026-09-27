@@ -27353,6 +27353,55 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   }
   return false;
 }
+// ============ DÉPLACER UN VÉHICULE GARÉ : ON REGARDE LES DEUX CÔTÉS ============
+// La réparation du bulldozer (défaut n° 113) ne posait QU'UNE question à chaque place
+// essayée : « est-ce que le DÉCOR me bute ? ». `carBlocked` écarte les autres caisses par
+// défaut (`if (o.veh && !opt.veh) continue`), donc la réponse était OUI, LIBRE à cinq
+// centimètres de la grue — et le banc d'essai l'a vu (test 486 : « la paire la plus serrée
+// garde 0,05 m, grue(24,4 ; 128,0) / bulldozer(26,2 ; 121,5) »).
+// UN VÉHICULE QU'ON DÉPLACE DOIT VÉRIFIER LES DEUX : qu'il n'est plus bloqué, ET qu'il ne
+// bloque ni ne frôle personne. Les trois contrôles ci-dessous, dans cet ordre :
+//   1. LE DÉCOR NE LE BUTE PAS. C'est le contrôle d'hier, intact : sans lui, `conduire` le
+//      déclare « buté » sur sa propre place de parking et tue sa vitesse à chaque image
+//      (mesure d'hier : 1,70 m en dix secondes pour une fiche à 36 km/h).
+//   2. LES AUTRES CAISSES NON PLUS. Le même `carBlocked`, `veh: true` — exactement ce que
+//      `vehBloque` demande pour tout véhicule conduit par le jeu, et ce dont `separerVehicules`
+//      se sert pour écarter deux caisses qui se recouvrent. Ce contrôle-là n'est pas une
+//      marge décrétée, il est CALCULÉ : `carBlocked` gonfle la caisse voisine du rayon de
+//      chaîne (1,574 m pour le bulldozer) et teste les centres des disques, dont le plus
+//      avancé est à 0,675 m en retrait de la tôle — il exige donc 1,574 − 0,675 = 0,90 m
+//      d'air dans l'axe, et 1,574 − 1,400 = 0,17 m en travers.
+//   3. ET IL N'EN FRÔLE AUCUNE, à MARGE_PARC près. POURQUOI UNE MARGE EN PLUS : la tôle de
+//      collision N'EST PAS le véhicule. Celle du bulldozer fait 2,80 × 5,40 m, mais sa LAME
+//      est un tablier de 3,20 m de large planté à 3,19 m de son centre — 0,49 m devant la
+//      boîte et 0,20 m de chaque côté. À cinq centimètres de boîte à boîte, la lame était
+//      DANS la grue de quinze centimètres, et un enfant de huit ans le voit. 0,60 m, c'est ce
+//      débord de 0,49 m plus onze centimètres d'air visible.
+// La mesure du contrôle 3 est celle du banc d'essai : l'air entre deux boîtes alignées sur les
+// axes, le plus grand des deux écarts (c'est ce que rend le théorème des axes séparateurs sur
+// deux rectangles non tournés). On compare des boîtes DÉJÀ orientées, donc une caisse en biais
+// est jugée sur son emprise, jamais moins.
+const MARGE_PARC = 0.6;
+function emprisePlan(v) {   // demi-emprise [en x, en z] de la caisse, cap compris
+  const cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+  const W = v.baseW || 2.4, D = v.baseD || 4.4;
+  return [(W * cs + D * sn) / 2, (W * sn + D * cs) / 2];
+}
+function placeDeParcLibre(v, x, z, marge) {
+  if (!v) return false;
+  const m = marge == null ? MARGE_PARC : marge;
+  const [r, L] = vehHalf(v);
+  const opt = { garde: v.garde || 0, veh: false };
+  if (carBlocked(x, z, v.solid, r, opt, v.y || 0, v.h || 0, L)) return false;          // 1.
+  opt.veh = true;
+  if (carBlocked(x, z, v.solid, r, opt, v.y || 0, v.h || 0, L)) return false;          // 2.
+  const [hx, hz] = emprisePlan(v);
+  for (const o of solidsAutour(x, z, Math.max(hx, hz) + m + 0.5, true)) {              // 3.
+    if (!o.veh || o === v.solid) continue;
+    if (Math.max(Math.abs(x - o.x) - hx - o.w / 2, Math.abs(z - o.z) - hz - o.d / 2) < m) return false;
+  }
+  return true;
+}
 // Aucun véhicule ne doit en chevaucher un autre : on écarte les paires qui se recouvrent.
 // (La voiture conduite a son propre traitement, resolveVehicleOverlap.)
 // ================= ON NE SE MARCHE PAS DESSUS =================
@@ -39213,12 +39262,24 @@ function buildMetiers() {
   // est vide à l'est des bennes à gravats. On avance donc d'un mètre à la fois jusqu'à la
   // première place où son gabarit ne mord sur rien ; s'il n'y en a aucune, on le laisse où il
   // était plutôt que de le déplacer pour rien.
+  // ---------- CE QUE LE DÉCALAGE D'HIER NE REGARDAIT PAS (test 486, round 83) ----------
+  // Le contrôle ne posait QU'UNE question à chaque place essayée : « est-ce que le DÉCOR me
+  // bute ? ». `carBlocked` écarte les autres caisses par défaut : il a donc répondu « libre »
+  // au premier mètre où les bennes à gravats lâchaient, à x = 26,20 — À CINQ CENTIMÈTRES DE
+  // LA GRUE. Relevé : grue (24,40 ; 128,00), caisse 2,50 × 7,50 m, nez à z 124,25 ; bulldozer
+  // (26,20 ; 121,50), caisse 2,80 × 5,40 m, nez à z 124,20 ; et sa LAME, qui n'est pas dans sa
+  // caisse, plantée à z 124,40 — quinze centimètres DANS la grue.
+  // `placeDeParcLibre` pose les trois questions d'un coup (le décor, les autres caisses par
+  // `veh: true`, et MARGE_PARC = 0,60 m d'air entre les tôles) ; on garde le pas d'un mètre vers
+  // l'est le long de la même rangée, et si AUCUNE place ne convient on le laisse où il était
+  // plutôt que de le déplacer pour rien. La réparation d'hier est intacte : le contrôle du
+  // décor est le PREMIER des trois, et le bulldozer roule toujours.
   {
-    const [br, bL] = vehHalf(bull);
-    const libre = () => !carBlocked(bull.x, bull.z, bull.solid, br, { garde: bull.garde || 0 }, bull.y, bull.h, bL);
     const x0 = bull.x;
-    for (let i = 1; i <= 18 && !libre(); i++) { bull.x = x0 + i; bull.g.position.x = bull.x; vehicleSolid(bull); }
-    if (!libre()) { bull.x = x0; bull.g.position.x = x0; vehicleSolid(bull); }
+    let trouve = placeDeParcLibre(bull, x0, bull.z) ? x0 : null;
+    for (let i = 1; i <= 18 && trouve == null; i++) if (placeDeParcLibre(bull, x0 + i, bull.z)) trouve = x0 + i;
+    bull.x = trouve == null ? x0 : trouve;
+    bull.g.position.x = bull.x; vehicleSolid(bull);
     settleVehicle(bull); bull.home0 = [bull.x, bull.z, bull.h];
   }
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);

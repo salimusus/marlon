@@ -22912,6 +22912,12 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
     const alea = Math.random; Math.random = () => 0.5;
     const b = G.bots.find(q => q.av && q.av.group);
     b.pos.set(67, 0, 1.5); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    // ON REND LE NOM QU'ON EMPRUNTE. Ce test rebaptisait l'habitant « Momo_king » pour la duree
+    // de sa mesure et le laissait ainsi POUR TOUTE LA SUITE : il n'y avait plus aucun
+    // Lucas_2014 dans la page (et deux Momo_king, `find` ne rendant plus le vrai). C'est ce qui
+    // faisait exploser le test du rendez-vous a la portiere en suite complete alors qu'il etait
+    // vert dans son lot. Le nom d'origine est repose a la fin du test.
+    const nom497 = b.name;
     b.ko = 0; b.hp = 100; b.wait = 1e6; b.rdv = null; b.fight = null; b.name = 'Momo_king';
     G.P.pos.set(67, 0.3, 19.4); G.P.hp = 100;
     G.equipWeapon('pistol'); G.P.drawn = true;
@@ -22930,10 +22936,13 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
     const out = { rayons: n, libres, pire: +pire.toFixed(2), etoiles: G.police.wanted,
       touchees: G.city.shots, hpVoisin: b.hp, zVoisin: +b.pos.z.toFixed(2), enVol: (G.shots || []).length };
     G.P.gun = false; G.P.weapon = null; G.P.drawn = false;
+    b.name = nom497; b.wait = 0;   // il retrouve son nom et sa vie d'habitant
+    out.nomRendu = b.name;
     return out;
   });
-  const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
-  return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
+  const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0
+    && r.nomRendu && r.nomRendu !== 'Momo_king';
+  return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin · le nom emprunté est rendu : l'habitant redevient « ${r.nomRendu} » (il restait « Momo_king » pour toute la suite, et le test du rendez-vous à la portière explosait dessus)` };
 });
 
 test('la cage à grimper se GRIMPE A PIED du gazon au plancher du sommet, sans un seul saut', async p => {
@@ -25003,7 +25012,22 @@ test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitan
     __SHOT.go({ world: 4, x: -60, y: 1, z: 30, hour: 12, frais: true });
     const R = {}, R2 = 2.2, lieu = { x: 0, z: 8, nom: 'centre-ville' };
     const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.rider && !v.busy && v.parts);
-    const b = G.bots.find(x => x.name === 'Lucas_2014');
+    if (!c) return { erreur: 'aucune voiture ordinaire libre dans la ville' };
+    // L'HABITANT EST EXIGE, PAS SUPPOSE. Ce test lisait `G.bots.find(x => x.name ===
+    // 'Lucas_2014')` : vert dans son lot, il levait « Cannot read properties of undefined
+    // (reading 'av') » en suite complete. LE NOM AVAIT ETE EMPRUNTE : le test du stand de tir
+    // rebaptise le premier habitant « Momo_king » pour la duree de sa mesure et ne le lui
+    // rendait pas — il n'y avait plus AUCUN Lucas_2014 dans la page (et deux Momo_king).
+    // On ne suppose donc plus : on prend l'habitant par son nom s'il est la, sinon le premier
+    // habitant VIVANT et A PIED, on le nomme dans le bilan avec sa vitesse (c'est elle qui fixe
+    // les comptes d'images), et on refuse le test s'il n'y en a aucun. On lui rend aussi un etat
+    // propre : un habitant laisse en pleine bagarre ou en prison par un voisin ne marche pas.
+    const b = G.bots.find(x => x.name === 'Lucas_2014' && x.av && x.av.group && !x.dead && !x.prison)
+      || G.bots.find(x => x.av && x.av.group && !x.dead && !x.prison && !x.drive);
+    if (!b) return { erreur: 'aucun habitant vivant et a pied parmi les ' + G.bots.length + ' habitants' };
+    R.habitant = { nom: b.name, vitesse: b.speed, rang: G.bots.indexOf(b) };
+    b.prison = false; b.dead = 0; b.hp = 100; b.sit = null; b.ride = null; b.sport = null;
+    b.bagarre = null; b.gangMission = null; b.ordre = null; b.suit = null; b.job = null;
     b.av.group.visible = true;
     // LE MUR DU RELEVE PRECEDENT est toujours la : on le nomme, c'est le temoin de la geometrie.
     const mur = G.solids.find(o => !o.veh && Math.abs(o.x + 35.5) < 0.6 && Math.abs(o.z - 11.68) < 0.6 && o.h > 3);
@@ -25045,6 +25069,7 @@ test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitan
       b.pos.set(BX, 0.3, BZ); b.av.group.position.copy(b.pos);
       b.drive = null; b.rdv = null; b.rdvRoute = null; b.rdvRouteT = 0; b.target = null; b.wait = 0;
       b.ko = 0; b.stuckT = 0; b.fight = null; b.enVoiture = null; b.activite = null;
+      b.hp = 100; b.dead = 0; b.prison = false; b.sit = null; b.bagarre = null; b.sport = null;
       G.botPrendVoiture(b, lieu, null, true);
       if (!b.rdv) return null;
       if (forcer) { b.rdv.x = forcer[0]; b.rdv.z = forcer[1]; }
@@ -25070,12 +25095,13 @@ test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitan
     R.apres = marche(null);        // le choix du jeu aujourd'hui
     return R;
   });
+  if (r.erreur) return { ok: false, detail: r.erreur };
   const tp = q => q.stuckMax >= 2.5 || q.sauts > 0;
-  const ok = !!r.mur && r.recensement.defaut > 0 && r.recensement.avecIssue > 0
+  const ok = !!r.mur && !!r.habitant && r.recensement.defaut > 0 && r.recensement.avecIssue > 0
     && r.cotes.length >= 2 && !r.cotes[0].joignable            // le plus proche debout n'est PAS joignable
     && r.apres.auVolant && !tp(r.apres) && r.apres.images > 0 && r.apres.images < r.avant.images
     && tp(r.avant);                                            // et avant, seul le filet le sauvait
-  return { ok, detail: `« il verifie qu'on tient debout, pas que le point est atteignable » · le mur du releve precedent est toujours la : ${r.mur ? `${r.mur.w} m de long et ${r.mur.h} m de haut en (${r.mur.x} ; ${r.mur.z})` : 'INTROUVABLE'}`
+  return { ok, detail: `« il verifie qu'on tient debout, pas que le point est atteignable » · habitant mesure : ${r.habitant ? `${r.habitant.nom} (rang ${r.habitant.rang}, vitesse ${r.habitant.vitesse} m/s)` : 'AUCUN'} · le mur du releve precedent est toujours la : ${r.mur ? `${r.mur.w} m de long et ${r.mur.h} m de haut en (${r.mur.x} ; ${r.mur.z})` : 'INTROUVABLE'}`
     + ` · RECENSEMENT sur ${r.recensement.paires} configurations (voiture posee de 10 en 10 m sur la ville habitee, habitant a 8 m dans quatre directions) : ${r.recensement.defaut} ou le cote le plus proche ou l'on TIENT DEBOUT n'est pas joignable a pied, dont ${r.recensement.avecIssue} qui ont une autre portiere joignable (hors banc, au pas de 5 m : 300 sur 3 038, dont 175 avec une issue)`
     + ` · CAS MESURE, voiture en (-60 ; 25), habitant en (-65,66 ; 30,66) — les huit cotes : ${r.cotes.map(q => `(${q.p[0]} ; ${q.p[1]}) a ${q.d} m ${q.joignable ? 'JOIGNABLE' : 'injoignable'}`).join(', ')}`
     + ` · AVANT (l'ancien choix, le plus proche ou l'on tient debout, ${JSON.stringify(r.avant.rdv)}) : ${r.avant.images} images pour monter, compteur de blocage a ${r.avant.stuckMax} au maximum — le filet des 2,5 s se declenche — et ${r.avant.sauts} saut de ${r.avant.sautMax} m, une TELEPORTATION`

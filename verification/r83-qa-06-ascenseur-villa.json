@@ -1,0 +1,25 @@
+{
+ "villa": {
+  "poseSurLaCabine": {
+   "rider": true,
+   "y": 0.7,
+   "plancher": 0.7,
+   "ecart": 0,
+   "dx": 0,
+   "dz": 0
+  },
+  "course": 4.75,
+  "attente_s": 1.22,
+  "montee_s": 2.73,
+  "ecartMontee_m": 0,
+  "descente_s": 2.73,
+  "ecartDescente_m": 0,
+  "hpMin": 100,
+  "hp": 100,
+  "mort": false,
+  "msg": "🛗 Descente…",
+  "yJoueur": 0.72,
+  "yCabine": 0.62
+ },
+ "erreurs": []
+}

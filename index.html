@@ -188,6 +188,20 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
   text-shadow:0 3px 0 rgba(0,0,0,.5),0 0 22px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;white-space:nowrap;z-index:4}
 #msg.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;max-width:90vw;text-align:center;line-height:1.15}
+/* LE BANDEAU SORTAIT PAR LE HAUT SUR UN TELEPHONE COUCHE. Sa POSITION est un pourcentage de la
+   HAUTEUR (top: 17 %, centre sur lui-meme) mais sa TAILLE un pourcentage de la LARGEUR (3,6vw) :
+   sur un ecran large et bas — 812 x 375, le telephone couche — le message d'accueil « Bienvenue
+   en ville ! Z Q S D pour marcher · E agir · Espace sauter » fait trois lignes de 29,2 px, soit
+   154,5 px de haut, et sa moitie (77 px) depasse les 17 % de 375 px (63,75 px). Mesure au banc :
+   boite de (203 ; -13,5) a (609 ; 141) — 13,5 px AU-DESSUS de l'ecran, la premiere ligne coupee.
+   Sur un ecran bas, on ANCRE donc le bandeau PAR LE HAUT au lieu de le centrer sur une fraction
+   de hauteur, et on reserre la police : il ne peut plus sortir. (La tele fait 1080 px de haut :
+   cette regle ne la concerne pas, et body.tv garde ses propres tailles.) */
+@media (max-height:560px){
+  #msg{top:10px;transform:translate(-50%,0) scale(.6);font-size:clamp(20px,4.4vw,34px)}
+  #msg.show{transform:translate(-50%,0) scale(1)}
+  #msg.long{font-size:clamp(15px,2.6vw,22px);max-width:84vw}
+}
 /* Le VIGNETTAGE et l'ÉTALONNAGE se faisaient ici, en CSS : le navigateur devait recomposer
    toute l'image par-dessus le jeu, et sur la télé on les coupait donc — l'image y était plus
    terne et le coin sombre disparaissait. Ils sont maintenant DANS la passe de netteté

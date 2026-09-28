@@ -1363,6 +1363,15 @@ marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux d
 - **Captures** : `verification/r83qa2-partie-01-arrivee.png` … `r83qa2-partie-08-apres-le-ko.png`
 - **Mesures brutes** : `verification/r83qa2-partie-1-arriver-rouler-se-garer.json`, `verification/r83qa2-partie-2-jouer-ko-revenir.json`
 
+### 116. Le contrôle « aucun véhicule bloqué sans raison » ne connaît pas le carjacking, un arrêt pourtant légitime du jeu
+- **Gravité** : MINEUR — c'est le CONTRÔLE qui a tort, pas le jeu. Mais il rend le test 450 rouge au hasard de l'ordre des lots, et un test qui crie au loup finit par ne plus être écouté.
+- **Reproduire** : lancer le test 450 dans un lot où le joueur se trouve à portée d'un véhicule de la circulation (mesuré par le poste r83-j dans un lot de 111 tests, sur DEUX versions du jeu — donc ce n'est ni une régression du round 83 ni une sensibilité à l'horloge).
+- **On voit** : un véhicule s'arrête à la portière du joueur et y reste — **7,8 s** sur l'ancien code, **25 s** sur le neuf. Le vidage de diagnostic du test dit `"raison":"braquage"`.
+- **La cause** : `braquage` est le **carjacking du jeu** — un véhicule vient se présenter à l'enfant pour qu'il puisse le prendre. C'est un arrêt voulu, annoncé, et utile. La liste des « raisons légales » que le test 450 accepte ne le contient pas.
+- **On devrait voir** : le test compte `braquage` parmi les raisons légales, et le **nomme** dans son bilan — comme il nomme déjà `degage`, `figeT` et les autres. Ne pas monter son seuil de 5 s : c'est la liste des raisons qui est incomplète, pas le seuil qui est trop serré.
+- **Relevé brut** : journal de la suite propre, `scratchpad/SUITE-PROPRE-121098b.log`, et le lot de 111 tests du poste r83-j.
+
+
 ## LE CONTRÔLE DU ROUND 83 — r83-qa2 (entrées 117 et suivantes)
 
 ### 117. Dans la cage d'escalier de La Zone, il reste SIX PAS sur cinquante-deux où la caméra entre encore dans le dos de l'enfant
@@ -1389,6 +1398,7 @@ marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux d
 - **Gravité** : MINEUR, mais c'est exactement le maillon de la chaîne de cause à effet que la réparation voulait donner à l'enfant.
 - **Reproduire** : rouler sur un passant à plus de 30 km/h, hors de vue de la police.
 - **On voit** : `ecraseAuSol` affiche d'abord **« 🚑 Tu as renversé X ! Il va porter plainte… »** (`msg(..., 3000)`, **priorité 0**), puis, **dans la même image**, l'appel des secours affiche **« 🚑 Une ambulance a été appelée »** (`msg(..., 2200, 1)`, **priorité 1**). La priorité 1 écrase la priorité 0 et tient 2,2 s : le premier message **n'est jamais lu**. Relevé de ma mesure : la bande passe de « 🌳 Parc… » à « 🚑 Une ambulance a été appelée », sans jamais montrer « il va porter plainte ». Puis **quarante secondes de silence**, et l'étoile tombe avec « 📝 Lucas_2014 a porté plainte… ».
+- **Ce qui rattrape en partie, et je le dis** : le **journal de chat**, lui, garde la trace — on y lit « 📝 Lucas_2014 a porté plainte contre Joueur36 (l'avoir renversé en voiture) » et « 🚨 La police recherche Joueur36 (écraser Lucas_2014) ». Un enfant qui lit le journal comprend ; un enfant qui ne regarde que la bande, non.
 - **On devrait voir** : les deux, ou au moins celui qui annonce la suite (le jeu peut lui donner la priorité 1 lui aussi, ou l'afficher après l'ambulance).
 - **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
 
@@ -1410,10 +1420,3 @@ marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux d
 - **On voit** : « 🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame » tient sur **cinq lignes** et couvre environ **200 px sur 720**, soit **28 % de la hauteur**, au milieu du haut de l'écran. Idem pour « 💪 Séance finie : 76 foulées en 30 s (2.5/s) · 📈 Performance +10 → 27/100 ★ · 🏆 Record personnel battu (76) : +2 de bonus ». C'est beaucoup de texte d'un coup pour un enfant de huit ans, et ça masque ce qu'il y a devant pendant deux à quatre secondes.
 - **Captures** : `verification/r83qa2-113-bulldozer-et-ses-voisins.png`, `verification/r83qa2-sport-par-la-porte.png`
 
-### 116. Le contrôle « aucun véhicule bloqué sans raison » ne connaît pas le carjacking, un arrêt pourtant légitime du jeu
-- **Gravité** : MINEUR — c'est le CONTRÔLE qui a tort, pas le jeu. Mais il rend le test 450 rouge au hasard de l'ordre des lots, et un test qui crie au loup finit par ne plus être écouté.
-- **Reproduire** : lancer le test 450 dans un lot où le joueur se trouve à portée d'un véhicule de la circulation (mesuré par le poste r83-j dans un lot de 111 tests, sur DEUX versions du jeu — donc ce n'est ni une régression du round 83 ni une sensibilité à l'horloge).
-- **On voit** : un véhicule s'arrête à la portière du joueur et y reste — **7,8 s** sur l'ancien code, **25 s** sur le neuf. Le vidage de diagnostic du test dit `"raison":"braquage"`.
-- **La cause** : `braquage` est le **carjacking du jeu** — un véhicule vient se présenter à l'enfant pour qu'il puisse le prendre. C'est un arrêt voulu, annoncé, et utile. La liste des « raisons légales » que le test 450 accepte ne le contient pas.
-- **On devrait voir** : le test compte `braquage` parmi les raisons légales, et le **nomme** dans son bilan — comme il nomme déjà `degage`, `figeT` et les autres. Ne pas monter son seuil de 5 s : c'est la liste des raisons qui est incomplète, pas le seuil qui est trop serré.
-- **Relevé brut** : journal de la suite propre, `scratchpad/SUITE-PROPRE-121098b.log`, et le lot de 111 tests du poste r83-j.

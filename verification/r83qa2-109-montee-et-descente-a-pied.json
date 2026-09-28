@@ -1,0 +1,1250 @@
+{
+ "montee": [
+  {
+   "etape": "01-trottoir-vers-palier",
+   "cible": [
+    -158.4,
+    13.9
+   ],
+   "fin": {
+    "x": -158.4,
+    "y": 0.2,
+    "z": 14.24,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 7.08,
+    "piece": null,
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 150.83
+   },
+   "ymax": 0.78,
+   "ymin": 0.06,
+   "bloque": 0,
+   "images": 43,
+   "camMin": 7.08,
+   "camMoy": 7.08,
+   "traces": [
+    [
+     -158.4,
+     0.78,
+     17.99
+    ],
+    "ARRIVE i=43"
+   ],
+   "vu": {
+    "camD": 9.01,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.36,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": -0.05,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.1,
+     "y": -0.34,
+     "dedans": true
+    },
+    "degageDevant": 2.77,
+    "pos": [
+     -158.4,
+     0.2,
+     14
+    ]
+   }
+  },
+  {
+   "etape": "02-volee-montante-etage0",
+   "cible": [
+    -159.7,
+    10.5
+   ],
+   "fin": {
+    "x": -159.7,
+    "y": 1.8,
+    "z": 10.76,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.95,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 153.2
+   },
+   "ymax": 1.8,
+   "ymin": 0.2,
+   "bloque": 0,
+   "images": 117,
+   "camMin": 4.95,
+   "camMoy": 4.95,
+   "traces": [
+    [
+     -158.4,
+     0.2,
+     13.92
+    ],
+    [
+     -159.44,
+     0.2,
+     13.92
+    ],
+    [
+     -159.68,
+     0.84,
+     12.52
+    ],
+    "ARRIVE i=117"
+   ],
+   "vu": {
+    "camD": 6.49,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": -0.1,
+     "y": -0.09,
+     "dedans": true
+    },
+    "tete": {
+     "x": -0.11,
+     "y": 0.35,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.09,
+     "y": -0.02,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.7,
+     1.8,
+     10.52
+    ]
+   }
+  },
+  {
+   "etape": "03-demi-tour-etage0",
+   "cible": [
+    -159.7,
+    8.55
+   ],
+   "fin": {
+    "x": -159.7,
+    "y": 1.8,
+    "z": 8.88,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 3.11,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 154.02
+   },
+   "ymax": 1.8,
+   "ymin": 1.8,
+   "bloque": 0,
+   "images": 18,
+   "camMin": 3.11,
+   "camMoy": 3.11,
+   "traces": [
+    [
+     -159.7,
+     1.8,
+     10.38
+    ],
+    "ARRIVE i=18"
+   ],
+   "vu": {
+    "camD": 4.18,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.52,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.06,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.07,
+     "y": -0.25,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.7,
+     1.8,
+     8.64
+    ]
+   }
+  },
+  {
+   "etape": "04-change-de-bande-etage0",
+   "cible": [
+    -157.1,
+    8.55
+   ],
+   "fin": {
+    "x": -157.37,
+    "y": 1.8,
+    "z": 8.55,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.77,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 155.02
+   },
+   "ymax": 1.8,
+   "ymin": 1.8,
+   "bloque": 0,
+   "images": 26,
+   "camMin": 4.77,
+   "camMoy": 4.77,
+   "traces": [
+    [
+     -159.69,
+     1.8,
+     8.5
+    ],
+    "ARRIVE i=26"
+   ],
+   "vu": {
+    "camD": 6.1,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0.01,
+     "y": -0.35,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0.01,
+     "y": 0.09,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.13,
+     "y": -0.2,
+     "dedans": true
+    },
+    "degageDevant": 6.1,
+    "pos": [
+     -157.13,
+     1.8,
+     8.55
+    ]
+   }
+  },
+  {
+   "etape": "05-volee-descendante-etage0",
+   "cible": [
+    -157.1,
+    14.2
+   ],
+   "fin": {
+    "x": -157.09,
+    "y": 3.4,
+    "z": 13.88,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.88,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 156.5
+   },
+   "ymax": 3.4,
+   "ymin": 1.8,
+   "bloque": 0,
+   "images": 55,
+   "camMin": 4.88,
+   "camMoy": 4.88,
+   "traces": [
+    [
+     -156.99,
+     1.8,
+     8.56
+    ],
+    "ARRIVE i=55"
+   ],
+   "vu": {
+    "camD": 6.68,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.14,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.28,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.15,
+     "y": -0.02,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -157.1,
+     3.4,
+     14.12
+    ]
+   }
+  },
+  {
+   "etape": "12-volee-montante-etage1",
+   "cible": [
+    -159.7,
+    10.5
+   ],
+   "fin": {
+    "x": -159.66,
+    "y": 5,
+    "z": 10.81,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 3.86,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 158.07
+   },
+   "ymax": 5,
+   "ymin": 3.4,
+   "bloque": 0,
+   "images": 75,
+   "camMin": 3.86,
+   "camMoy": 3.86,
+   "traces": [
+    [
+     -157.11,
+     3.4,
+     14.25
+    ],
+    [
+     -159.31,
+     3.72,
+     13.27
+    ],
+    "ARRIVE i=75"
+   ],
+   "vu": {
+    "camD": 5.55,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": -0.16,
+     "y": -0.16,
+     "dedans": true
+    },
+    "tete": {
+     "x": -0.16,
+     "y": 0.34,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.02,
+     "y": -0.12,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.69,
+     5,
+     10.57
+    ]
+   }
+  },
+  {
+   "etape": "13-demi-tour-etage1",
+   "cible": [
+    -159.7,
+    8.55
+   ],
+   "fin": {
+    "x": -159.7,
+    "y": 5,
+    "z": 8.83,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 2.54,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 158.95
+   },
+   "ymax": 5,
+   "ymin": 5,
+   "bloque": 0,
+   "images": 19,
+   "camMin": 2.54,
+   "camMoy": 2.54,
+   "traces": [
+    [
+     -159.71,
+     5,
+     10.43
+    ],
+    "ARRIVE i=19"
+   ],
+   "vu": {
+    "camD": 3.64,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0.01,
+     "y": -0.56,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0.01,
+     "y": 0.07,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.15,
+     "y": -0.29,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.7,
+     5,
+     8.59
+    ]
+   }
+  },
+  {
+   "etape": "14-change-de-bande-etage1",
+   "cible": [
+    -157.1,
+    8.55
+   ],
+   "fin": {
+    "x": -157.37,
+    "y": 5,
+    "z": 8.54,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.46,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 159.85
+   },
+   "ymax": 5,
+   "ymin": 5,
+   "bloque": 0,
+   "images": 26,
+   "camMin": 4.46,
+   "camMoy": 4.46,
+   "traces": [
+    [
+     -159.69,
+     5,
+     8.45
+    ],
+    "ARRIVE i=26"
+   ],
+   "vu": {
+    "camD": 5.94,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0.02,
+     "y": -0.35,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0.02,
+     "y": 0.09,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.12,
+     "y": -0.2,
+     "dedans": true
+    },
+    "degageDevant": 6.1,
+    "pos": [
+     -157.13,
+     5,
+     8.55
+    ]
+   }
+  },
+  {
+   "etape": "15-volee-descendante-etage1",
+   "cible": [
+    -157.1,
+    14.2
+   ],
+   "fin": {
+    "x": -157.09,
+    "y": 6.6,
+    "z": 13.88,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.86,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 161.38
+   },
+   "ymax": 6.6,
+   "ymin": 5,
+   "bloque": 0,
+   "images": 55,
+   "camMin": 4.86,
+   "camMoy": 4.86,
+   "traces": [
+    [
+     -156.99,
+     5,
+     8.56
+    ],
+    "ARRIVE i=55"
+   ],
+   "vu": {
+    "camD": 6.67,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.15,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.28,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.15,
+     "y": -0.02,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -157.1,
+     6.6,
+     14.12
+    ]
+   }
+  },
+  {
+   "etape": "90-coursive",
+   "cible": [
+    -165.9,
+    15.8
+   ],
+   "fin": {
+    "x": -165.61,
+    "y": 6.6,
+    "z": 15.78,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 164.05
+   },
+   "ymax": 6.6,
+   "ymin": 6.6,
+   "bloque": 0,
+   "images": 132,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -157.11,
+     6.6,
+     14.26
+    ],
+    [
+     -160.57,
+     6.6,
+     15.4
+    ],
+    "ARRIVE i=132"
+   ],
+   "vu": {
+    "camD": 6.85,
+    "piece": "coursive de La Zone",
+    "pieds": {
+     "x": -0.03,
+     "y": -0.28,
+     "dedans": true
+    },
+    "tete": {
+     "x": -0.04,
+     "y": 0.13,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.19,
+     "y": -0.16,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -165.85,
+     6.6,
+     15.8
+    ]
+   }
+  },
+  {
+   "etape": "91-appartement",
+   "cible": [
+    -165.9,
+    13.8
+   ],
+   "fin": {
+    "x": -165.91,
+    "y": 6.6,
+    "z": 14.09,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "coursive de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 164.95
+   },
+   "ymax": 6.6,
+   "ymin": 6.6,
+   "bloque": 0,
+   "images": 20,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -165.99,
+     6.6,
+     15.79
+    ],
+    "ARRIVE i=20"
+   ],
+   "vu": {
+    "camD": 5.85,
+    "piece": "Territoire Les Frelons Jaunes",
+    "pieds": {
+     "x": 0,
+     "y": -0.39,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.08,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.21,
+     "y": -0.28,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -165.9,
+     6.6,
+     13.85
+    ]
+   }
+  }
+ ],
+ "descente": [
+  {
+   "etape": "D1-vers-la-volee",
+   "cible": [
+    -157.1,
+    12.3
+   ],
+   "fin": {
+    "x": -157.23,
+    "y": 6.6,
+    "z": 12.57,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 5.58,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 166.55
+   },
+   "ymax": 6.6,
+   "ymin": 6.6,
+   "bloque": 0,
+   "images": 26,
+   "camMin": 5.58,
+   "camMoy": 5.58,
+   "traces": [
+    [
+     -158.39,
+     6.6,
+     13.89
+    ],
+    "ARRIVE i=26"
+   ],
+   "vu": {
+    "camD": 6.5,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0.18,
+     "y": -0.34,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0.19,
+     "y": 0.1,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.09,
+     "y": -0.16,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -157.13,
+     6.6,
+     12.35
+    ]
+   }
+  },
+  {
+   "etape": "D2-descend-vers-le-nord",
+   "cible": [
+    -157.1,
+    8.55
+   ],
+   "fin": {
+    "x": -157.1,
+    "y": 5.02,
+    "z": 8.8,
+    "hp": 100,
+    "sol": false,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 167.73
+   },
+   "ymax": 6.6,
+   "ymin": 5.02,
+   "bloque": 0,
+   "images": 37,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -157.07,
+     6.6,
+     12.22
+    ],
+    "ARRIVE i=37"
+   ],
+   "vu": {
+    "camD": 6.89,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.5,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": -0.1,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0,
+     "y": -0.3,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -157.1,
+     5,
+     8.55
+    ]
+   }
+  },
+  {
+   "etape": "D3-change-de-bande",
+   "cible": [
+    -159.7,
+    8.55
+   ],
+   "fin": {
+    "x": -159.43,
+    "y": 5,
+    "z": 8.53,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.92,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 168.63
+   },
+   "ymax": 5,
+   "ymin": 5,
+   "bloque": 0,
+   "images": 26,
+   "camMin": 4.92,
+   "camMoy": 4.92,
+   "traces": [
+    [
+     -157.11,
+     5,
+     8.39
+    ],
+    "ARRIVE i=26"
+   ],
+   "vu": {
+    "camD": 6.15,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.36,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.09,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.15,
+     "y": -0.2,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.67,
+     5,
+     8.55
+    ]
+   }
+  },
+  {
+   "etape": "D4-descend-vers-le-sud",
+   "cible": [
+    -159.7,
+    14.2
+   ],
+   "fin": {
+    "x": -159.71,
+    "y": 3.49,
+    "z": 13.89,
+    "hp": 100,
+    "sol": false,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 170.12
+   },
+   "ymax": 5,
+   "ymin": 3.49,
+   "bloque": 0,
+   "images": 55,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -159.81,
+     5,
+     8.57
+    ],
+    "ARRIVE i=55"
+   ],
+   "vu": {
+    "camD": 6.91,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.43,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": -0.03,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.15,
+     "y": -0.29,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.7,
+     3.4,
+     14.15
+    ]
+   }
+  },
+  {
+   "etape": "D5-suite",
+   "cible": [
+    -157.1,
+    12.3
+   ],
+   "fin": {
+    "x": -157.16,
+    "y": 3.4,
+    "z": 12.59,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 171.37
+   },
+   "ymax": 3.4,
+   "ymin": 3.4,
+   "bloque": 0,
+   "images": 41,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -159.69,
+     3.4,
+     14.31
+    ],
+    "ARRIVE i=41"
+   ],
+   "vu": {
+    "camD": 6.2,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0.18,
+     "y": -0.36,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0.19,
+     "y": 0.09,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.03,
+     "y": -0.37,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -157.11,
+     3.4,
+     12.35
+    ]
+   }
+  },
+  {
+   "etape": "D6-encore",
+   "cible": [
+    -157.1,
+    8.55
+   ],
+   "fin": {
+    "x": -157.1,
+    "y": 1.89,
+    "z": 8.89,
+    "hp": 100,
+    "sol": false,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.92,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 172.38
+   },
+   "ymax": 3.4,
+   "ymin": 1.89,
+   "bloque": 0,
+   "images": 36,
+   "camMin": 4.92,
+   "camMoy": 4.92,
+   "traces": [
+    [
+     -157.08,
+     3.4,
+     12.21
+    ],
+    "ARRIVE i=36"
+   ],
+   "vu": {
+    "camD": 6.85,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.51,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": -0.11,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": -0.11,
+     "y": -0.33,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -157.1,
+     1.8,
+     8.62
+    ]
+   }
+  },
+  {
+   "etape": "D7-bande",
+   "cible": [
+    -159.7,
+    8.55
+   ],
+   "fin": {
+    "x": -159.43,
+    "y": 1.8,
+    "z": 8.54,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.92,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 173.28
+   },
+   "ymax": 1.8,
+   "ymin": 1.8,
+   "bloque": 0,
+   "images": 26,
+   "camMin": 4.92,
+   "camMoy": 4.92,
+   "traces": [
+    [
+     -157.11,
+     1.8,
+     8.43
+    ],
+    "ARRIVE i=26"
+   ],
+   "vu": {
+    "camD": 6.15,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.36,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.09,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.15,
+     "y": -0.2,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.67,
+     1.8,
+     8.55
+    ]
+   }
+  },
+  {
+   "etape": "D8-au-sol",
+   "cible": [
+    -159.7,
+    14.2
+   ],
+   "fin": {
+    "x": -159.71,
+    "y": 0.29,
+    "z": 13.89,
+    "hp": 100,
+    "sol": false,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 174.67
+   },
+   "ymax": 1.8,
+   "ymin": 0.29,
+   "bloque": 0,
+   "images": 55,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -159.81,
+     1.8,
+     8.57
+    ],
+    "ARRIVE i=55"
+   ],
+   "vu": {
+    "camD": 6.91,
+    "piece": "cage d'escalier de La Zone",
+    "pieds": {
+     "x": 0,
+     "y": -0.43,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": -0.03,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0.15,
+     "y": -0.29,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -159.7,
+     0.2,
+     14.15
+    ]
+   }
+  },
+  {
+   "etape": "D9-trottoir",
+   "cible": [
+    -158.4,
+    18
+   ],
+   "fin": {
+    "x": -158.51,
+    "y": 0.06,
+    "z": 17.69,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 4.91,
+    "piece": "cage d'escalier de La Zone",
+    "act": "🚩 Territoire Les Frelons Jaunes",
+    "sim": 175.82
+   },
+   "ymax": 0.2,
+   "ymin": 0.06,
+   "bloque": 0,
+   "images": 38,
+   "camMin": 4.91,
+   "camMoy": 4.91,
+   "traces": [
+    [
+     -159.69,
+     0.2,
+     14.33
+    ],
+    "ARRIVE i=38"
+   ],
+   "vu": {
+    "camD": 6.77,
+    "piece": null,
+    "pieds": {
+     "x": 0,
+     "y": -0.31,
+     "dedans": true
+    },
+    "tete": {
+     "x": 0,
+     "y": 0.1,
+     "dedans": true
+    },
+    "marcheDevant": {
+     "x": 0,
+     "y": -0.14,
+     "dedans": true
+    },
+    "degageDevant": 12,
+    "pos": [
+     -158.43,
+     0.06,
+     17.92
+    ]
+   }
+  }
+ ],
+ "gabarit": {
+  "imx": -169,
+  "imw": 16,
+  "imd": 10,
+  "imz": 10,
+  "etages": 3,
+  "h": 3.2,
+  "palX": -158.4,
+  "zS": 14.8,
+  "pal": 1.8,
+  "b0": -159.7,
+  "b1": -157.1,
+  "zM0": 7.1,
+  "zM1": 10,
+  "courZ0": 14.8,
+  "courZ1": 16.8
+ },
+ "messages": [
+  {
+   "t": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+   "sim": 150.05
+  }
+ ],
+ "erreurs": []
+}

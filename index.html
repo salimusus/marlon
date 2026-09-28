@@ -28681,8 +28681,8 @@ function conduire(c, cmd, dt) {
         if (simTime - c.pietBloqueT >= ECARTE_DELAI) ecartePietons(c, !!devant);
         msg(devant ? '🚸 Attention ! Quelqu\'un devant — recule (S ou L2) pour te dégager'
           : '🚸 Attention ! Quelqu\'un derrière — avance doucement pour te dégager', 1800); }
-    } else c.pietBloqueT = 0;   // le couloir est libre : le compteur d'attente repart de zero
-  }
+    } else c.pietBloqueT = 0;   // le couloir est libre : le compteur d'attente repart de zéro
+  } else if (c.pietBloqueT) c.pietBloqueT = 0;   // on a quitté la place : le compteur ne survit pas
   const accLong = (V.speed - v0) / Math.max(dt, 1e-3);
   if (pilote && P.jumpBuf > 0) { P.jumpBuf = 0; if (c.kind === 'buggy') { if (!c.airborne && (c.vy || 0) <= 0.01 && simTime > (c.hopT || 0)) { c.hopT = simTime + 0.9; c.vy = 9.5; c.airborne = true; c.susp = -0.2; sfx.jump(); burst(c.x, c.y + 0.3, c.z, 0xc9a86a, 6); } } else horn(c.kind); }   // SAUT : le buggy bondit, les autres klaxonnent
   if (c.rider) { c.tilt += ((-ix * (sp.lean || 0.3) * Math.min(1, Math.abs(V.speed) / 8)) - c.tilt) * Math.min(1, dt * 6); }

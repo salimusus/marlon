@@ -128,9 +128,68 @@ défauts du jeu mais des défauts de mesure, chacun établi par un chiffre :
   relevé à la 60ᵉ seconde d'une mission qui dure 28 s), et le test précédent laissait
   l'enfant à 37 PV — il mourait et le jeu le téléportait à l'hôpital, 197 m plus loin.
 
+### La caméra ne montrait plus l'enfant dans les cages d'escalier
+
+C'est le défaut que le contrôleur qualité a exigé de voir réparé avant toute
+livraison. Distance caméra-tête de **0,47 à 1,96 m** sur trois caps sur quatre, aux
+sept points de la cage, pour un confort que le jeu se fixe lui-même à **4,60 m** :
+l'écran était rempli par le visage de l'enfant. La Zone est un des huit
+territoires et sa conquête se joue dans ces **cinq immeubles à trois niveaux**.
+
+La cause, trouvée rayon par rayon : une cage d'escalier a par définition une dalle
+au-dessus de la tête, donc la loi « un plafond bas n'interdit que de MONTER »
+écrasait la visée à son minimum — **or la montée est le seul secours du jeu quand
+il n'y a pas de place derrière**. La caméra restait clouée à hauteur de poitrine :
+la hauteur exacte des garde-corps.
+
+**Après : 4,95 m**, vérifié deux fois et par deux méthodes — 24 relevés par le
+réparateur, puis **240 relevés indépendants** par le contrôleur (5 immeubles × 3
+niveaux × 4 points × 4 caps). Et **rien n'est effacé** : 41 garde-corps sur 41, 25
+marches sur 25, opacité 1 partout. La recette employée pour la cabane des arbres a
+été **refusée après mesure**, parce qu'elle efface tout ce qui dépasse un mètre
+au-dessus du plancher — dans un escalier, elle aurait retiré à l'enfant la volée
+et le garde-corps qu'il gravit.
+
+### Une voiture qui sort d'une place écrasait un passant
+
+Et c'est l'enfant qui était au volant. Deux mesures du même jeu se
+contredisaient : la boîte où l'on **écrase** fait 1,70 m de demi-largeur, le couloir
+où l'on **freine** n'en faisait que 1,40. Le passant était à 1,60 m : dans la boîte,
+hors du couloir. Sur les 24 images qui mènent au choc, le freinage a répondu
+« non » **24 fois**.
+
+L'avertissement retenu n'est pas un adoucissement mais une impossibilité
+arithmétique : la manœuvre est plafonnée à **2,4 m/s** alors que l'écrasement exige
+3 m/s. Coût en fluidité, mesuré sur 21 600 images-véhicule : **nul** (4,898 →
+4,898 m/s). Et **zéro véhicule de la circulation** n'est jamais en état « sortie de
+place » : l'exception ne touche que ce qu'elle doit toucher.
+
+**La victime porte maintenant plainte**, et le délai n'est pas une constante de
+plus — il est contenu par le temps où elle reste à terre : bousculée, l'étoile tombe
+à **6,00 s** ; renversée, à **40,02 s**. Plus on fait mal, plus tard on paie.
+
+**Et la boîte d'écrasement a enfin un sens de marche** : dix essais en pleine rue,
+**neuf renversements sur dix avant** — indifféremment devant ou derrière, en
+avançant ou en reculant — contre **cinq légitimes et cinq épargnés** après.
+
+### L'ami ne pouvait pas passer devant le joueur
+
+Purement arithmétique, et mesuré au centimètre. La séparation de deux personnages
+applique le chevauchement **entier** à celui qui n'est pas figé, et **le joueur est
+toujours figé**. Le pas d'un habitant vaut 0,0653 m par image, la poussée vaut
+1,16 m moins la distance : elles s'égalent à **1,0947 m**. L'ami était **épinglé
+pour toujours**, et comme le jeu le déclarait libre à chaque image, même le filet de
+secours ne pouvait pas le sauver. Réparé non pas en poussant moins fort — deux
+silhouettes se traverseraient — mais **en passant à côté**. Avant : jamais au
+volant, 80 secondes sur place. Après : au volant à l'image 180.
+
+**Et un fuyard fuyait un fantôme** : le nom de l'agresseur n'était effacé qu'à
+l'expiration de la bagarre, jamais à son ouverture — un habitant frappé par
+l'enfant fuyait donc pour toujours à cause d'une vieille rancune contre un voisin.
+
 ## Le banc d'essai
 
-**526 tests** joués dans un vrai navigateur, plus douze bancs Node et cinq
+**534 tests** joués dans un vrai navigateur, plus douze bancs Node et cinq
 vérifications de lint. Les douze bancs : `traffic` 14/14, `vehicle-contact` 6/6,
 `strategy` 7/0, `gamepad` 23/23, `controls-tv` 16/16, `cinematic` 15, `city-detail`
 10/10, `empire` 15/0, `save-strategy` 4/0, `cosmetic-performance`, `garage` (8 accès

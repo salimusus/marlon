@@ -25704,3 +25704,136 @@ test('un habitant frappe par l\'enfant se retourne meme s\'il gardait une vieill
     + ` · AVEC LA VIEILLE RANCUNE MONTEE A LA MAIN (b.fuitDe = un voisin, une bagarre finie) : il se retourne au coup ${B.retourne}, KO en ${B.coups} coups (${B.suite}) — AVANT, jamais`
     + ` · TEMOIN, la regle mord toujours : frappe par un AUTRE HABITANT (${T.nom}, le joueur a 40 m), le fuyard garde son agresseur (fuitDe = ${T.fuitDe}) et ne se retourne pas contre l'enfant` };
 });
+// ====== A LA FETE FORAINE, LA PASTILLE ET LA TOUCHE DISENT LA MEME CHOSE (defaut n° 122) ======
+// Le controleur : « un enfant de huit ans marche vers la grande roue — l'endroit du jeu ou il va
+// en premier —, la consigne s'arme, il appuie sur △, et la police le recherche pour vol de
+// voiture. Il ne comprend pas, et rien ne le lui a propose. »
+// LA CAUSE : la touche E (et △, qui passe par le MEME keydown : PAD_MAP[3] = 'KeyE', telTouche)
+// execute LA PREMIERE action d'une chaine de quarante-cinq `else if`, et cette chaine testait
+// `city.near` (voiture libre) puis `city.jackNear` (voiture OCCUPEE, deux etoiles) AVANT
+// `city.rideNear`, trente branches plus loin. Et `consigneProche` ne parlait d'AUCUN manege.
+// AVANT, 4 caps x 12 distances autour du moyeu (12 ; 158) = 48 releves par scenario :
+//   roue seule : 28 montees dans la roue, mais PASTILLE VIDE 48 sur 48 ;
+//   + voiture libre a 2,2 m : 48 sur 48 au volant, la roue jamais atteignable ;
+//   + voiture occupee a 2,2 m : 39 vols sur 48 (+2 etoiles), dont 28 la roue armee, pastille vide.
+// APRES : 28 montees dans la roue et 20 vols LA OU LA ROUE N'EST PLUS ARMEE (8 a 12 m) — le vol
+// de voiture n'est pas desarme —, zero incoherence entre la pastille et la touche sur 144 releves.
+test('a la fete foraine, la pastille et la touche disent la meme chose : on monte dans le manege, et zero etoile', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 18, y: 1, z: 158, hour: 12, frais: true });
+    const roue = G.city.rides.find(x => x.kind === 'wheel');
+    if (!roue) return { pourquoi: 'pas de grande roue' };
+    if (!G.arbitreMontee) return { pourquoi: 'arbitreMontee n\'est pas exporte' };
+    // tout le parc automobile au loin : ce test juge UNE roue et UNE voiture
+    for (const v of G.city.cars.concat(G.city.aiCars)) { v.x += 500; v.z += 500; if (v.g) v.g.position.set(v.x, v.y || 0, v.z); }
+    const libre = G.city.cars.find(v => !v.heli && !v.busy);
+    const occ = G.city.aiCars.find(v => v.driver);
+    if (!occ || !libre) return { pourquoi: 'il faut une voiture libre et une voiture avec conducteur' };
+    const pilote = occ.driver;
+    const ecarte = v => { if (!v) return; v.x = 500; v.z = 500; if (v.g) v.g.position.set(500, 0, 500); if (v.solid) { v.solid.x = 500; v.solid.z = 500; } };
+    // la voiture est posee a 2,2 m du joueur, portiere vers lui (c'est la boite de carjacking)
+    const pose = (v, px, pz, ux, uz) => { v.x = px + 2.2 * ux; v.z = pz + 2.2 * uz; v.y = 0;
+      v.h = Math.atan2(-(pz - v.z), px - v.x);
+      if (v.g) { v.g.position.set(v.x, 0, v.z); v.g.rotation.y = v.h; }
+      if (v.solid) { v.solid.x = v.x; v.solid.z = v.z; } };
+    const remetLePilote = () => { occ.driver = pilote; occ.spd = occ.spd || 1; occ.speed = 1;
+      if (!G.city.aiCars.includes(occ)) { G.city.aiCars.push(occ); const k = G.city.cars.indexOf(occ); if (k >= 0) G.city.cars.splice(k, 1); }
+      G.city.fleeing.length = 0; };
+    // ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS : cityStep arme les drapeaux de proximite.
+    const arme = (px, pz) => { P.ride = null; roue.rider = null; if (G.drive.car) G.exitCar();
+      for (let i = 0; i < 4; i++) { P.pos.set(px, 0.4, pz); P.vel.set(0, 0, 0); G.cityStep(1 / 60); }
+      P.pos.set(px, 0.4, pz); };
+    // △ de la manette : PAD_MAP[3] vaut 'KeyE' et padTouche l'envoie par telTouche — le MEME
+    // keydown que le clavier. Un seul appui, exactement comme l'enfant.
+    const triangle = () => { const w0 = G.police.wanted || 0;
+      G.telTouche(G.PAD_MAP[3], true, 'gamepad'); G.telTouche(G.PAD_MAP[3], false, 'gamepad');
+      const et = (G.police.wanted || 0) - w0;
+      const out = { manege: !!P.ride, volant: !!G.drive.car, etoiles: et };
+      if (G.drive.car) G.exitCar(); P.ride = null; roue.rider = null;
+      try { G.clearWanted('fin'); } catch (e) {} return out; };
+    const clavier = () => { const w0 = G.police.wanted || 0;
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', key: 'KeyE', bubbles: true }));
+      const et = (G.police.wanted || 0) - w0;
+      const out = { manege: !!P.ride, volant: !!G.drive.car, etoiles: et };
+      if (G.drive.car) G.exitCar(); P.ride = null; roue.rider = null;
+      try { G.clearWanted('fin'); } catch (e) {} return out; };
+    const R = { roue: { x: roue.x, z: roue.z, rayon: roue.rayon }, caps: [], etoiles: 0, incoherences: [] };
+    // ---- 1. LE POINT DU CONTROLEUR : 6 m a l'est du moyeu, une voiture OCCUPEE a 2,2 m
+    ecarte(libre); remetLePilote(); pose(occ, roue.x + 6, roue.z, 1, 0);
+    arme(roue.x + 6, roue.z);
+    R.point = { flags: (G.city.rideNear ? 'R' : '-') + (G.city.near ? 'N' : '-') + (G.city.jackNear ? 'J' : '-'),
+      consigne: G.consigneProche(), arbitre: G.arbitreMontee(),
+      dManege: +G.distManege(G.city.rideNear).toFixed(2),
+      dVoiture: G.city.jackNear ? +G.distCarrosserie(G.city.jackNear).toFixed(2) : null };
+    R.point.triangle = triangle();
+    arme(roue.x + 6, roue.z); R.point.clavier = clavier();
+    // ---- 2. LES QUATRE APPROCHES, DE 1 A 12 m, dans les trois situations
+    for (const [nom, ux, uz] of [['nord', 0, -1], ['sud', 0, 1], ['est', 1, 0], ['ouest', -1, 0]]) {
+      const ligne = { cap: nom, manege: 0, voiture: 0, vol: 0, rien: 0, etoilesRoueArmee: 0 };
+      for (const scen of ['seule', 'libre', 'occupee']) {
+        for (let d = 1; d <= 12; d++) {
+          const px = roue.x + ux * d, pz = roue.z + uz * d;
+          ecarte(libre); ecarte(occ); remetLePilote();
+          if (scen === 'libre') pose(libre, px, pz, ux, uz);
+          if (scen === 'occupee') pose(occ, px, pz, ux, uz);
+          arme(px, pz);
+          const roueArmee = !!G.city.rideNear;
+          const consigne = String(G.consigneProche());
+          const e = clavier();
+          const act = e.manege ? 'MANEGE' : e.volant ? (e.etoiles > 0 ? 'VOL' : 'VOITURE') : 'rien';
+          // LA PASTILLE DOIT DIRE CE QUE LA TOUCHE VIENT DE FAIRE
+          const dit = act === 'MANEGE' ? /monter dans/.test(consigne)
+            : act === 'VOITURE' ? consigne === '\u{1F697} E : monter'
+            : act === 'VOL' ? /voler cette voiture/.test(consigne) : true;
+          if (!dit) R.incoherences.push(`${scen}/${nom}/${d}m : ${act} mais « ${consigne} »`);
+          if (act === 'MANEGE') ligne.manege++; else if (act === 'VOITURE') ligne.voiture++;
+          else if (act === 'VOL') ligne.vol++; else ligne.rien++;
+          R.etoiles += e.etoiles;
+          if (roueArmee && e.etoiles > 0) ligne.etoilesRoueArmee += e.etoiles;
+        }
+      }
+      R.caps.push(ligne);
+    }
+    // ---- 3. CONTRE-EPREUVE : la MEME voiture occupee, loin de tout manege — △ la vole toujours
+    ecarte(libre); remetLePilote(); pose(occ, 80, 0, 1, 0); arme(80, 0);
+    R.contre = { flags: (G.city.rideNear ? 'R' : '-') + (G.city.near ? 'N' : '-') + (G.city.jackNear ? 'J' : '-'),
+      consigne: G.consigneProche(), arbitre: G.arbitreMontee() };
+    R.contre.triangle = triangle();
+    // remise en ordre pour les tests suivants
+    ecarte(libre); remetLePilote(); ecarte(occ);
+    P.ride = null; roue.rider = null; if (G.drive.car) G.exitCar();
+    try { G.clearWanted('fin'); } catch (e) {}
+    return R;
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const manege = r.caps.reduce((a, c) => a + c.manege, 0), vol = r.caps.reduce((a, c) => a + c.vol, 0);
+  const voiture = r.caps.reduce((a, c) => a + c.voiture, 0);
+  const puni = r.caps.reduce((a, c) => a + c.etoilesRoueArmee, 0);
+  const ok = r.point.arbitre === 'manege' && /monter dans la grande roue/.test(String(r.point.consigne))
+    && r.point.triangle.manege && r.point.triangle.etoiles === 0 && !r.point.triangle.volant
+    && r.point.clavier.manege && r.point.clavier.etoiles === 0
+    && r.incoherences.length === 0 && puni === 0 && manege >= 80 && vol >= 16
+    && r.contre.arbitre === null && r.contre.triangle.volant && r.contre.triangle.etoiles === 2;
+  return { ok, detail: `LA CAUSE : E (et △, meme keydown — PAD_MAP[3] = 'KeyE' passe par telTouche)`
+    + ` execute LA PREMIERE action d'une chaine de 45 \`else if\` qui testait \`city.near\` puis`
+    + ` \`city.jackNear\` (voiture OCCUPEE, 2 etoiles) AVANT \`city.rideNear\`, 30 branches plus loin —`
+    + ` et \`consigneProche\` ne parlait d'AUCUN manege`
+    + ` · LE POINT DU CONTROLEUR, 6 m a l'est du moyeu (${r.roue.x} ; ${r.roue.z}), une voiture occupee`
+    + ` a 2,2 m : drapeaux ${r.point.flags}, la SURFACE de la roue est a ${r.point.dManege} m et la`
+    + ` carrosserie a ${r.point.dVoiture} m — 20 cm d'ecart, le meme endroit pour la main d'un enfant,`
+    + ` donc l'arbitre rend « ${r.point.arbitre} » · la pastille dit « ${r.point.consigne} » et △ fait`
+    + ` monter dans le manege=${r.point.triangle.manege} avec ${r.point.triangle.etoiles} etoile`
+    + ` (le clavier aussi : manege=${r.point.clavier.manege}, ${r.point.clavier.etoiles} etoile)`
+    + ` · AVANT : « 🚗 Joueur a vole la voiture de X ! » et « 🚨 Recherche ★★ »`
+    + ` · 4 approches x 12 distances x 3 situations = 144 releves : ${manege} montees dans le manege,`
+    + ` ${voiture} montees dans une voiture libre, ${vol} vols, ${r.incoherences.length} incoherence`
+    + ` entre la pastille et la touche, et ${puni} etoile prise alors que le manege etait arme`
+    + ` (avant : 39 vols sur 48 dans la seule situation « voiture occupee », dont 28 le manege arme,`
+    + ` pastille vide 48 sur 48)`
+    + ` · CONTRE-EPREUVE, le vol n'est pas desarme : la MEME voiture occupee a 80 m de tout manege,`
+    + ` drapeaux ${r.contre.flags}, arbitre=${r.contre.arbitre}, pastille « ${r.contre.consigne} »,`
+    + ` △ met au volant=${r.contre.triangle.volant} et rend recherche ${r.contre.triangle.etoiles}★`
+    + (r.incoherences.length ? ` · INCOHERENCES : ${r.incoherences.slice(0, 5).join(' | ')}` : '') };
+});

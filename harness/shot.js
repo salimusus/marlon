@@ -2775,6 +2775,10 @@ window.__G = {
   get habitants() { return typeof city !== 'undefined' ? (city.habitants || []) : []; },
   lacheBalancoire: typeof lacheBalancoire === 'function' ? lacheBalancoire : null,
   consigneProche: typeof consigneProche === 'function' ? consigneProche : null,
+  // n° 122 : l'arbitre de la chaîne d'action (le manège contre la voiture)
+  arbitreMontee: typeof arbitreMontee === 'function' ? arbitreMontee : null,
+  distManege: typeof distManege === 'function' ? distManege : null,
+  distCarrosserie: typeof distCarrosserie === 'function' ? distCarrosserie : null,
   updateAct: typeof updateAct === 'function' ? updateAct : null,
   remiseEnJeu: typeof remiseEnJeu === 'function' ? remiseEnJeu : null,
   relevageTick: typeof relevageTick === 'function' ? relevageTick : null,

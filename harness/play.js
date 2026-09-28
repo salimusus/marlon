@@ -26007,7 +26007,13 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       tom.pos.set(car.x, 0.14, car.z + avant + 0.9); tom.av.group.position.copy(tom.pos);
       tom.av.group.visible = true;
       P.pos.set(car.x, (car.y || 0) + 0.4, car.z); G.enterCar(car);
-      const trace = []; let degage = -1, vMax = 0, bride = 0, dit = null;
+      // DEUX POINTES, PAS UNE. Premier jet : `vMax` sur toute la course, releve a 21 m/s — et
+      // c'etait JUSTE : des que le passant s'est ecarte, `pietonDevant` rend faux, le plafond se
+      // leve, et l'enfant qui tient toujours le gaz RECUPERE SA VOITURE. Mesurer la pointe
+      // apres le degagement pour juger le bridage etait un contresens. On mesure donc la pointe
+      // PENDANT que le plafond s'applique, et celle d'APRES separement : la seconde est la preuve
+      // qu'on n'a rien confisque a l'enfant.
+      const trace = []; let degage = -1, vBride = 0, vApres = 0, bride = 0, dit = null;
       G.keys.add('KeyW');
       for (let i = 0; i < images; i++) {
         // le plein gaz, l'enfant qui insiste : la voiture reste dans sa place (voir l'epingle)
@@ -26017,8 +26023,9 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
         const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
         const al = dx * fx + dz * fz, trav = Math.abs(-dx * fz + dz * fx);
         const pare = al - (car.baseD || 4.4) / 2;   // distance au PARE-CHOCS
-        vMax = Math.max(vMax, Math.abs(G.drive.speed || 0));
-        if (G.sortDeStationnement(car, G.drive.speed) && G.pietonDevant(car, G.drive.speed)) bride++;
+        const v = Math.abs(G.drive.speed || 0);
+        const plafonne = G.sortDeStationnement(car, G.drive.speed) && G.pietonDevant(car, G.drive.speed);
+        if (plafonne) { bride++; vBride = Math.max(vBride, v); } else if (degage > 0) vApres = Math.max(vApres, v);
         if (!dit) { const t = el.textContent || ''; if (/Attention/.test(t)) dit = t.trim(); }
         if (i % 60 === 0 || i === images - 1) trace.push({ img: i, pare: +pare.toFixed(2), trav: +trav.toFixed(2) });
         // DEGAGE = il n'est plus dans le couloir de freinage de la voiture
@@ -26027,7 +26034,7 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       G.keys.delete('KeyW');
       const fx = Math.sin(car.h), fz = Math.cos(car.h);
       const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
-      const res = { degage, bride, dit, vMax: +vMax.toFixed(2), trace,
+      const res = { degage, bride, dit, vBride: +vBride.toFixed(2), vApres: +vApres.toFixed(2), trace,
         pareFin: +(dx * fx + dz * fz - (car.baseD || 4.4) / 2).toFixed(2),
         travFin: +Math.abs(-dx * fz + dz * fx).toFixed(2),
         hp: +(tom.hp == null ? 100 : tom.hp).toFixed(1), tole: +(car.dmg || 0).toFixed(2),
@@ -26087,7 +26094,8 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     && B.degage > 0 && B.degage < 400 && B.travFin > A.pareMin
     && B.hp === 100 && B.tole === 0 && !B.ambulance
     && /Attention/.test(B.dit || '') && /recule/.test(B.dit || '')
-    && B.vMax <= r.SORTIE_PAS + 0.05
+    && B.vBride <= r.SORTIE_PAS + 0.05        // bridee TANT QU'IL EST LA
+    && B.vApres > r.SORTIE_PAS + 1            // et l'enfant recupere sa voiture des qu'il s'ecarte
     && r.horsCouloir.ecartes === 0 && r.horsCouloir.bouge === 0;
   return { ok, detail: `LA CAUSE : \`klaxonne(c)\` ne fait que du BRUIT (\`if (d < 40) horn(c.kind)\`) —`
     + ` rien, dans tout le fichier, ne faisait s'ecarter un passant devant un capot, et le bandeau`
@@ -26102,8 +26110,10 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     + ` passant qui s'ecartait) : il degage le couloir a l'image ${B.degage} (${(B.degage / 60).toFixed(1)} s),`
     + ` en s'ecartant DE COTE — ${B.travFin} m de l'axe a la fin, ${B.pareFin} m du pare-chocs —,`
     + ` etat « ${B.fuite} », et il n'a pas une egratignure (${B.hp} PV, ${B.tole} de tole,`
-    + ` ambulance=${B.ambulance}) · la voiture reste bridee a ${B.vMax} m/s tant qu'il est la`
-    + ` (${B.bride} images) · LE MESSAGE DIT LA MANŒUVRE : « ${B.dit} » (avant : « 🚸 Attention !`
+    + ` ambulance=${B.ambulance}) · la voiture reste bridee a ${B.vBride} m/s tant qu'il est la`
+    + ` (${B.bride} images) et L'ENFANT RECUPERE SA VOITURE des qu'il s'est ecarte : pointe`
+    + ` ${B.vApres} m/s ensuite, plafond leve — on ne lui a rien confisque`
+    + ` · LE MESSAGE DIT LA MANŒUVRE : « ${B.dit} » (avant : « 🚸 Attention !`
     + ` Quelqu'un est juste devant la voiture », aucune manœuvre)`
     + ` · relevés, une ligne par seconde : ${B.trace.map(t => `${t.img}: ${t.pare} m du pare-chocs, ${t.trav} m de l'axe`).join(' | ')}`
     + ` · TEMOIN, on n'ecarte que qui est dans le couloir : un passant a 4 m de l'axe n'est pas`

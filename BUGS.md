@@ -1420,3 +1420,21 @@ marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux d
 - **On voit** : « 🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame » tient sur **cinq lignes** et couvre environ **200 px sur 720**, soit **28 % de la hauteur**, au milieu du haut de l'écran. Idem pour « 💪 Séance finie : 76 foulées en 30 s (2.5/s) · 📈 Performance +10 → 27/100 ★ · 🏆 Record personnel battu (76) : +2 de bonus ». C'est beaucoup de texte d'un coup pour un enfant de huit ans, et ça masque ce qu'il y a devant pendant deux à quatre secondes.
 - **Captures** : `verification/r83qa2-113-bulldozer-et-ses-voisins.png`, `verification/r83qa2-sport-par-la-porte.png`
 
+### 122. À la fête foraine, E fait monter dans la voiture garée à côté, jamais dans le manège — et si elle est occupée, l'enfant devient voleur de voiture sans l'avoir voulu
+- **Gravité** : **GÊNANT, et c'est celui des cinq que je remonterais en premier** — il coche « le punit sans qu'il comprenne ». Il ne bloque pas la partie (on court, ou on va en prison et on en sort), mais l'enfant est puni pour une action qu'il n'a pas demandée.
+- **Comment je suis tombé dessus** : pas en le cherchant. Pendant ma partie longue, je marche jusqu'à la grande roue, j'arrive à **0,95 m** du point d'embarquement, `rideNear` est bien **armé**, j'appuie sur **E** — et le journal écrit **« 🚗 Joueur23 a volé la voiture de Chloé ! »**, **« 🚨 La police recherche Joueur23 (vol de voiture) »**, et la bande affiche **« 🚨 Recherché ★★ · la police arrive dans 9 s — sauve-toi ! »**. Je n'ai pas touché au manège.
+- **Reproduit et mesuré, trois cas, même place (6 m à l'est du moyeu de la grande roue) :**
+
+  | situation | `rideNear` | `city.near` | consigne affichée | E fait… |
+  |---|---|---|---|---|
+  | la roue seule, aucune voiture à portée | **oui** | non | « 🎡 Fête foraine » | **monte dans la roue** — « 🎡 C'est parti ! (Espace / SAUT pour descendre) » |
+  | une voiture **libre** garée à 2,2 m | **oui** | **oui** | **« 🚗 E : monter »** | **met au volant de la voiture** (`P.ride` faux, `drive.car` vrai) |
+  | une voiture **occupée** à 2,2 m | **oui** | **oui** | **« 🚗 E : monter »** | **met au volant** — et en jeu réel, c'est le **vol** : ★★ et la police |
+
+- **La cause, lue dans le texte du jeu** : la touche E exécute **la première** d'une longue chaîne de priorités, et `city.near` (monter dans une voiture) puis `city.jackNear` (l'éjecter, « gros délit ! ») passent **bien avant** `city.rideNear`. Il suffit donc qu'une voiture soit garée à côté d'un manège pour que le manège devienne inatteignable à la touche.
+- **Ce qui aggrave** : la consigne devient **« 🚗 E : monter »** — *monter dans quoi ?* Un enfant qui vient de lire le panneau de zone « 🎡 Fête foraine : grande roue et carrousel (**E pour monter**) » lit exactement le même verbe.
+- **On devrait voir** : soit le manège passe devant la voiture quand on est dans son rayon d'embarquement, soit la consigne nomme l'objet (« 🚗 E : monter **dans la voiture** »), soit les deux choix sont proposés.
+- **Captures** : `verification/r83qa2-longue-4-grande-roue.png` (le vol, ★★, la police), `verification/r83qa2-122-touche-e-a-la-fete-foraine.png`
+- **Mesures brutes** : `verification/r83qa2-122-touche-e-mesures.json`
+- **Loyauté** : la seule erreur console de tout mon contrôle (`botDriveTick … reading 'speed'`) vient de **mon** montage du troisième cas — j'ai posé un conducteur à la main (`b.drive = v ; v.rider = b`) sans les champs que le jeu attend. **Ce n'est pas un défaut du jeu** et je ne le compte pas comme tel ; partout ailleurs, sur onze sessions, **zéro erreur console**.
+

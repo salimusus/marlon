@@ -1167,7 +1167,30 @@ est fermée. Joués jusqu'au bout, en pas de simulation, jamais en temps réel.*
   **« 🎬 🏴‍☠️ Les pirates (aventure) — bon film ! (Espace pour se lever) »**. L'image de la toile
   **change** pendant la projection (trois relevés du canevas : 157 890, 242 490, 211 426 octets),
   et **Espace** relève l'enfant. 17 plans au programme.
-- **Mesures brutes** : `verification/r83qa2-chien-cinema-sport-ecole.json`
+- **🏋️ LA SALLE DE SPORT — elle marche, les deux appareils, jusqu'à la fin de séance.** Elle est
+  en (−1 ; 19,5) et **sa porte est en (−1 ; 16,15)**, large de 2,20 m : on entre par là, pas par
+  le mur du fond (c'est ce qui m'avait fait écrire « non testé »). De la rue à l'appareil :
+  **0 blocage**. Le banc s'arme (« 🏋️ E : soulever la barre »), **E** lance la séance
+  (« 🏋️ Appuie vite sur Espace pour soulever — chaque répétition rallonge la séance ! »), et
+  40 appuis sur Espace donnent : **« 💪 Séance finie : 40 répétitions en 32 s (1,2/s) ·
+  📈 Performance +7 → 17/100 ★ · 🏆 Record personnel battu (40) : +2 de bonus »**. Le tapis, dans
+  la foulée : **76 foulées en 30 s, Performance +10 → 27/100**.
+- **🏫 L'ÉCOLE — jouée jusqu'à la question ET la réponse.** Quatre classes (Maths, Géométrie &
+  Géographie, Logique, Culture générale) en z = 213,2, x = −79 / −69 / −59 / −49 ; **la porte est
+  dans le mur de la cour**, au milieu, et les chaises sont au fond. De la cour à la chaise :
+  **0 blocage**. La chaise s'arme (« 🪑 E : s'asseoir en classe »), **E** assied
+  (« 🪑 Assis (Espace / SAUT pour se lever) »), **un deuxième E ouvre la leçon**, et voilà ce que
+  l'enfant lit : titre « ➕ Classe de Maths », énoncé **« 4 + 3 + 1 = ? »**, quatre cartes
+  « 1️⃣8 2️⃣10 3️⃣9 4️⃣7 », et **le tableau noir l'écrit à la craie** : « 4 + 3 + 1 = ? | 1) 8
+  2) 10 3) 9 4) 7 ». On répond **8** : « 🎉 C'est gagné ! », **+3 🪙**, et la craie écrit
+  « Réponse : 8 | ✅ GAGNÉ ! +3 pièces ». Espace relève l'enfant, « 🏫 Leçon terminée ».
+  - *Deux petites choses, aucune bloquante* : (1) la ligne « Score : 0/0 · série 0 » ne se
+    rafraîchit qu'à l'exercice **suivant**, donc juste après une bonne réponse elle affiche encore
+    l'ancien score — le message et le tableau, eux, disent vrai ; (2) je **n'ai pas pu jouer la
+    mauvaise réponse** dans la même mesure : l'exercice suivant arrive par un `setTimeout`, et un
+    `setTimeout` ne tourne pas pendant une boucle de pas synchrone. Ce n'est pas un défaut du jeu,
+    c'est une limite de ma méthode, et je le dis plutôt que de l'inventer.
+- **Mesures brutes** : `verification/r83qa2-chien-cinema-sport-ecole.json`, `verification/r83qa2-sport-et-ecole-par-la-porte.json`
 
 ### CE QUI EST ACQUIS — round 81 : les seize défauts du round 77, vérifiés un par un dans le jeu
 Tout ce qui suit est **mesuré à la manette DualSense sur `95ad841`**, monde neuf à chaque essai.

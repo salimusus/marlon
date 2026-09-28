@@ -1,0 +1,517 @@
+{
+ "a_sortie": {
+  "parking": {
+   "nom": "Parking du centre",
+   "x": -13,
+   "z": 8.5,
+   "w": 24,
+   "d": 16
+  },
+  "essais": [
+   {
+    "cas": "personne autour",
+    "vmax": 73.3,
+    "imagesBridees": 443,
+    "messages": [
+     {
+      "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+      "sim": 150.5
+     },
+     {
+      "t": "⚽ Fonce dans le ballon et marque !",
+      "sim": 151.65
+     },
+     {
+      "t": "💥 BOUM ! Gros choc contre le mur",
+      "sim": 151.88
+     }
+    ]
+   },
+   {
+    "cas": "un passant devant",
+    "vmax": 8.6,
+    "imagesBridees": 900,
+    "surImages": 900,
+    "secondesBridees": 15,
+    "hpMinPieton": 100,
+    "messages": [
+     {
+      "t": "🚸 Attention ! Quelqu'un est juste devant la voiture",
+      "sim": 160.83
+     },
+     {
+      "t": "💥 Lampadaire renversé !",
+      "sim": 162.22
+     },
+     {
+      "t": "🚸 Attention ! Quelqu'un est juste derrière la voiture",
+      "sim": 163.15
+     }
+    ],
+    "journal": [
+     {
+      "s": 0,
+      "v": 1.5,
+      "dPieton": 3.19,
+      "hp": 100
+     },
+     {
+      "s": 1,
+      "v": 8.6,
+      "dPieton": 0.86,
+      "hp": 100
+     },
+     {
+      "s": 2,
+      "v": 8.6,
+      "dPieton": 0.95,
+      "hp": 100
+     },
+     {
+      "s": 3,
+      "v": 7.1,
+      "dPieton": 1.37,
+      "hp": 100
+     },
+     {
+      "s": 4,
+      "v": 1,
+      "dPieton": 1.24,
+      "hp": 100
+     },
+     {
+      "s": 5,
+      "v": 7.1,
+      "dPieton": 1.37,
+      "hp": 100
+     },
+     {
+      "s": 6,
+      "v": 0.9,
+      "dPieton": 1.23,
+      "hp": 100
+     },
+     {
+      "s": 7,
+      "v": 6.9,
+      "dPieton": 1.37,
+      "hp": 100
+     },
+     {
+      "s": 8,
+      "v": 0.5,
+      "dPieton": 1.22,
+      "hp": 100
+     },
+     {
+      "s": 9,
+      "v": 6.8,
+      "dPieton": 1.35,
+      "hp": 100
+     },
+     {
+      "s": 10,
+      "v": 1.7,
+      "dPieton": 1.25,
+      "hp": 100
+     },
+     {
+      "s": 11,
+      "v": 6.3,
+      "dPieton": 1.33,
+      "hp": 100
+     },
+     {
+      "s": 12,
+      "v": 3.1,
+      "dPieton": 1.26,
+      "hp": 100
+     },
+     {
+      "s": 13,
+      "v": 6.3,
+      "dPieton": 1.34,
+      "hp": 100
+     },
+     {
+      "s": 14,
+      "v": 3,
+      "dPieton": 1.27,
+      "hp": 100
+     }
+    ]
+   }
+  ]
+ },
+ "a2_passant_s_ecarte": [
+  {
+   "cas": "passant qui marche (il a un but ailleurs)",
+   "pointe": 8.6,
+   "imagesDansLaBoite": 1800,
+   "surImages": 1800,
+   "secondesBridees": 30,
+   "degageA": null,
+   "hpPieton": 100,
+   "messages": [
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste derrière la voiture",
+     "sim": 176.57
+    }
+   ],
+   "journal": [
+    {
+     "s": 0,
+     "v": 1.6,
+     "d": 4.02,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 5,
+     "v": 0,
+     "d": 0.81,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 10,
+     "v": 8.2,
+     "d": 0.89,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 15,
+     "v": 8.6,
+     "d": 0.92,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 20,
+     "v": 5.6,
+     "d": 0.85,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 25,
+     "v": 2.4,
+     "d": 0.79,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    }
+   ]
+  },
+  {
+   "cas": "passant plante la (aucun but)",
+   "pointe": 8.6,
+   "imagesDansLaBoite": 1800,
+   "surImages": 1800,
+   "secondesBridees": 30,
+   "degageA": null,
+   "hpPieton": 100,
+   "messages": [
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste devant la voiture",
+     "sim": 206.9
+    },
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste derrière la voiture",
+     "sim": 209.22
+    }
+   ],
+   "journal": [
+    {
+     "s": 0,
+     "v": 2.2,
+     "d": 3.19,
+     "devant": true,
+     "derriere": false,
+     "hp": 100
+    },
+    {
+     "s": 5,
+     "v": 3.5,
+     "d": 0.81,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 10,
+     "v": 1.9,
+     "d": 0.81,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 15,
+     "v": 3.8,
+     "d": 0.81,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 20,
+     "v": 0.5,
+     "d": 0.78,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    },
+    {
+     "s": 25,
+     "v": 6.4,
+     "d": 0.87,
+     "devant": false,
+     "derriere": true,
+     "hp": 100
+    }
+   ]
+  }
+ ],
+ "b_plainte": {
+  "choc": null,
+  "etoile": null,
+  "etoilesFin": 0,
+  "journal": [
+   {
+    "s": 0,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 10,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 20,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 30,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 40,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 50,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 60,
+    "etoiles": 0,
+    "hp": 100,
+    "ko": false,
+    "plainteDue": 0
+   }
+  ],
+  "messages": [
+   {
+    "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+    "sim": 237.73
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 239.15
+   },
+   {
+    "t": "⛓️ Carcasse chargée sur le plateau : enlèvement gratuit",
+    "sim": 243.28
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 245.15
+   },
+   {
+    "t": "⛓️ Véhicule chargé sur le plateau : direction le garage",
+    "sim": 246.18
+   },
+   {
+    "t": "🔥 AU FEU ! La caserne envoie le camion",
+    "sim": 250.02
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 251.15
+   },
+   {
+    "t": "💧 Feu éteint ! Merci les pompiers 🚒",
+    "sim": 281.72
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 287.23
+   }
+  ],
+  "PLAINTE_ECRASE": 6
+ },
+ "c_contourne": {
+  "arrive": null,
+  "images": 1200,
+  "dMin": 6,
+  "dansJoueur": 0,
+  "fin": [
+   6,
+   8
+  ],
+  "passeDeLautreCote": false
+ },
+ "d_riposte": {
+  "sansRancune": {
+   "retourne": 5,
+   "coups": 13,
+   "ko": true,
+   "suite": [
+    {
+     "coup": 1,
+     "hp": 86,
+     "etat": "flee"
+    },
+    {
+     "coup": 2,
+     "hp": 72,
+     "etat": "flee"
+    },
+    {
+     "coup": 3,
+     "hp": 46,
+     "etat": "flee"
+    },
+    {
+     "coup": 4,
+     "hp": 46,
+     "etat": "flee"
+    },
+    {
+     "coup": 5,
+     "hp": 46,
+     "etat": "fight"
+    },
+    {
+     "coup": 6,
+     "hp": 46,
+     "etat": "fight"
+    },
+    {
+     "coup": 7,
+     "hp": 34,
+     "etat": "fight"
+    },
+    {
+     "coup": 8,
+     "hp": 34,
+     "etat": "fight"
+    },
+    {
+     "coup": 9,
+     "hp": 20,
+     "etat": "fight"
+    },
+    {
+     "coup": 10,
+     "hp": 14,
+     "etat": "fight"
+    },
+    {
+     "coup": 11,
+     "hp": 2,
+     "etat": "fight"
+    },
+    {
+     "coup": 12,
+     "hp": 2,
+     "etat": "fight"
+    },
+    {
+     "coup": 13,
+     "hp": 0,
+     "etat": "rien"
+    }
+   ],
+   "hpJoueur": 35
+  },
+  "avecVieilleRancune": {
+   "retourne": -1,
+   "coups": 9,
+   "ko": true,
+   "suite": [
+    {
+     "coup": 1,
+     "hp": 86,
+     "etat": "flee"
+    },
+    {
+     "coup": 2,
+     "hp": 60,
+     "etat": "flee"
+    },
+    {
+     "coup": 3,
+     "hp": 60,
+     "etat": "flee"
+    },
+    {
+     "coup": 4,
+     "hp": 46,
+     "etat": "flee"
+    },
+    {
+     "coup": 5,
+     "hp": 32,
+     "etat": "flee"
+    },
+    {
+     "coup": 6,
+     "hp": 6,
+     "etat": "flee"
+    },
+    {
+     "coup": 7,
+     "hp": 6,
+     "etat": "flee"
+    },
+    {
+     "coup": 8,
+     "hp": 6,
+     "etat": "flee"
+    },
+    {
+     "coup": 9,
+     "hp": 0,
+     "etat": "rien"
+    }
+   ],
+   "hpJoueur": 92
+  }
+ },
+ "erreurs": []
+}

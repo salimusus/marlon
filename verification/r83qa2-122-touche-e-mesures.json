@@ -1,0 +1,69 @@
+{
+ "roue": {
+  "manege": "la grande roue",
+  "centre": [
+   12,
+   158
+  ],
+  "cas": [
+   {
+    "nom": "la roue seule",
+    "rideNear": true,
+    "jackNear": false,
+    "near": false,
+    "consigne": "🎡 Fête foraine",
+    "derniersMessages": [],
+    "monte": true,
+    "auVolant": false,
+    "apres": [
+     {
+      "t": "🎡 C'est parti ! (Espace / SAUT pour descendre)",
+      "sim": 151.65
+     }
+    ]
+   },
+   {
+    "nom": "la roue, une voiture LIBRE a 2,2 m",
+    "rideNear": true,
+    "jackNear": false,
+    "near": true,
+    "consigne": "🚗 E : monter",
+    "derniersMessages": [],
+    "monte": false,
+    "auVolant": true,
+    "etoiles": 0,
+    "apres": [
+     {
+      "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+      "sim": 156.15
+     }
+    ]
+   },
+   {
+    "nom": "la roue, une voiture OCCUPEE a 2,2 m",
+    "rideNear": true,
+    "jackNear": false,
+    "near": true,
+    "consigne": "🚗 E : monter",
+    "derniersMessages": [],
+    "monte": false,
+    "auVolant": true,
+    "etoiles": 0,
+    "apres": [
+     {
+      "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+      "sim": 160.15
+     }
+    ]
+   }
+  ]
+ },
+ "portees": {
+  "volVoiture": "city.jackNear — voir enterCar/stealCar",
+  "ride": "rayon + 2,5 m",
+  "note": "ordre de la touche E dans index.html : … city.near, city.jackNear, city.slotNear, city.tableNear, city.rackNear, … puis city.rideNear"
+ },
+ "erreurs": [
+  "chauffeur TypeError: Cannot read properties of undefined (reading 'speed')\n    at botDriveTick (http://127.0.0.1:42973/:22917:7)\n    at http://127.0.0.1:42973/:30921:389\n    at safe (http://127.0.0.1:42973/:30913:38)\n    at cityVie (http://127.0.0.1:42973/:30921:365)\n    at cityCommon (http://127.0.0.1:42973/:30886:3)\n    at cityStep (http://127.0.0.1:42973/:30823:19)\n    at Object.step (http://127.0.0.1:42973/:26984:16)\n    at QA.pas (eval at evaluate (:290:30), <anonymous>:33:66)\n    at eval (eval at evaluate (:290:30), <anonymous>:38:61)\n    at UtilityScript.evaluate (<anonymous>:292:16)"
+ ]
+}

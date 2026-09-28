@@ -1,0 +1,79 @@
+{
+ "ecoleAssis": {
+  "assis": true,
+  "ui": "schoolUI",
+  "q": {
+   "texte": "2 + 10 = ?",
+   "bonne": "12",
+   "choix": [
+    "22",
+    "12",
+    "3",
+    "13"
+   ]
+  }
+ },
+ "ecoleFaux": {
+  "clique": "1️⃣8",
+  "bonneReponse": "6",
+  "ok": 0,
+  "tot": 1,
+  "sousPerdus": 0,
+  "tableau": "8 − 2 = ? | Réponse : 8 | ❌ FAUX | La bonne réponse : 6",
+  "couleurs": [
+   "rgb(255, 214, 214)",
+   "",
+   "rgb(214, 255, 214)",
+   ""
+  ],
+  "messages": [
+   {
+    "t": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+    "sim": 150.67
+   },
+   {
+    "t": "➕ Classe de Maths : assieds-toi à une table (E) pour les exercices",
+    "sim": 151
+   },
+   {
+    "t": "🪑 E : s'asseoir en classe",
+    "sim": 151.37
+   },
+   {
+    "t": "🪑 Assis (Espace / SAUT pour se lever)",
+    "sim": 151.93
+   }
+  ]
+ },
+ "ecoleSuite": {
+  "questionSuivante": "9 + 9 = ?",
+  "score": "Score : 0/1 · série 0",
+  "tableau": "9 + 9 = ? | 🍎🍎🍎🍎🍎🍎🍎🍎🍎 + | 🍏🍏🍏🍏🍏🍏🍏🍏🍏 |  | 1) 17   2) 20   3) 18   4) 19"
+ },
+ "banque": {
+  "guichet": [
+   -52,
+   75.9
+  ],
+  "marche": {
+   "points": 2,
+   "images": 379,
+   "bloques": 1,
+   "reste": 5.83
+  },
+  "arme": false,
+  "ui": null,
+  "pos": [
+   -52,
+   0.2,
+   81.7
+  ],
+  "messages": [
+   {
+    "t": "🔧 Garage custom : peinture, kits, moteur, amortisseurs et nitro — gare-toi et va au comptoir (E)",
+    "sim": 510.68
+   }
+  ]
+ },
+ "erreurs": []
+}

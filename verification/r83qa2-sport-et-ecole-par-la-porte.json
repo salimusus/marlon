@@ -1,0 +1,329 @@
+{
+ "sport": {
+  "porte": [
+   -1,
+   16.15
+  ],
+  "essais": [
+   {
+    "nom": "banc de musculation",
+    "porte": {
+     "x": -1,
+     "y": 0.42,
+     "z": 15.75,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 26,
+     "camD": 2.57,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 151.17
+    },
+    "dedans": {
+     "x": -1,
+     "y": 0.42,
+     "z": 18.02,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 26,
+     "camD": 2.57,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 151.53
+    },
+    "appareil": {
+     "x": -2.07,
+     "y": 0.95,
+     "z": 18.85,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 26,
+     "camD": 2.57,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 151.8
+    },
+    "bloques": [
+     0,
+     0,
+     0
+    ],
+    "arme": "bench",
+    "lance": "bench",
+    "enCours": {
+     "on": "bench",
+     "reps": 40,
+     "act": "🏋️ 40 reps · 17s"
+    },
+    "finie": true,
+    "perf": 17,
+    "messages": [
+     {
+      "t": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+      "sim": 150.67
+     },
+     {
+      "t": "🏃 E : courir sur le tapis",
+      "sim": 151.32
+     },
+     {
+      "t": "🏋️ E : soulever la barre",
+      "sim": 151.53
+     },
+     {
+      "t": "🏋️ Appuie vite sur Espace pour soulever — chaque répétition rallonge la séance !",
+      "sim": 151.8
+     },
+     {
+      "t": "💪 Séance finie : 40 répétitions en 32 s (1.2/s) · 📈 Performance +7 → 17/100 ★ · 🏆 Record personnel battu (40) : +2 de bonus",
+      "sim": 183.8
+     }
+    ]
+   },
+   {
+    "nom": "tapis de course",
+    "porte": {
+     "x": -1,
+     "y": 0.42,
+     "z": 15.78,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 26,
+     "camD": 2.57,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 185.65
+    },
+    "dedans": {
+     "x": -1,
+     "y": 0.42,
+     "z": 18.08,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 26,
+     "camD": 2.57,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 186.02
+    },
+    "appareil": {
+     "x": 0.03,
+     "y": 0.73,
+     "z": 18.39,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 26,
+     "camD": 2.57,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 186.33
+    },
+    "bloques": [
+     0,
+     0,
+     0
+    ],
+    "arme": "run",
+    "lance": "run",
+    "enCours": {
+     "on": "run",
+     "reps": 57.8,
+     "act": "🏃 58 foulées · 15s"
+    },
+    "finie": true,
+    "perf": 27,
+    "messages": [
+     {
+      "t": "💪 Séance finie : 40 répétitions en 32 s (1.2/s) · 📈 Performance +7 → 17/100 ★ · 🏆 Record personnel battu (40) : +2 de bonus",
+      "sim": 185.15
+     },
+     {
+      "t": "🏃 E : courir sur le tapis",
+      "sim": 185.78
+     },
+     {
+      "t": "🏋️ E : soulever la barre",
+      "sim": 186.02
+     },
+     {
+      "t": "🏃 E : courir sur le tapis",
+      "sim": 186.18
+     },
+     {
+      "t": "🏃 Appuie sur Espace au rythme de tes foulées : plus tu accélères, plus tu progresses !",
+      "sim": 186.33
+     },
+     {
+      "t": "💪 Séance finie : 76 foulées en 30 s (2.5/s) · 📈 Performance +10 → 27/100 ★ · 🏆 Record personnel battu (76) : +2 de bonus",
+      "sim": 216.33
+     }
+    ]
+   }
+  ]
+ },
+ "ecole": {
+  "salle": "Maths",
+  "porte": {
+   "x": -79,
+   "y": 0.2,
+   "z": 214.2,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 26,
+   "camD": 4.91,
+   "piece": "batiment",
+   "act": "🏫 E : la leçon",
+   "sim": 220.67
+  },
+  "allee": {
+   "x": -79,
+   "y": 0.3,
+   "z": 212.41,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 26,
+   "camD": 4.91,
+   "piece": "batiment",
+   "act": "🏫 E : la leçon",
+   "sim": 220.95
+  },
+  "chaise": {
+   "x": -79.49,
+   "y": 0.79,
+   "z": 209.71,
+   "hp": 100,
+   "sol": false,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 26,
+   "camD": 4.91,
+   "piece": "batiment",
+   "act": "🪑 E : s'asseoir",
+   "sim": 221.38
+  },
+  "bloques": [
+   0,
+   0,
+   0
+  ],
+  "armeChaise": true,
+  "assis": true,
+  "bonneChaise": true,
+  "ouvert": "schoolUI",
+  "question": {
+   "texte": "4 + 3 + 1 = ?",
+   "choix": [
+    "8",
+    "10",
+    "9",
+    "7"
+   ],
+   "bonne": "8"
+  },
+  "affiche": {
+   "titre": "➕ Classe de Maths",
+   "sous": "La maîtresse lit et écrit ta réponse à la craie sur le tableau · bonne réponse 3 🪙 · 🔊 relire · Espace pour te lever",
+   "question": "4 + 3 + 1 = ?",
+   "choix": [
+    "1️⃣8",
+    "2️⃣10",
+    "3️⃣9",
+    "4️⃣7"
+   ],
+   "score": "Score : 0/0 · série 0",
+   "tableau": "4 + 3 + 1 = ? |  | 1) 8   2) 10   3) 9   4) 7"
+  },
+  "bon": {
+   "clique": "1️⃣8",
+   "score": "Score : 0/0 · série 0",
+   "ok": 1,
+   "tot": 1,
+   "sousGagnes": 3,
+   "messages": [
+    {
+     "t": "🏫 École : entre dans une classe, assieds-toi a une table (E) et reponds au tableau pour gagner des pieces",
+     "sim": 220.13
+    },
+    {
+     "t": "➕ Classe de Maths : assieds-toi à une table (E) pour les exercices",
+     "sim": 220.47
+    },
+    {
+     "t": "🪑 E : s'asseoir en classe",
+     "sim": 220.82
+    },
+    {
+     "t": "🪑 Assis (Espace / SAUT pour se lever)",
+     "sim": 221.38
+    },
+    {
+     "t": "🎉 C'est gagné !",
+     "sim": 222.4
+    }
+   ],
+   "tableau": "4 + 3 + 1 = ? | Réponse : 8 | ✅ GAGNÉ ! +3 pièces"
+  },
+  "faux": null,
+  "messages": [
+   {
+    "t": "🏫 École : entre dans une classe, assieds-toi a une table (E) et reponds au tableau pour gagner des pieces",
+    "sim": 220.13
+   },
+   {
+    "t": "➕ Classe de Maths : assieds-toi à une table (E) pour les exercices",
+    "sim": 220.47
+   },
+   {
+    "t": "🪑 E : s'asseoir en classe",
+    "sim": 220.82
+   },
+   {
+    "t": "🪑 Assis (Espace / SAUT pour se lever)",
+    "sim": 221.38
+   },
+   {
+    "t": "🎉 C'est gagné !",
+    "sim": 222.4
+   }
+  ]
+ },
+ "ecoleSortie": {
+  "ui": null,
+  "debout": true,
+  "messages": [
+   {
+    "t": "🪑 Assis (Espace / SAUT pour se lever)",
+    "sim": 221.38
+   },
+   {
+    "t": "🎉 C'est gagné !",
+    "sim": 222.4
+   },
+   {
+    "t": "🏫 Leçon terminée : tu te lèves (E sur une chaise pour reprendre)",
+    "sim": 229.4
+   },
+   {
+    "t": "🪑 E : s'asseoir en classe",
+    "sim": 229.42
+   }
+  ]
+ },
+ "erreurs": []
+}

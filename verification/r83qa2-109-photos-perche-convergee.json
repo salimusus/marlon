@@ -1,0 +1,299 @@
+{
+ "etapes": [
+  {
+   "nom": "01-pied-de-cage",
+   "bloque": 0,
+   "images": 43,
+   "pos": [
+    -158.4,
+    0.2,
+    14
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 2.77,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "02-haut-de-volee-montante",
+   "bloque": 0,
+   "images": 57,
+   "pos": [
+    -159.69,
+    1.8,
+    10.57
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "03-palier-de-demi-tour",
+   "bloque": 0,
+   "images": 20,
+   "pos": [
+    -159.7,
+    1.8,
+    8.61
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "04-milieu-volee-descendante",
+   "bloque": 0,
+   "images": 60,
+   "pos": [
+    -157.1,
+    3.08,
+    11.49
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "05-palier-d-etage",
+   "bloque": 0,
+   "images": 27,
+   "pos": [
+    -157.1,
+    3.4,
+    14.17
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "12-haut-de-volee-montante",
+   "bloque": 61,
+   "images": 174,
+   "pos": [
+    -157.71,
+    2.44,
+    10.5
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "13-palier-de-demi-tour",
+   "bloque": 0,
+   "images": 45,
+   "pos": [
+    -159.6,
+    1.8,
+    8.58
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "14-milieu-volee-descendante",
+   "bloque": 0,
+   "images": 59,
+   "pos": [
+    -157.11,
+    3.08,
+    11.49
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "15-palier-d-etage",
+   "bloque": 0,
+   "images": 27,
+   "pos": [
+    -157.1,
+    3.4,
+    14.17
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "90-coursive",
+   "bloque": 0,
+   "images": 134,
+   "pos": [
+    -165.85,
+    3.4,
+    15.8
+   ],
+   "camD": 4.91,
+   "piece": "coursive de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 12,
+   "camDapresPhoto": 4.91
+  },
+  {
+   "nom": "95-mi-volee-montante",
+   "pos": [
+    -159.7,
+    4.68,
+    11.5
+   ],
+   "camD": 1.27,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -1.54,
+    "dedans": false
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.03,
+    "dedans": true
+   },
+   "hauteurEcran": 1.57,
+   "degageDevant": 12
+  },
+  {
+   "nom": "96-mi-volee-descendante",
+   "pos": [
+    -157.1,
+    3.08,
+    11.63
+   ],
+   "camD": 4.91,
+   "piece": "cage d'escalier de La Zone",
+   "pieds": {
+    "x": 0,
+    "y": -0.54,
+    "dedans": true
+   },
+   "tete": {
+    "x": 0,
+    "y": 0.04,
+    "dedans": true
+   },
+   "hauteurEcran": 0.58,
+   "degageDevant": 1.3
+  }
+ ],
+ "erreurs": []
+}

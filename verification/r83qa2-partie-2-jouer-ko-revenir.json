@@ -1,0 +1,180 @@
+{
+ "entrer": {
+  "approche": {
+   "x": -52,
+   "y": 0.18,
+   "z": 80.4,
+   "hp": 100,
+   "sol": false,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25,
+   "camD": 2.59,
+   "piece": "batiment",
+   "act": "🏦 Banque",
+   "sim": 212.72
+  },
+  "bloque": 121,
+  "dedans": false,
+  "guichet": false,
+  "camD": 2.59,
+  "messages": [
+   {
+    "t": "🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés",
+    "sim": 210.67
+   }
+  ],
+  "auGuichet": {
+   "fin": {
+    "x": -52,
+    "y": 0.13,
+    "z": 80.4,
+    "hp": 100,
+    "sol": false,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 2.59,
+    "piece": "batiment",
+    "act": "🏦 Banque",
+    "sim": 214.23
+   },
+   "arme": false
+  },
+  "ui": null
+ },
+ "jeux": [
+  {
+   "jeu": "balancoire",
+   "arme": true,
+   "assis": true,
+   "amplitude": 1.05,
+   "descendu": true,
+   "messages": [
+    {
+     "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+     "sim": 217.8
+    },
+    {
+     "t": "🎠 E : s'asseoir sur la balançoire",
+     "sim": 218.45
+    },
+    {
+     "t": "🎠 Espace / SAUT pour sauter de la balançoire !",
+     "sim": 218.63
+    },
+    {
+     "t": "🎠 E : s'asseoir sur la balançoire",
+     "sim": 218.65
+    },
+    {
+     "t": "🎠 Wouhou !",
+     "sim": 229.15
+    },
+    {
+     "t": "🎠 E : s'asseoir sur la balançoire",
+     "sim": 229.17
+    }
+   ]
+  },
+  {
+   "jeu": "trampoline",
+   "arme": false,
+   "saut": 0,
+   "hp": 100,
+   "messages": [
+    {
+     "t": "🏠 Ta villa : garage sur la rue, ascenseur près de l'entrée, cuisine, chambres à l'étage, piscine et trampoline",
+     "sim": 230.65
+    }
+   ]
+  },
+  {
+   "jeu": "basket",
+   "arme": false,
+   "ballonEnMain": false,
+   "paniers": 0,
+   "messages": [
+    {
+     "t": "🏫 École : entre dans une classe, assieds-toi a une table (E) et reponds au tableau pour gagner des pieces",
+     "sim": 237.45
+    }
+   ]
+  }
+ ],
+ "ko": {
+  "avant": {
+   "pos": [
+    0,
+    30
+   ],
+   "hp": 100,
+   "sous": 25,
+   "morts": 0
+  },
+  "pendant": {
+   "mort": false,
+   "hp": 100,
+   "hpBas": 0,
+   "tMort": 1.82,
+   "messages": [
+    {
+     "t": "💀 Chute mortelle ! 40 m de haut…",
+     "sim": 247.75
+    },
+    {
+     "t": "🚑 Une ambulance a été appelée",
+     "sim": 247.98
+    },
+    {
+     "t": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+     "sim": 249.35
+    }
+   ]
+  },
+  "apres": {
+   "reveil": 0,
+   "hp": 100,
+   "pos": [
+    22,
+    0.4,
+    205.9
+   ],
+   "sous": 25,
+   "morts": 1,
+   "messages": [
+    {
+     "t": "💀 Chute mortelle ! 40 m de haut…",
+     "sim": 247.75
+    },
+    {
+     "t": "🚑 Une ambulance a été appelée",
+     "sim": 247.98
+    },
+    {
+     "t": "🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille !",
+     "sim": 249.35
+    }
+   ]
+  },
+  "repart": {
+   "bloque": 0,
+   "avance": true,
+   "fin": {
+    "x": 32.9,
+    "y": 0,
+    "z": 217.48,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 5.51,
+    "piece": null,
+    "act": "🏥 Hôpital",
+    "sim": 259.2
+   }
+  }
+ },
+ "erreurs": []
+}

@@ -1,0 +1,377 @@
+{
+ "messageBloque": {
+  "messages": [
+   {
+    "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+    "sim": 150.45
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 151.87
+   },
+   {
+    "t": "🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés",
+    "sim": 152.83
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 157.87
+   }
+  ],
+  "releves": [
+   {
+    "t": 1,
+    "parcouru": 3.39,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 12 km/h · 🔧 1%",
+    "coinceT": 1.08,
+    "pilote": true
+   },
+   {
+    "t": 2,
+    "parcouru": 6.79,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 12 km/h · 🔧 2%",
+    "coinceT": 2.08,
+    "pilote": true
+   },
+   {
+    "t": 3,
+    "parcouru": 9.01,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 12 km/h · 🔧 2%",
+    "coinceT": 3.08,
+    "pilote": true
+   },
+   {
+    "t": 4,
+    "parcouru": 9.4,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 6 km/h · 🔧 3%",
+    "coinceT": 4.08,
+    "pilote": true
+   },
+   {
+    "t": 5,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 7 km/h · 🔧 4%",
+    "coinceT": 5.08,
+    "pilote": true
+   },
+   {
+    "t": 6,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 4 km/h · 🔧 4%",
+    "coinceT": 6.08,
+    "pilote": true
+   },
+   {
+    "t": 7,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 7 km/h · 🔧 5%",
+    "coinceT": 7.08,
+    "pilote": true
+   },
+   {
+    "t": 8,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 2 km/h · 🔧 5%",
+    "coinceT": 8.08,
+    "pilote": true
+   },
+   {
+    "t": 9,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 7 km/h · 🔧 6%",
+    "coinceT": 9.08,
+    "pilote": true
+   },
+   {
+    "t": 10,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 0 km/h · 🔧 6%",
+    "coinceT": 10.08,
+    "pilote": true
+   },
+   {
+    "t": 11,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 8 km/h · 🔧 7%",
+    "coinceT": 11.08,
+    "pilote": true
+   },
+   {
+    "t": 12,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 1 km/h · 🔧 8%",
+    "coinceT": 12.08,
+    "pilote": true
+   }
+  ]
+ },
+ "heliportSuite": {
+  "fin": [
+   43,
+   50.37
+  ],
+  "devant": [
+   {
+    "x": 43,
+    "z": 54.15,
+    "w": 7,
+    "h": 4.2,
+    "d": 0.36
+   },
+   {
+    "x": 41.4,
+    "z": 54.9,
+    "w": 0.62,
+    "h": 0.7,
+    "d": 0.62
+   },
+   {
+    "x": 45.6,
+    "z": 55,
+    "w": 1.1,
+    "h": 0.3,
+    "d": 1.1
+   },
+   {
+    "x": 43,
+    "z": 55,
+    "w": 0.2,
+    "h": 0.5,
+    "d": 0.42
+   },
+   {
+    "x": 46.35,
+    "z": 55.45,
+    "w": 0.36,
+    "h": 1.2,
+    "d": 2.9
+   }
+  ],
+  "dmg": 21.3,
+  "messages": [
+   {
+    "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+    "sim": 163.28
+   },
+   {
+    "t": "🚧 Panneau tordu !",
+    "sim": 163.78
+   },
+   {
+    "t": "📋 Bureau des missions : E devant le comptoir pour accepter un défi",
+    "sim": 165.03
+   },
+   {
+    "t": "🗑️ Poubelle renversée !",
+    "sim": 165.43
+   },
+   {
+    "t": "💥 BOUM ! Gros choc contre le mur",
+    "sim": 166.7
+   },
+   {
+    "t": "🪟 E : donner un coup de main à Yanis",
+    "sim": 168.98
+   }
+  ],
+  "releves": [
+   {
+    "t": 1,
+    "z": -8.29,
+    "act": "⚙️ A2 · 28 km/h · 🔧 5%",
+    "coinceT": 0,
+    "dmg": 5
+   },
+   {
+    "t": 5,
+    "z": 50.45,
+    "act": "⚙️ A1 · 11 km/h · 🔧 13%",
+    "coinceT": 0,
+    "dmg": 12.8
+   },
+   {
+    "t": 9,
+    "z": 50.59,
+    "act": "⚙️ A1 · 9 km/h · 🔧 15%",
+    "coinceT": 0,
+    "dmg": 15
+   },
+   {
+    "t": 13,
+    "z": 50.37,
+    "act": "⚙️ A1 · 3 km/h · 🔧 17%",
+    "coinceT": 0,
+    "dmg": 17.2
+   },
+   {
+    "t": 17,
+    "z": 50.65,
+    "act": "⚙️ A1 · 9 km/h · 🔧 20%",
+    "coinceT": 0.02,
+    "dmg": 19.7
+   },
+   {
+    "t": 20,
+    "z": 50.37,
+    "act": "⚙️ A1 · 2 km/h · 🔧 21%",
+    "coinceT": 0,
+    "dmg": 21.3
+   }
+  ]
+ },
+ "bulldozerLigne": {
+  "place0": [
+   28.2,
+   121.5
+  ],
+  "fiche": 36,
+  "parcouru": 13.09,
+  "pointe": 36
+ },
+ "sortiePlace": {
+  "parking": "Parking du centre",
+  "essais": [
+   {
+    "cas": "personne devant",
+    "pointe": 43.7,
+    "imagesBridees": 602,
+    "surImages": 900,
+    "secondesBridees": 10,
+    "hpMinPieton": null,
+    "messages": [
+     {
+      "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+      "sim": 194.5
+     },
+     {
+      "t": "💥 Lampadaire renversé !",
+      "sim": 194.9
+     },
+     {
+      "t": "💥 Vitrine fissurée",
+      "sim": 195.4
+     },
+     {
+      "t": "🚔 Infraction : casser une vitrine ! Niveau ★ — file, ils arrivent dans 30 s",
+      "sim": 195.42
+     },
+     {
+      "t": "💥 Vitrine fissurée",
+      "sim": 195.43
+     },
+     {
+      "t": "💥 Vitrine brisée !",
+      "sim": 195.45
+     }
+    ],
+    "journal": [
+     {
+      "s": 0,
+      "v": 2.2,
+      "d": null,
+      "hp": null
+     },
+     {
+      "s": 2.5,
+      "v": 10.5,
+      "d": null,
+      "hp": null
+     },
+     {
+      "s": 5,
+      "v": 1.5,
+      "d": null,
+      "hp": null
+     },
+     {
+      "s": 7.5,
+      "v": 7.3,
+      "d": null,
+      "hp": null
+     },
+     {
+      "s": 10,
+      "v": 15.8,
+      "d": null,
+      "hp": null
+     },
+     {
+      "s": 12.5,
+      "v": 4.3,
+      "d": null,
+      "hp": null
+     }
+    ]
+   },
+   {
+    "cas": "un passant devant",
+    "pointe": 8.6,
+    "imagesBridees": 900,
+    "surImages": 900,
+    "secondesBridees": 15,
+    "hpMinPieton": 100,
+    "messages": [
+     {
+      "t": "🚸 Attention ! Quelqu'un est juste devant la voiture",
+      "sim": 209.83
+     },
+     {
+      "t": "🚸 Attention ! Quelqu'un est juste derrière la voiture",
+      "sim": 212.15
+     }
+    ],
+    "journal": [
+     {
+      "s": 0,
+      "v": 2.2,
+      "d": 3.19,
+      "hp": 100
+     },
+     {
+      "s": 2.5,
+      "v": 7.1,
+      "d": 0.98,
+      "hp": 100
+     },
+     {
+      "s": 5,
+      "v": 4.2,
+      "d": 0.87,
+      "hp": 100
+     },
+     {
+      "s": 7.5,
+      "v": 2,
+      "d": 0.86,
+      "hp": 100
+     },
+     {
+      "s": 10,
+      "v": 5.6,
+      "d": 0.89,
+      "hp": 100
+     },
+     {
+      "s": 12.5,
+      "v": 7.1,
+      "d": 0.95,
+      "hp": 100
+     }
+    ]
+   }
+  ]
+ },
+ "erreurs": []
+}

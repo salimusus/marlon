@@ -1022,7 +1022,21 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Le n° 87 n'est PAS atteignable par un recul d'horloge, et c'est vérifié** : le siège de la balançoire est `P.swing`, un **objet sans date**, et `sw.rider` une chaîne — un saut libère l'enfant quelle que soit l'horloge (`descendu = true` dans les deux versions). `P.swingT`, qu'on donnait pour le siège, est le coup de **raquette** (un drapeau d'animation envoyé au réseau, `m.sw`). La seule date de la balançoire est `sw.diraT`, et c'est le **rappel à l'écran** qu'elle faisait taire.
 - **Test** : `harness/play.js` n° **525**, en deux moitiés. (1) **Le recenseur vit dans le test** : il relit le texte du jeu, cherche mécaniquement toute pose de date tirée de l'horloge (en écartant les PHASES d'animation — l'horloge doit rester un terme additif de premier niveau, donc `Math.sin(simTime * 1.8)` ne compte pas), ne garde que les champs relus contre l'horloge, et les recoupe avec `DATES_JEU`. Le jour où un poste écrit `X = simTime + 5` sans inscrire `X` au registre, **le test passe au rouge et NOMME la variable**. (2) **La preuve par le symptôme** : le piège est monté en page, `step()` doit trouver le recul tout seul, et l'enfant ne doit être ni provocateur, ni paralysé, ni à terre, ni endormi, ni accroupi — **et** un marqueur vraiment frais doit continuer de faire son travail.
 
-### 109. Dans la cage d'escalier des immeubles de La Zone, la caméra entre dans le dos de l'enfant : l'écran est bouché par sa tête, on ne voit plus une seule marche
+### 109. ✅ RÉPARÉ (à 97 %) — Dans la cage d'escalier des immeubles de La Zone, la caméra entre dans le dos de l'enfant : l'écran est bouché par sa tête, on ne voit plus une seule marche
+- **VÉRIFIÉ AU ROUND 83 (contrôle r83-qa2), et c'est réparé** — mais il reste **six pas sur cinquante-deux** où le défaut est encore atteignable, et je les donne en n° 117.
+- **Ce que j'ai mesuré moi-même, sans relire le correctif d'abord :**
+  - **240 relevés de perche** (5 immeubles × 3 niveaux × 4 points × 4 caps) : **4,95 m** partout sur les immeubles 0, 2 et 3, contre 0,47 à 1,96 m avant. La pièce de caméra répond à chaque point (« cage d'escalier de La Zone » / « coursive de La Zone »). Mesures : `verification/r83qa2-109-cage-camera-240-releves.json`.
+  - **Contre-épreuve en simulation complète** (`step()`, 150 images, 4 caps) aux trois points clés du premier immeuble : **4,95 · 6,63 · 4,80 m**. Le chiffre du poste tient donc aussi hors de sa propre méthode.
+  - **LE PIÈGE DE MESURE, et il vaut pour tout le monde** : `step()` **ne place pas la caméra** — c'est `camPerche`, appelé par la boucle d'affichage, et le banc ne rend **qu'une image par seconde**. Mes premières photos montraient donc une perche à 2,5 m là où la mesure disait 6,5 : ce n'était pas le jeu, c'était la caméra qui n'avait jamais eu le temps de converger. Toute photo de perche doit faire tourner `camPerche` + `interieurTick` à la main (120 à 150 images) avant le déclic.
+- **ET CE QU'ON VOIT, puisque c'était la deuxième moitié de la question :**
+  - **Montée à pied, du trottoir (−158,4 ; 18) au 2ᵉ étage puis dans l'appartement** : 11 étapes, **0 blocage**, y 0,2 → 6,6 m. À chaque arrêt, **les pieds ET la tête sont dans le cadre**, la marche suivante aussi. L'enfant occupe 29 % de la hauteur d'écran (0,58 en coordonnées normalisées).
+  - **Descente**, 9 étapes : **0 blocage**, perche **4,91 m** du haut en bas.
+  - **Rien n'est effacé** : 41 garde-corps sur 41 visibles, 25 marches et paliers sur 25 visibles, **opacité 1 partout**. La recette de la cabane (`tout: true`, qui efface ce qui dépasse un mètre) n'a **pas** été appliquée ici, et le poste a eu raison de la refuser : sur la capture on voit la volée, le nez de marche sous les pieds, le garde-corps et le palier.
+- **Captures** : `verification/r83qa2-109c-01-pied-de-cage.png` à `…-90-coursive.png` (perche convergée, les onze arrêts de la montée).
+- **Mesures brutes** : `r83qa2-109-cage-camera-240-releves.json`, `r83qa2-109-montee-et-descente-a-pied.json`, `r83qa2-109-photos-perche-convergee.json`, `r83qa2-109-balayage-fin-52-points.json`.
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel :**
+
 - **Gravité** : MAJEUR — c'est exactement le n° 106, réparé à la cabane des arbres au round 83, et resté entier dans un endroit où l'enfant passe dix fois plus souvent (cinq immeubles, trois niveaux chacun, la conquête de La Zone se joue dedans). Un écran bouché est ce que le carnet range dans « ça fait mal ».
 - **Reproduire** : La Zone, immeuble (−169 ; 10). Monter l'escalier extérieur depuis le trottoir (−158,4 ; 17) et tourner la caméra sur les quatre côtés à chaque palier. Reproduit 2/2.
 - **On voit** : distance objectif ↔ tête (`cam.dJoueur`), quatre caps par point, recul demandé 7,00 m, seuil de confort du jeu `CAM_CONFORT` = **4,60 m** :
@@ -1059,8 +1073,20 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On voit** : le point d'apparition est (0 ; 3). `surLaChaussee(0 ; 3)` rend **vrai** ; le trottoir le plus proche est à **8,0 m**. Sur la capture, l'enfant est planté sur les bandes blanches au milieu du carrefour, et le trafic y passe. Effet de bord mesuré : pendant un de mes essais une voiture du trafic s'est garée sur ce point, et le personnage n'a plus avancé que de 0,33 m/s pendant trois secondes, le temps que `desincarcere` le sorte.
 - **On devrait voir** : l'enfant apparaît sur le trottoir ou sur la place, jamais sur le bitume.
 - **Capture** : `verification/s1-09-dix-secondes.png`
+- **⚠️ TOUJOURS VRAI au round 83 (contrôle r83-qa2), re-mesuré** : partie neuve, monde 4, on ne touche à rien — le joueur apparaît en **(0 ; 0 ; 3,50)** et `surLaChaussee(0 ; 3,5)` rend **VRAI**. Sur la capture, l'enfant est planté sur le bitume au milieu du carrefour, entre quatre passages piétons, avec un panneau « cédez le passage » à sa gauche et les voies de circulation de part et d'autre. Rien ne l'a écrasé dans les dix premières secondes (❤️ 100), donc ça reste **MINEUR** — mais c'est toujours la première image du jeu.
+- **Capture du round 83** : `verification/r83qa2-partie-01-arrivee.png`
 
-### 112. La première voiture du parking du centre est arrêtée par un poteau de 36 cm : pied au plancher, elle n'avance plus, sans un choc, sans une bosse, sans un mot — et le compteur affiche 0 pendant qu'elle se dégage
+### 112. ❌ MON DIAGNOSTIC ÉTAIT FAUX (ce n'était pas une voiture, c'était l'hélicoptère) — ✅ et ce qui était vrai dedans est RÉPARÉ
+- **Je me suis trompé, et je l'ai vérifié de mes yeux au round 83 (contrôle r83-qa2).** Le véhicule garé en (43 ; −13) **n'est pas une voiture : c'est l'hélicoptère de l'héliport**. Mesuré : `city.cars[0]`, `heli` **vrai**, la zone s'appelle « 🚁 Héliport », le rectangle de stationnement s'appelle « Héliport » (le Parking du centre est en (−13 ; 8,5), quarante mètres plus loin). Et le « compteur à 0 km/h » que je rapportais est le bandeau **« 🚁 0 m » — son ALTITUDE**. On le voit sur la capture : c'est un hélicoptère rouge à rotor, avec « MARLON LOGISTICS » sur le flanc. `verification/r83qa2-112-heliport-15s.png`.
+- **Contre-épreuve refaite par moi** : une **vraie** voiture (ambulance) posée au même endroit, cap au nord, gaz à fond — elle passe de z = −13 à z = **+50 en cinq secondes** (63 m), **tord le poteau** (« 🚧 Panneau tordu ! »), renverse une poubelle et finit sur un mur (« 💥 BOUM ! Gros choc contre le mur »). Un poteau de 36 cm n'arrête pas une voiture. `verification/r83qa2-112b-heliport-vraie-voiture.png`.
+- **CE QUI ÉTAIT VRAI, ET QUI EST BIEN RÉPARÉ :**
+  - **le compteur dit la vitesse de la CAISSE** : relevé au même essai, 28 km/h réels ↔ « ⚙️ A2 · 28 km/h » affiché.
+  - **l'enfant coincé est prévenu** : nez dans la façade de la banque, gaz au plancher, `coinceT` monte et la bande affiche **« 🧱 Tu es coincé — recule ou braque pour te dégager »** à **1,5 s** (sim 151,87) puis **six secondes plus tard** (sim 157,87), pas plus souvent. Vérifié à l'écran.
+- **UN AVERTISSEMENT SUR MA PROPRE MÉTHODE, parce qu'il a failli me faire écrire une deuxième bêtise** : mon premier instrument lisait la bande de message avec un `MutationObserver`. Son rappel est une **micro-tâche** : dans un `page.evaluate` qui enchaîne mille `step()` sans jamais rendre la main, ni les observateurs ni les `setTimeout` ne tournent — et la liste, lue dans le même `evaluate`, revient **toujours vide**. J'ai donc lu « 0 message » là où le jeu en affichait deux. On relève la bande **à la main, en synchrone, à chaque image**.
+- **Mesures brutes** : `verification/r83qa2-112-113-114-mesures.json`, `verification/r83qa2-112-113-4a-mesures.json`
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel (il portait sur l'hélicoptère sans que je le sache) :**
+
 - **Gravité** : GÊNANT, et c'est la première minute au volant d'un enfant de huit ans.
 - **Reproduire** : prendre la voiture garée en (43 ; −13) au parking du centre, pousser « avancer » et ne plus toucher au volant.
 - **On voit**, 20 s de gaz à fond, passants écartés pour ne juger que la conduite :
@@ -1078,7 +1104,16 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Captures** : `verification/s5-10-balade.png`, `verification/s5-11-balade-dirigee.png`
 - **Mesures brutes** : `verification/r83-qa-05-conduire-obstacle.json`, `verification/r83-qa-05-conduire-engins.json`, `verification/r83-qa-05-compteur.json`
 
-### 113. Le bulldozer ne roule pas : 1,70 m en dix secondes, cinq km/h pour une fiche à trente-six, et la marche arrière ne le sort pas
+### 113. ✅ RÉPARÉ — mais la cause n'était PAS le moteur : le bulldozer était déclaré bloqué SUR SA PROPRE PLACE
+- **Vérifié au round 83 (contrôle r83-qa2), et le poste a raison sur la cause.** Le même bulldozer, **posé sur une ligne droite dégagée** (avenue z = 70), pointe à **36,0 km/h — exactement sa fiche**. Le moteur n'a jamais rien eu : c'est une benne à gravats à 20 cm de son arrière qui faisait répondre `carBlocked` VRAI à chaque image, sur sa place de parking.
+- **Les deux moitiés demandées :**
+  - **IL ROULE** : depuis sa place, gaz à fond dix secondes, **16,56 m parcourus**, pointe 21,3 km/h, **3 images immobiles sur 600** (avant : 1,70 m et 480 images sur 600), `coinceT` = **0**.
+  - **IL N'EST COLLÉ À PERSONNE** : sa place est (28,20 ; 121,50) et l'air entre sa boîte et la plus proche est de **2,10 m** (la grue), puis 3,10 m (la pelle) et 6,60 m (la benne). Avant : 20 cm, puis 5 cm après le premier déplacement. La marge que le jeu se fixe est de 0,60 m : on est à trois fois et demie.
+- **Réserve honnête, et elle est petite** : depuis sa place il ne tient que **7,8 km/h** en régime établi (21,3 km/h la première seconde) — il sort du chantier en frôlant le bâti. Sur route dégagée il fait bien ses 36. Ce n'est pas un blocage, c'est un engin qui se faufile.
+- **Capture** : `verification/r83qa2-113-bulldozer.png` · **Mesures** : `verification/r83qa2-112-113-114-mesures.json`
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel :**
+
 - **Gravité** : GÊNANT — c'est un engin qu'un enfant repère de loin, dans lequel il monte, et qui ne fait rien.
 - **Reproduire** : chantier du nord, bulldozer garé en (18,2 ; 121,5). Monter, pousser « avancer » dix secondes, puis « reculer » sept secondes.
 - **On voit** : **1,70 m** parcourus en 10 s, pointe **5 km/h** alors que sa propre fiche annonce **36 km/h** (`spec.max` = 10 m/s) ; la marche arrière ne change rien (1,70 m au total). Il a un solide de 0,40 × 4,60 m à **2,06 m** de son nez. Les trois autres engins du même chantier, testés dans la foulée, roulent tous à leur fiche : grue 68,5 m / 50 km/h (fiche 50), pelle 40,3 m / 40 (fiche 40), tracteur 23,6 m / 53 (fiche 54).
@@ -1086,7 +1121,22 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Capture** : `verification/s5-12-engin-de-chantier.png`
 - **Mesures brutes** : `verification/r83-qa-05-conduire-engins.json`
 
-### 114. Le carrousel de la fête foraine ne se monte pas en s'en approchant : le panneau dit « E pour monter », mais rien ne se propose
+### 114. ❌ CE N'ÉTAIT PAS LE CARROUSEL, C'ÉTAIT LA GRANDE ROUE — ✅ et les QUATRE manèges se prennent maintenant
+- **Je me suis trompé de manège** : `city.rides[0]` est **la grande roue**, pas le carrousel. Le défaut était réel, mais c'est la roue qui n'avait aucun rayon d'approche.
+- **Vérifié au round 83 (contrôle r83-qa2), les quatre manèges, approchés à pied par l'est, un mètre à la fois, 60 images d'arrêt à chaque pas, puis E :**
+
+  | manège | rayon | s'arme à | on monte | il tourne | on redescend (Espace) |
+  |---|---:|---:|---|---|---|
+  | 🎡 la grande roue | 5,0 | **7 m** | oui | oui | oui |
+  | 🎠 le carrousel | 5,5 | **9 m** | oui | oui | oui |
+  | 🎠 le tourniquet | 3,1 | **7 m** | oui | oui | oui |
+  | 🎠 le manège à poneys | 5,2 | **9 m** | oui | oui | oui |
+
+  Le carrousel, que j'accusais, répondait déjà : il s'arme à 9 m. **Les quatre sont bons.**
+- **Captures** : `verification/r83qa2-114-maneges.png` · **Mesures** : `verification/r83qa2-112-113-114-mesures.json`
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel (il visait le mauvais manège) :**
+
 - **Gravité** : GÊNANT (une attraction annoncée par son propre panneau et qu'on n'atteint pas). **À CONFIRMER** : `rideEnter()` appelée à la main fonctionne, donc c'est la mise à portée qui ne s'arme pas, et je n'ai essayé qu'une seule approche.
 - **Reproduire** : fête foraine, marcher jusqu'au carrousel (`city.rides[0]`) en venant de l'est, attendre 1,5 s à l'arrêt, appuyer sur E.
 - **On voit** : `city.rideNear` reste **faux**, aucune consigne ne s'affiche (`consigneProche()` rend null), E ne fait rien, le joueur reste au sol (y 0,12). Le panneau de zone dit pourtant « 🎡 Fête foraine : grande roue et carrousel (**E pour monter**), stands et ballons ». À titre de comparaison, au même essai et de la même façon, la balançoire arme `swingNear`, le banc arme `benchNear` et le trampoline arme `trampNear` — les trois répondent à E du premier coup.
@@ -1099,7 +1149,63 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Reproduire** : au centre de la ville, donner un coup de poing à l'habitant le plus proche, puis attendre 60 s sans rien faire.
 - **On voit** : l'habitant riposte tout de suite (« tiens ! », « tu l'as cherché ! »), le cœur de l'enfant descend à **37 PV** puis remonte seul à 100, et **★ reste à 0** pendant toute la minute. Le même enfant qui tire cinq coups de pistolet au même endroit passe à **★1 en moins d'une seconde**, est poursuivi, puis « arrêté et mis en prison » à t+25 s.
 - **On devrait voir** : si le coup de poing doit rester gratuit, très bien — mais alors ce n'est pas la police qui fait la différence, c'est l'arme, et il vaut mieux que ce soit un choix écrit qu'un oubli.
+- **✅ RÉPONSE APPORTÉE au round 83 (contrôle r83-qa2) : ce n'est pas un oubli, c'est une graduation, et je la retire donc de mes reproches.** En jouant la bagarre jusqu'au bout — huit à neuf coups de poing à la touche V sur le même habitant — l'écran affiche **« 🚨 Recherché ★★ · la police arrive dans 8 s — sauve-toi ! »** et le journal écrit **« 🚨 La police recherche Joueur36 (KO sur Lucas_2014) »**. Le **coup** est gratuit, le **KO** ne l'est pas, et **le coup de feu** l'est encore moins (★1 immédiat). C'est une échelle cohérente pour un enfant de huit ans : on peut se chamailler, on ne peut pas mettre quelqu'un à terre.
+- **Capture** : `verification/r83qa2-4d-riposte.png` (deux habitants à terre, « j'abandonne », ★★ et la police annoncée)
 - **Mesures brutes** : `verification/r83-qa-08-vie-de-la-ville.json`, `verification/r83-qa-07-armes-et-09-jeux.json`
+
+### CE QUI EST ACQUIS — round 83 (contrôle r83-qa2) : ce que le contrôle précédent avait eu l'honnêteté de dire « non testé »
+
+Le contrôle du round 83 écrivait : « Le chien, la salle de sport, le cinéma du parc et l'école
+jusqu'à la question : **non testés**, je ne les ai pas trouvés ou pas su déclencher. » **La liste
+est fermée. Joués jusqu'au bout, en pas de simulation, jamais en temps réel.**
+
+- **🐶 LE CHIEN — il marche, jusqu'à l'adoption.** Trois chiens dans le parc, relevés en
+  (26,43 ; 88,14), (24 ; 87,26) et (−9,77 ; 80,84). On s'approche : la consigne s'arme à **1,8 m**
+  et dit « 🐶 E : caresser · écris « adopte » pour l'adopter ». **E** le caresse (il suit 20 s).
+  On écrit **« adopte »** dans le champ de chat : `chien.pet` devient l'animal, `p.adopte` passe à
+  vrai, et la consigne devient « 🐶 E : caresser le chien ». **Il suit** : téléporté 14 m plus loin
+  et cinq secondes de jeu plus tard, il est à **1,89 m** du maître.
+- **🎬 LE CINÉMA DU PARC — il marche, de bout en bout.** Écran en (0 ; 98), **douze bancs** face à
+  lui. Le panneau dit « 🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin
+  animé » ; le banc s'arme (« 🪑 E : s'asseoir »), **E** assied, et le film s'annonce :
+  **« 🎬 🏴‍☠️ Les pirates (aventure) — bon film ! (Espace pour se lever) »**. L'image de la toile
+  **change** pendant la projection (trois relevés du canevas : 157 890, 242 490, 211 426 octets),
+  et **Espace** relève l'enfant. 17 plans au programme.
+- **🏋️ LA SALLE DE SPORT — elle marche, les deux appareils, jusqu'à la fin de séance.** Elle est
+  en (−1 ; 19,5) et **sa porte est en (−1 ; 16,15)**, large de 2,20 m : on entre par là, pas par
+  le mur du fond (c'est ce qui m'avait fait écrire « non testé »). De la rue à l'appareil :
+  **0 blocage**. Le banc s'arme (« 🏋️ E : soulever la barre »), **E** lance la séance
+  (« 🏋️ Appuie vite sur Espace pour soulever — chaque répétition rallonge la séance ! »), et
+  40 appuis sur Espace donnent : **« 💪 Séance finie : 40 répétitions en 32 s (1,2/s) ·
+  📈 Performance +7 → 17/100 ★ · 🏆 Record personnel battu (40) : +2 de bonus »**. Le tapis, dans
+  la foulée : **76 foulées en 30 s, Performance +10 → 27/100**.
+- **🏫 L'ÉCOLE — jouée jusqu'à la question ET la réponse.** Quatre classes (Maths, Géométrie &
+  Géographie, Logique, Culture générale) en z = 213,2, x = −79 / −69 / −59 / −49 ; **la porte est
+  dans le mur de la cour**, au milieu, et les chaises sont au fond. De la cour à la chaise :
+  **0 blocage**. La chaise s'arme (« 🪑 E : s'asseoir en classe »), **E** assied
+  (« 🪑 Assis (Espace / SAUT pour se lever) »), **un deuxième E ouvre la leçon**, et voilà ce que
+  l'enfant lit : titre « ➕ Classe de Maths », énoncé **« 4 + 3 + 1 = ? »**, quatre cartes
+  « 1️⃣8 2️⃣10 3️⃣9 4️⃣7 », et **le tableau noir l'écrit à la craie** : « 4 + 3 + 1 = ? | 1) 8
+  2) 10 3) 9 4) 7 ». On répond **8** : « 🎉 C'est gagné ! », **+3 🪙**, et la craie écrit
+  « Réponse : 8 | ✅ GAGNÉ ! +3 pièces ». Espace relève l'enfant, « 🏫 Leçon terminée ».
+  - **ET LA MAUVAISE RÉPONSE, jouée elle aussi** (en rendant la main à la page entre deux mesures,
+    pour laisser tourner le `setTimeout` de l'exercice suivant) : question **« 8 − 2 = ? »**, on
+    clique **8** — la carte cliquée passe au **rouge** (rgb 255,214,214), la bonne carte passe au
+    **vert** (rgb 214,255,214), et le tableau écrit à la craie
+    **« 8 − 2 = ? | Réponse : 8 | ❌ FAUX | La bonne réponse : 6 »**. **Aucune pièce n'est perdue.**
+    Puis l'exercice suivant arrive tout seul : **« 9 + 9 = ? »**, avec **neuf pommes rouges et neuf
+    pommes vertes dessinées** dans le panneau ET au tableau, et le score se met à jour
+    (« Score : 0/1 · série 0 »). C'est doux et c'est lisible pour un enfant de huit ans.
+    Capture : `verification/r83qa2-ecole-mauvaise-reponse.png`.
+  - *Une petite chose, non bloquante* : la ligne « Score » ne se rafraîchit qu'à l'exercice
+    **suivant** — entre la réponse et l'exercice d'après (1,5 à 2,8 s) elle affiche encore l'ancien
+    score. Le message et le tableau, eux, disent vrai. Voir n° 120.
+  - *Ce que je n'ai PAS su faire* : **entrer dans la banque**. Deux approches (par le nord, à pied,
+    et par l'itinéraire piéton du jeu) s'arrêtent contre la façade, à **5,83 m du guichet** — et
+    `navPath` lui-même ne mène pas au comptoir (il rend « le plus près » possible). Le banc d'essai,
+    lui, y entre **par l'est** ; je n'ai pas eu le temps de rejouer cette approche-là. **Je ne dis
+    pas que la banque est fermée** : je dis que je ne l'ai pas ouverte, et par où j'ai essayé.
+- **Mesures brutes** : `verification/r83qa2-chien-cinema-sport-ecole.json`, `verification/r83qa2-sport-et-ecole-par-la-porte.json`
 
 ### CE QUI EST ACQUIS — round 81 : les seize défauts du round 77, vérifiés un par un dans le jeu
 Tout ce qui suit est **mesuré à la manette DualSense sur `95ad841`**, monde neuf à chaque essai.
@@ -1206,6 +1312,57 @@ Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout 
 - **Le labyrinthe de paille tient debout** : ses murs de bottes sont continus, on ne passe pas entre deux bottes — 684 images de stick à fond contre un mur, 0 traversée. C'est un vrai labyrinthe : il faut le contourner, pas le traverser (mon pilote automatique, lui, n'a jamais trouvé le cœur).
 - **L'escalier de la première tour du Bois** monte impeccablement de 0,14 m à 2,60 m sans une image de blocage — c'est la rambarde d'en haut qui gâche tout (n° 102).
 
+### CE QUI EST ACQUIS — round 83 (contrôle r83-qa2) : les quatre réparations que personne n'avait encore JOUÉES
+
+Elles étaient mesurées et protégées par des tests verts, mais aucun humain ne les avait vues.
+Jouées ici en **pas de simulation**, jamais en temps réel, à la touche comme un enfant.
+
+- **🚸 UNE VOITURE QUI SORT D'UNE PLACE N'ÉCRASE PLUS LE PASSANT.** Mesure au Parking du centre,
+  gaz à fond trente secondes : personne dans la boîte → la voiture monte à **73,3 km/h** ; un
+  passant dans la boîte → **8,6 km/h, plafond exact (SORTIE_PAS = 2,4 m/s)**, **1 800 images sur
+  1 800 bridées**, et le passant finit à **100 PV** — il n'est pas touché une seule fois. Avant, il
+  était écrasé à 31,6 km/h. **Le klaxon sonne et la bande dit, en toutes lettres et lisiblement :
+  « 🚸 Attention ! Quelqu'un est juste devant la voiture »** (capture `r83qa2-4a-le-passant-s-ecarte.png`).
+  *Réserve chiffrée, en n° 119.*
+- **📝 LA VICTIME PORTE PLAINTE, et la chaîne se lit.** Avenue dégagée, police écartée : choc à
+  **1,33 s à 100,2 km/h**, la victime tombe à 30 PV, reste **à terre 40 s**, l'ambulance part —
+  puis, **40,02 s après le choc**, la bande affiche
+  **« 📝 Lucas_2014 a porté plainte : tu es recherché pour l'avoir renversé »** et **★ passe à 1**.
+  Le message final **nomme la cause**, c'est ce qui rend la leçon lisible. *Réserve en n° 118.*
+- **🚶 UN HABITANT CONTOURNE LE JOUEUR PLANTÉ SUR SON CHEMIN.** Joueur pile au milieu en (0 ; 8),
+  l'habitant part de (6 ; 8) vers (−6 ; 8) : il arrive en **181 images**, **passe de l'autre côté**
+  (x = −4,26), **0 image dans le joueur**, jamais plus près que **1,17 m** (la séparation vaut
+  1,16 m). Sans personne au milieu : 156 images. **Le détour coûte 25 images, soit 0,42 s.**
+  Avant, il restait épinglé à 1,09 m pour toujours.
+- **👊 UN HABITANT FRAPPÉ SE RETOURNE, même avec une vieille rancune.** Frappé **à la touche V**,
+  quatorze coups au plus : sans rancune il se retourne au **coup 5** (KO en 9 coups,
+  86 → 72 → 46 → 46 → 32⚔ → 18⚔ → 6⚔ → 6⚔ → 0) ; **avec une vieille rancune montée à la main**
+  (`b.fuitDe` = un voisin, bagarre finie) il se retourne **aussi au coup 5** (KO en 8). Avant :
+  jamais. *Attention au montage : si l'on pose `b.fight = 'flee'` en plus de `b.fuitDe`, la
+  réparation ne joue PAS — et c'est voulu, elle ne touche jamais une bagarre en cours. Mon premier
+  essai s'y est trompé et lisait « jamais ».*
+- **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
+
+---
+
+### CE QUI EST ACQUIS — round 83 (contrôle r83-qa2) : UNE PARTIE ENTIÈRE, sans script
+
+Jouée en deux moitiés, **en pas de simulation** (≈ 14 000 images, soit un peu moins de quatre
+minutes de jeu d'affilée), en réagissant à ce que je voyais et non à un scénario écrit.
+Le chemin à pied est celui que le jeu donne lui-même (`navEnPieton` + `navPath`), c'est-à-dire
+la rue — c'est ce que fait un enfant, et c'est ce qui manquait à mes deux premiers essais, qui
+marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux du jeu).
+
+1. **Arriver** — (0 ; 3,50), sur la chaussée (voir n° 111), ❤️ 100, « 👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter ».
+2. **Marcher** — la place du centre (**arrivé, 0 blocage**), le parc (**arrivé, 0 blocage**, 768 images), le cinéma du parc (**arrivé**), la fête foraine (à 5,9 m du but, 1 blocage sur 5 points). **❤️ 100 du début à la fin.** Et **la ville se propose toute seule** en chemin : « 🪑 E : s'asseoir », « 🎬 Cinéma en plein air : assieds-toi sur un banc (E) », « 🐱 E : caresser le chat », « 📮 E : donner un coup de main à Paulette », « 🎡 Fête foraine : grande roue et carrousel (E pour monter) », « 🎠 E : monter dans le carrousel ».
+3. **Prendre une voiture** — la plus proche est à 28,5 m (un camion de pompiers) ; « 🚗 Appuie sur E pour conduire », **E met au volant**, « 🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main ».
+4. **Rouler** — 4 690 images (78 s), **123,2 m**, pointe **70 km/h**, 0 étoile, ❤️ 100. *Mais* 552 images figées (12 %) et **55,7 % de tôle** : trois « 💥 BOUM ! Gros choc contre le mur » et un « 🧱 Tu es coincé — recule ou braque ». **Je ne le mets pas au compte du jeu** : je pilotais le plus gros véhicule de la ville avec un volant tout ou rien, et le jeu m'a dit à chaque fois quoi faire.
+5. **Se garer** — frein, 0 km/h, **E descend**, à pied en (−148,7 ; 71,5), ❤️ 100, ★ 0, « 🏚️ La Zone : immeubles ouverts, escaliers et appartements — attention aux gangs ».
+6. **Jouer** — la balançoire : « 🎠 E : s'asseoir sur la balançoire » → assis → amplitude 1,05 → **« 🎠 Wouhou ! »** → Espace pour sauter. (Le trampoline et le ballon de basket ne se sont pas armés à mon approche : je n'affirme pas qu'ils sont cassés, je n'ai pas su les atteindre.)
+7. **Se faire mettre KO, et revenir** — chute de 40 m : **« 💀 Chute mortelle ! 40 m de haut… »** puis **« 🚑 Une ambulance a été appelée »** puis, 1,6 s plus tard, **« 🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille ! »**. Réveil en (22 ; 205,9), **❤️ 100, 0 pièce perdue**, 💀 1, et le journal écrit « 💀 Joueur93 s'est écrasé après une chute de 40 m » puis « L'infirmière : Bonjour, comment puis-je vous aider ? ». **Il repart tout de suite, 0 blocage.** Le n° 97 et le n° 105 sont bien morts.
+- **Captures** : `verification/r83qa2-partie-01-arrivee.png` … `r83qa2-partie-08-apres-le-ko.png`
+- **Mesures brutes** : `verification/r83qa2-partie-1-arriver-rouler-se-garer.json`, `verification/r83qa2-partie-2-jouer-ko-revenir.json`
+
 ### 116. Le contrôle « aucun véhicule bloqué sans raison » ne connaît pas le carjacking, un arrêt pourtant légitime du jeu
 - **Gravité** : MINEUR — c'est le CONTRÔLE qui a tort, pas le jeu. Mais il rend le test 450 rouge au hasard de l'ordre des lots, et un test qui crie au loup finit par ne plus être écouté.
 - **Reproduire** : lancer le test 450 dans un lot où le joueur se trouve à portée d'un véhicule de la circulation (mesuré par le poste r83-j dans un lot de 111 tests, sur DEUX versions du jeu — donc ce n'est ni une régression du round 83 ni une sensibilité à l'horloge).
@@ -1213,3 +1370,97 @@ Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout 
 - **La cause** : `braquage` est le **carjacking du jeu** — un véhicule vient se présenter à l'enfant pour qu'il puisse le prendre. C'est un arrêt voulu, annoncé, et utile. La liste des « raisons légales » que le test 450 accepte ne le contient pas.
 - **On devrait voir** : le test compte `braquage` parmi les raisons légales, et le **nomme** dans son bilan — comme il nomme déjà `degage`, `figeT` et les autres. Ne pas monter son seuil de 5 s : c'est la liste des raisons qui est incomplète, pas le seuil qui est trop serré.
 - **Relevé brut** : journal de la suite propre, `scratchpad/SUITE-PROPRE-121098b.log`, et le lot de 111 tests du poste r83-j.
+
+
+## LE CONTRÔLE DU ROUND 83 — r83-qa2 (entrées 117 et suivantes)
+
+### VERDICT : **OUI MAIS** — livrable après le n° 122, qui se répare en une ligne d'ordre de priorité
+
+**Le défaut bloquant du contrôle précédent (n° 109) est réparé, et je l'ai vérifié des deux
+côtés : la perche ET l'image.** 240 relevés à 4,95 m là où il y en avait 18 sur 24 sous deux
+mètres ; la montée du trottoir au 2ᵉ étage puis dans l'appartement, **0 blocage**, pieds et tête
+dans le cadre à chaque arrêt, **41 garde-corps sur 41 et 25 marches sur 25 visibles**. Le poste
+a eu raison de refuser la recette de la cabane.
+
+**Ce qui retient la livraison, et c'est tout ce qui la retient** : le **n° 122**. Un enfant qui
+marche jusqu'à la grande roue, qui voit la consigne s'armer, qui appuie sur E (△ à la manette) —
+et qui se retrouve **recherché par la police pour vol de voiture**. Il est puni pour une action
+qu'il n'a pas demandée et qu'aucun message ne lui a proposée. C'est GÊNANT et non bloquant au
+sens strict (il n'est jamais prisonnier, il peut courir ou faire sa peine), mais c'est le seul
+de mes constats qui **punit sans qu'on comprenne**, et il tombe **à l'endroit du jeu où un enfant
+de huit ans va en premier**. Il se répare par l'ordre de priorité de la touche.
+
+**Ce qui reste et ne gêne pas** : n° 117 (six pas sur cinquante-deux dans la cage d'escalier, un
+cap sur quatre, un pas de plus libère), n° 118, n° 119, n° 120, n° 121, et le n° 111 d'avant.
+
+**Ce que je n'ai PAS contrôlé ce round, et je le dis** : la **manette DualSense** (tout mon
+contrôle est au clavier, par les vrais gestionnaires de touches ; le round 81 l'avait jouée à la
+manette et `harness/gamepad.js` la couvre — mais le n° 122 vaut à l'identique sur △, qui porte la
+même action) ; l'**introduction** ; le **son** ; et je n'ai **pas su entrer dans la banque** par
+le nord ni par l'est.
+
+
+### 117. Dans la cage d'escalier de La Zone, il reste SIX PAS sur cinquante-deux où la caméra entre encore dans le dos de l'enfant
+- **Gravité** : GÊNANT. C'est le reliquat du n° 109, qui est réparé par ailleurs (voir son entrée) : on est passé de **18 relevés sur 24 sous deux mètres** à **6 relevés sur 208 sous le confort**.
+- **Reproduire** : La Zone, immeuble (−169 ; 10). Se placer en **(−159,70 ; 1,16 ; 12,10)** (bande montante du rez, deux marches au-dessus du palier) et tourner la caméra **plein ouest**.
+- **On voit** : balayage fin de toute la cage, **52 pas de 30 cm**, 4 caps chacun (208 relevés), caméra convergée à la main (120 images de `camPerche` + `interieurTick`), joueur posé puis laissé tomber au sol. Confort du jeu `CAM_CONFORT` = 4,60 m.
+
+  | bande | étage | z | y | pire | cap fautif |
+  |---|---:|---:|---:|---:|---|
+  | montante | 0 | 12,10 | 1,16 | **0,85 m** | ouest |
+  | montante | 0 | 11,80 | 1,16 | **0,85 m** | ouest |
+  | descendante | 0 | 11,50 | 3,08 | **0,85 m** | est |
+  | descendante | 0 | 11,80 | 3,08 | **1,30 m** | est |
+  | montante | 1 | 11,50 | 4,68 | **0,85 m** | ouest |
+  | montante | 1 | 11,20 | 4,68 | **1,30 m** | ouest |
+
+  Aux **46 autres pas**, les quatre caps donnent **4,91 m** et l'enfant occupe 29 % de la hauteur d'écran. Aux six-là, il en occupe **114 à 228 %** : **ses pieds sortent du cadre** et le dos remplit tout. C'est toujours **un seul cap sur quatre** — le cap LATÉRAL, celui qui regarde en travers de la cage — et jamais celui de la montée.
+- **Ce que ça coûte vraiment, et je le mesure aussi** : en **montant l'escalier pour de bon**, du trottoir au 2ᵉ étage, la perche ne descend jamais sous **2,54 m** et les pieds sont dans le cadre à chaque arrêt. Un enfant ne tombe donc dessus **que s'il pousse le stick droit de côté en s'arrêtant sur l'une de ces trois marches**, et un pas de plus le libère.
+- **On devrait voir** : 4,60 m au moins sur les quatre caps, partout dans la cage.
+- **Captures** : `verification/r83qa2-109d-pire-montante-etage0.png` (0,85 m, le dos remplit l'écran), à comparer avec `verification/r83qa2-109c-02-haut-de-volee-montante.png` (4,91 m, on voit tout).
+- **Mesures brutes** : `verification/r83qa2-109-balayage-fin-52-points.json`
+
+### 118. Quand l'enfant renverse quelqu'un, le message qui explique la suite est recouvert dans la même image par celui de l'ambulance
+- **Gravité** : MINEUR, mais c'est exactement le maillon de la chaîne de cause à effet que la réparation voulait donner à l'enfant.
+- **Reproduire** : rouler sur un passant à plus de 30 km/h, hors de vue de la police.
+- **On voit** : `ecraseAuSol` affiche d'abord **« 🚑 Tu as renversé X ! Il va porter plainte… »** (`msg(..., 3000)`, **priorité 0**), puis, **dans la même image**, l'appel des secours affiche **« 🚑 Une ambulance a été appelée »** (`msg(..., 2200, 1)`, **priorité 1**). La priorité 1 écrase la priorité 0 et tient 2,2 s : le premier message **n'est jamais lu**. Relevé de ma mesure : la bande passe de « 🌳 Parc… » à « 🚑 Une ambulance a été appelée », sans jamais montrer « il va porter plainte ». Puis **quarante secondes de silence**, et l'étoile tombe avec « 📝 Lucas_2014 a porté plainte… ».
+- **Ce qui rattrape en partie, et je le dis** : le **journal de chat**, lui, garde la trace — on y lit « 📝 Lucas_2014 a porté plainte contre Joueur36 (l'avoir renversé en voiture) » et « 🚨 La police recherche Joueur36 (écraser Lucas_2014) ». Un enfant qui lit le journal comprend ; un enfant qui ne regarde que la bande, non.
+- **On devrait voir** : les deux, ou au moins celui qui annonce la suite (le jeu peut lui donner la priorité 1 lui aussi, ou l'afficher après l'ambulance).
+- **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
+
+### 119. Un passant collé au pare-chocs ne s'écarte jamais, et le jeu ne dit pas à l'enfant quoi faire
+- **Gravité** : MINEUR (l'enfant s'en sort tout seul en reculant), mais c'est trente secondes d'incompréhension.
+- **Reproduire** : au Parking du centre, quelqu'un devant le capot, gaz à fond.
+- **On voit** : le bridage à 2,4 m/s est **juste** et il sauve le passant (100 PV). Mais le passant **ne s'écarte pas** : sur **1 800 images (30 s)** il reste entre **0,78 et 0,98 m** de la caisse, **qu'il ait un but ailleurs ou non** (les deux cas mesurés), et `pietonDevant`/`pietonDerriere` répond encore VRAI à la fin. Le commentaire du jeu dit « le passant s'écarte en deux secondes » : **ce n'est pas ce que je mesure**. La voiture ne fait que **4,18 m en 30 s**.
+  **L'ISSUE EXISTE, et elle est franche** : en passant la marche arrière au bout de dix secondes, la caisse fait **37,3 m**, le passant finit à **40,5 m**, hors de la boîte, **à 100 PV**. L'enfant n'est donc jamais prisonnier.
+- **On devrait voir** : soit le passant recule vraiment, soit le message le dit — « 🚸 Attention ! Quelqu'un est juste devant la voiture » **n'indique aucune manœuvre**, alors que le message du blocage sur un mur, lui, dit « recule ou braque ».
+- **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
+
+### 120. À l'école, la ligne « Score » ne se rafraîchit qu'à l'exercice suivant : juste après une bonne réponse elle affiche encore l'ancien score
+- **Gravité** : COSMÉTIQUE.
+- **On voit** : on répond juste (« 🎉 C'est gagné ! », +3 🪙, la craie écrit « ✅ GAGNÉ ! +3 pièces »), et le bandeau du haut affiche toujours **« Score : 0/0 · série 0 »**. `$('schScore')` n'est écrit que dans `nextQuestion()`. Sur la capture prise plus tard, on lit même **« Score : 0/0 · série 1 »** — la série compte, le score non.
+- **Capture** : `verification/r83qa2-ecole-la-question.png`
+
+### 121. Certains bandeaux de message occupent cinq lignes et le quart haut de l'écran
+- **Gravité** : MINEUR, noté comme une gêne de lecture, pas comme une panne.
+- **On voit** : « 🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame » tient sur **cinq lignes** et couvre environ **200 px sur 720**, soit **28 % de la hauteur**, au milieu du haut de l'écran. Idem pour « 💪 Séance finie : 76 foulées en 30 s (2.5/s) · 📈 Performance +10 → 27/100 ★ · 🏆 Record personnel battu (76) : +2 de bonus ». C'est beaucoup de texte d'un coup pour un enfant de huit ans, et ça masque ce qu'il y a devant pendant deux à quatre secondes.
+- **Captures** : `verification/r83qa2-113-bulldozer-et-ses-voisins.png`, `verification/r83qa2-sport-par-la-porte.png`
+
+### 122. À la fête foraine, E fait monter dans la voiture garée à côté, jamais dans le manège — et si elle est occupée, l'enfant devient voleur de voiture sans l'avoir voulu
+- **Gravité** : **GÊNANT, et c'est celui des cinq que je remonterais en premier** — il coche « le punit sans qu'il comprenne ». Il ne bloque pas la partie (on court, ou on va en prison et on en sort), mais l'enfant est puni pour une action qu'il n'a pas demandée.
+- **Comment je suis tombé dessus** : pas en le cherchant. Pendant ma partie longue, je marche jusqu'à la grande roue, j'arrive à **0,95 m** du point d'embarquement, `rideNear` est bien **armé**, j'appuie sur **E** — et le journal écrit **« 🚗 Joueur23 a volé la voiture de Chloé ! »**, **« 🚨 La police recherche Joueur23 (vol de voiture) »**, et la bande affiche **« 🚨 Recherché ★★ · la police arrive dans 9 s — sauve-toi ! »**. Je n'ai pas touché au manège.
+- **Reproduit et mesuré, trois cas, même place (6 m à l'est du moyeu de la grande roue) :**
+
+  | situation | `rideNear` | `city.near` | consigne affichée | E fait… |
+  |---|---|---|---|---|
+  | la roue seule, aucune voiture à portée | **oui** | non | « 🎡 Fête foraine » | **monte dans la roue** — « 🎡 C'est parti ! (Espace / SAUT pour descendre) » |
+  | une voiture **libre** garée à 2,2 m | **oui** | **oui** | **« 🚗 E : monter »** | **met au volant de la voiture** (`P.ride` faux, `drive.car` vrai) |
+  | une voiture **occupée** à 2,2 m | **oui** | **oui** | **« 🚗 E : monter »** | **met au volant** — et en jeu réel, c'est le **vol** : ★★ et la police |
+
+- **La cause, lue dans le texte du jeu** : la touche E exécute **la première** d'une longue chaîne de priorités, et `city.near` (monter dans une voiture) puis `city.jackNear` (l'éjecter, « gros délit ! ») passent **bien avant** `city.rideNear`. Il suffit donc qu'une voiture soit garée à côté d'un manège pour que le manège devienne inatteignable à la touche.
+- **Ce qui aggrave** : la consigne devient **« 🚗 E : monter »** — *monter dans quoi ?* Un enfant qui vient de lire le panneau de zone « 🎡 Fête foraine : grande roue et carrousel (**E pour monter**) » lit exactement le même verbe.
+- **On devrait voir** : soit le manège passe devant la voiture quand on est dans son rayon d'embarquement, soit la consigne nomme l'objet (« 🚗 E : monter **dans la voiture** »), soit les deux choix sont proposés.
+- **Captures** : `verification/r83qa2-longue-4-grande-roue.png` (le vol, ★★, la police), `verification/r83qa2-122-touche-e-a-la-fete-foraine.png`
+- **Mesures brutes** : `verification/r83qa2-122-touche-e-mesures.json`
+- **Loyauté** : la seule erreur console de tout mon contrôle (`botDriveTick … reading 'speed'`) vient de **mon** montage du troisième cas — j'ai posé un conducteur à la main (`b.drive = v ; v.rider = b`) sans les champs que le jeu attend. **Ce n'est pas un défaut du jeu** et je ne le compte pas comme tel ; partout ailleurs, sur onze sessions, **zéro erreur console**.
+

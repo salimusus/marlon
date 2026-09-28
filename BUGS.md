@@ -1188,12 +1188,23 @@ est fermée. Joués jusqu'au bout, en pas de simulation, jamais en temps réel.*
   « 1️⃣8 2️⃣10 3️⃣9 4️⃣7 », et **le tableau noir l'écrit à la craie** : « 4 + 3 + 1 = ? | 1) 8
   2) 10 3) 9 4) 7 ». On répond **8** : « 🎉 C'est gagné ! », **+3 🪙**, et la craie écrit
   « Réponse : 8 | ✅ GAGNÉ ! +3 pièces ». Espace relève l'enfant, « 🏫 Leçon terminée ».
-  - *Deux petites choses, aucune bloquante* : (1) la ligne « Score : 0/0 · série 0 » ne se
-    rafraîchit qu'à l'exercice **suivant**, donc juste après une bonne réponse elle affiche encore
-    l'ancien score — le message et le tableau, eux, disent vrai ; (2) je **n'ai pas pu jouer la
-    mauvaise réponse** dans la même mesure : l'exercice suivant arrive par un `setTimeout`, et un
-    `setTimeout` ne tourne pas pendant une boucle de pas synchrone. Ce n'est pas un défaut du jeu,
-    c'est une limite de ma méthode, et je le dis plutôt que de l'inventer.
+  - **ET LA MAUVAISE RÉPONSE, jouée elle aussi** (en rendant la main à la page entre deux mesures,
+    pour laisser tourner le `setTimeout` de l'exercice suivant) : question **« 8 − 2 = ? »**, on
+    clique **8** — la carte cliquée passe au **rouge** (rgb 255,214,214), la bonne carte passe au
+    **vert** (rgb 214,255,214), et le tableau écrit à la craie
+    **« 8 − 2 = ? | Réponse : 8 | ❌ FAUX | La bonne réponse : 6 »**. **Aucune pièce n'est perdue.**
+    Puis l'exercice suivant arrive tout seul : **« 9 + 9 = ? »**, avec **neuf pommes rouges et neuf
+    pommes vertes dessinées** dans le panneau ET au tableau, et le score se met à jour
+    (« Score : 0/1 · série 0 »). C'est doux et c'est lisible pour un enfant de huit ans.
+    Capture : `verification/r83qa2-ecole-mauvaise-reponse.png`.
+  - *Une petite chose, non bloquante* : la ligne « Score » ne se rafraîchit qu'à l'exercice
+    **suivant** — entre la réponse et l'exercice d'après (1,5 à 2,8 s) elle affiche encore l'ancien
+    score. Le message et le tableau, eux, disent vrai. Voir n° 120.
+  - *Ce que je n'ai PAS su faire* : **entrer dans la banque**. Deux approches (par le nord, à pied,
+    et par l'itinéraire piéton du jeu) s'arrêtent contre la façade, à **5,83 m du guichet** — et
+    `navPath` lui-même ne mène pas au comptoir (il rend « le plus près » possible). Le banc d'essai,
+    lui, y entre **par l'est** ; je n'ai pas eu le temps de rejouer cette approche-là. **Je ne dis
+    pas que la banque est fermée** : je dis que je ne l'ai pas ouverte, et par où j'ai essayé.
 - **Mesures brutes** : `verification/r83qa2-chien-cinema-sport-ecole.json`, `verification/r83qa2-sport-et-ecole-par-la-porte.json`
 
 ### CE QUI EST ACQUIS — round 81 : les seize défauts du round 77, vérifiés un par un dans le jeu

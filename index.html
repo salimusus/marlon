@@ -20388,6 +20388,30 @@ function interieurEntre(r) {
   // CE QUI CONTINUE DE FERMER LA VUE : tout ce qui est à HAUTEUR D'HOMME dans la cage. Une marche
   // devant soi, le limon, une carcasse garée au pied de l'escalier, un meuble du même étage. La
   // caméra ne peut donc pas passer sous l'escalier, ni traverser une volée par le flanc.
+  // ---- CE QU'IL RESTE, MESURÉ, ET POURQUOI ON N'Y TOUCHE PAS (n° 117) ----
+  // BALAYAGE DE TOUTE LA CAGE AU PAS DE 30 cm, du palier du rez à la coursive du 1er, quatre caps
+  // par pas : 63 pas, 252 relevés. HUIT relevés sous le confort de 4,60 m, pire 1,15 m, et TOUJOURS
+  // sur un seul cap sur quatre : les pas 10 à 13 (volée montante, x -159,70, y 1,16 et 1,48) au cap
+  // OUEST, et les pas 44 à 47 (volée descendante, x -157,10, y 2,76 et 3,08) au cap EST — les 3ᵉ et
+  // 4ᵉ marches de chaque demi-volée, symétriquement. Tout le reste rend 4,94 à 4,95 m, `cam.plafond`
+  // vaut 9 m et `cam.pmax` 0,42 rad aux 252 relevés : la montee n'est plus interdite, le n° 109 tient.
+  // EN MONTANT NORMALEMENT la perche ne descend JAMAIS sous 4,94 m (cap nord sur la volée montante,
+  // cap sud sur la descendante, 63 pas sur 63) : il faut s'arrêter sur l'une de ces quatre marches
+  // ET pousser le stick de côté.
+  // LA GÉOMÉTRIE QUI FERME CE CAP-LÀ : c'est LE FLANC DE L'AUTRE DEMI-VOLÉE. Les marches de la bande
+  // voisine (2,60 × 0,32 × 0,66 m, à 2,60 m en travers, face la plus proche à 1,00 m) se trouvent
+  // pile à hauteur d'œil de la caméra quand l'enfant est au milieu de sa propre volée : sur la
+  // montante la caméra bute sur les marches de la descendante à y 1,80 / 2,12 / 2,44 / 2,76 m, et
+  // réciproquement. Elles ne sont ni un garde-corps (`rambarde`), ni une dalle (leur petit côté fait
+  // 0,66 m, il en faut 1,20), ni un mur (0,32 m de haut, il en faut 2,20) : elles ferment donc,
+  // exactement comme le dit la règle ci-dessous.
+  // ON N'Y TOUCHE PAS, ET C'EST UN CHOIX. Les rendre traversables, c'est rendre traversable UNE
+  // VOLÉE D'ESCALIER — ce que l'enfant doit voir, et ce que le n° 109 interdit noir sur blanc
+  // (« UNE CAGE D'ESCALIER N'EFFACE RIEN ») : la caméra passerait derrière l'autre volée et la
+  // ferait fondre à 22 %, c'est-à-dire le défaut d'origine (« on ne voit ni escalier ni plancher ni
+  // mur »). Elles ne sont pas non plus « étroites » au sens du jeu : 2,60 m, soit 3,7 fois le seuil
+  // de 0,70 m en dessous duquel la caméra a le droit de regarder à côté d'un poteau. Huit relevés
+  // sur 252 (3,2 %), sur un geste que l'enfant ne fait pas en montant : on paie ce prix-là.
   if (r.cage) {
     const yObj = P.pos.y + 1.5, yCeint = P.pos.y + 0.45;
     const emprises = [{ x: r.x, z: r.z, w: r.w, d: r.d }].concat(r.emprises || []);

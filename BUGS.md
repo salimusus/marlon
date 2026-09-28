@@ -1149,6 +1149,26 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On devrait voir** : si le coup de poing doit rester gratuit, très bien — mais alors ce n'est pas la police qui fait la différence, c'est l'arme, et il vaut mieux que ce soit un choix écrit qu'un oubli.
 - **Mesures brutes** : `verification/r83-qa-08-vie-de-la-ville.json`, `verification/r83-qa-07-armes-et-09-jeux.json`
 
+### CE QUI EST ACQUIS — round 83 (contrôle r83-qa2) : ce que le contrôle précédent avait eu l'honnêteté de dire « non testé »
+
+Le contrôle du round 83 écrivait : « Le chien, la salle de sport, le cinéma du parc et l'école
+jusqu'à la question : **non testés**, je ne les ai pas trouvés ou pas su déclencher. » **La liste
+est fermée. Joués jusqu'au bout, en pas de simulation, jamais en temps réel.**
+
+- **🐶 LE CHIEN — il marche, jusqu'à l'adoption.** Trois chiens dans le parc, relevés en
+  (26,43 ; 88,14), (24 ; 87,26) et (−9,77 ; 80,84). On s'approche : la consigne s'arme à **1,8 m**
+  et dit « 🐶 E : caresser · écris « adopte » pour l'adopter ». **E** le caresse (il suit 20 s).
+  On écrit **« adopte »** dans le champ de chat : `chien.pet` devient l'animal, `p.adopte` passe à
+  vrai, et la consigne devient « 🐶 E : caresser le chien ». **Il suit** : téléporté 14 m plus loin
+  et cinq secondes de jeu plus tard, il est à **1,89 m** du maître.
+- **🎬 LE CINÉMA DU PARC — il marche, de bout en bout.** Écran en (0 ; 98), **douze bancs** face à
+  lui. Le panneau dit « 🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin
+  animé » ; le banc s'arme (« 🪑 E : s'asseoir »), **E** assied, et le film s'annonce :
+  **« 🎬 🏴‍☠️ Les pirates (aventure) — bon film ! (Espace pour se lever) »**. L'image de la toile
+  **change** pendant la projection (trois relevés du canevas : 157 890, 242 490, 211 426 octets),
+  et **Espace** relève l'enfant. 17 plans au programme.
+- **Mesures brutes** : `verification/r83qa2-chien-cinema-sport-ecole.json`
+
 ### CE QUI EST ACQUIS — round 81 : les seize défauts du round 77, vérifiés un par un dans le jeu
 Tout ce qui suit est **mesuré à la manette DualSense sur `95ad841`**, monde neuf à chaque essai.
 Les seize défauts du contrôleur du round 77 sont **tous réparés pour de bon** ; je les ai rejoués

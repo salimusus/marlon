@@ -1,0 +1,371 @@
+{
+ "sport": {
+  "banc": {
+   "x": -2.9,
+   "z": 19
+  },
+  "tapis": {
+   "x": 0.7,
+   "z": 17.9
+  },
+  "essais": [
+   {
+    "nom": "banc de musculation",
+    "approche": {
+     "x": -2.9,
+     "y": 0,
+     "z": 23.43,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 25,
+     "camD": 6.63,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 155.12
+    },
+    "bloque": 91,
+    "arme": null,
+    "lance": null,
+    "enCours": {
+     "on": null,
+     "reps": 0,
+     "act": "🛍️ Commerces"
+    },
+    "finie": true,
+    "perf": 10,
+    "messages": [
+     {
+      "t": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+      "sim": 150.67
+     },
+     {
+      "t": "🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir",
+      "sim": 150.98
+     }
+    ]
+   },
+   {
+    "nom": "tapis de course",
+    "approche": {
+     "x": 2.93,
+     "y": 0,
+     "z": 17.9,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 25,
+     "camD": 6.63,
+     "piece": null,
+     "act": "🛍️ Commerces",
+     "sim": 173.95
+    },
+    "bloque": 91,
+    "arme": null,
+    "lance": null,
+    "enCours": {
+     "on": null,
+     "reps": 0,
+     "act": "🛍️ Commerces"
+    },
+    "finie": true,
+    "perf": 10,
+    "messages": [
+     {
+      "t": "🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir",
+      "sim": 170.47
+     },
+     {
+      "t": "🤸 Trampolines : saute dessus pour t'envoler vers les pièces de la tour",
+      "sim": 170.75
+     },
+     {
+      "t": "🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir",
+      "sim": 171.4
+     }
+    ]
+   }
+  ]
+ },
+ "chien": {
+  "chiens": [
+   {
+    "x": 26.43,
+    "z": 88.14
+   },
+   {
+    "x": 24,
+    "z": 87.26
+   },
+   {
+    "x": -9.77,
+    "z": 80.84
+   }
+  ],
+  "arme": true,
+  "caresse": {
+   "follow": true,
+   "messages": [
+    {
+     "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+     "sim": 191.77
+    },
+    {
+     "t": "🐶 E : caresser · écris « adopte » pour l'adopter",
+     "sim": 192
+    }
+   ]
+  },
+  "adopte": {
+   "chien": true,
+   "adopte": true,
+   "messages": [
+    {
+     "t": "🐶 E : caresser le chien",
+     "sim": 192.88
+    }
+   ],
+   "champ": true
+  },
+  "suit": {
+   "d0": 0.98,
+   "d1": 1.89
+  },
+  "distanceArmement": 1.8
+ },
+ "cinema": {
+  "ecran": {
+   "x": 0,
+   "z": 98
+  },
+  "bancs": 12,
+  "premier": {
+   "x": -6.5,
+   "z": 93.5
+  },
+  "approche": {
+   "x": -6.5,
+   "y": 0.66,
+   "z": 92.73,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25,
+   "camD": 6.86,
+   "piece": null,
+   "act": "🪑 E : s'asseoir",
+   "sim": 202.28
+  },
+  "arme": true,
+  "assis": true,
+  "imageChange": true,
+  "tailles": [
+   157890,
+   242490,
+   211426
+  ],
+  "sacs": 17,
+  "i": 11,
+  "messages": [
+   {
+    "t": "🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin animé",
+    "sim": 201.38
+   },
+   {
+    "t": "🪑 E : s'asseoir",
+    "sim": 201.48
+   },
+   {
+    "t": "🐱 E : caresser le chat",
+    "sim": 201.57
+   },
+   {
+    "t": "🪑 E : s'asseoir",
+    "sim": 202.15
+   },
+   {
+    "t": "🎬 🏴‍☠️ Les pirates (aventure) — bon film ! (Espace pour se lever)",
+    "sim": 202.28
+   },
+   {
+    "t": "🪑 E : s'asseoir",
+    "sim": 222.65
+   }
+  ],
+  "sorti": true
+ },
+ "ecoleInfo": {
+  "classes": [
+   {
+    "n": "Maths",
+    "e": "➕",
+    "subj": "math",
+    "x": -79,
+    "z": 213.2
+   },
+   {
+    "n": "Géométrie & Géographie",
+    "e": "📐",
+    "subj": "geo",
+    "x": -69,
+    "z": 213.2
+   },
+   {
+    "n": "Logique",
+    "e": "🧩",
+    "subj": "logi",
+    "x": -59,
+    "z": 213.2
+   },
+   {
+    "n": "Culture générale",
+    "e": "🌍",
+    "subj": "cult",
+    "x": -49,
+    "z": 213.2
+   }
+  ],
+  "chaises": [
+   {
+    "x": -82.6,
+    "z": 209.1,
+    "salle": "Maths"
+   },
+   {
+    "x": -81.4,
+    "z": 209.1,
+    "salle": "Maths"
+   },
+   {
+    "x": -79.6,
+    "z": 209.1,
+    "salle": "Maths"
+   },
+   {
+    "x": -78.4,
+    "z": 209.1,
+    "salle": "Maths"
+   },
+   {
+    "x": -76.6,
+    "z": 209.1,
+    "salle": "Maths"
+   },
+   {
+    "x": -75.4,
+    "z": 209.1,
+    "salle": "Maths"
+   },
+   {
+    "x": -82.6,
+    "z": 211.7,
+    "salle": "Maths"
+   },
+   {
+    "x": -81.4,
+    "z": 211.7,
+    "salle": "Maths"
+   },
+   {
+    "x": -79.6,
+    "z": 211.7,
+    "salle": "Maths"
+   },
+   {
+    "x": -78.4,
+    "z": 211.7,
+    "salle": "Maths"
+   },
+   {
+    "x": -76.6,
+    "z": 211.7,
+    "salle": "Maths"
+   },
+   {
+    "x": -75.4,
+    "z": 211.7,
+    "salle": "Maths"
+   }
+  ]
+ },
+ "ecole": {
+  "salle": "Maths (math)",
+  "approche": {
+   "x": -82.6,
+   "y": 0.2,
+   "z": 213.93,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25,
+   "camD": 4.41,
+   "piece": null,
+   "act": "🏫 École",
+   "sim": 230.35
+  },
+  "armeChaise": false,
+  "assis": false,
+  "bonneChaise": false,
+  "ouvert": null,
+  "question": null,
+  "affiche": {
+   "question": "",
+   "choix": [],
+   "titre": "🏫 Classe",
+   "score": ""
+  },
+  "clic": null,
+  "apres": null,
+  "faux": null,
+  "uiApres": null,
+  "deboutApres": true
+ },
+ "bulldozerVu": {
+  "place": [
+   28.2,
+   121.5
+  ],
+  "voisins": [
+   {
+    "kind": "grue",
+    "air": 1.27
+   },
+   {
+    "kind": "pelle",
+    "air": 2.81
+   },
+   {
+    "kind": "fourgon",
+    "air": 6.42
+   }
+  ]
+ },
+ "roueVue": {
+  "nom": "la grande roue",
+  "arme": true,
+  "act": "🎡 Fête foraine",
+  "messages": [
+   {
+    "t": "➕ Classe de Maths : assieds-toi à une table (E) pour les exercices",
+    "sim": 226.47
+   },
+   {
+    "t": "🏫 Leçon terminée : tu te lèves (E sur une chaise pour reprendre)",
+    "sim": 234.37
+   },
+   {
+    "t": "🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame",
+    "sim": 235.27
+   },
+   {
+    "t": "🎡 E : monter dans la grande roue",
+    "sim": 237.72
+   }
+  ]
+ },
+ "erreurs": []
+}

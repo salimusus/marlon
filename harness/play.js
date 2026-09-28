@@ -25987,10 +25987,19 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     // et Tom PLANTE a 0,90 m du pare-chocs, dans l'axe — la mesure du controleur.
     const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14)
       || G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    // L'EPINGLE. Ce test pretend mesurer « un passant colle au pare-chocs d'une voiture qui SORT
+    // D'UNE PLACE » : il doit donc rester dans cet etat-la du debut a la fin. Premier jet : plein
+    // gaz pendant 600 images, la voiture QUITTAIT le rectangle de parking au bout de deux
+    // secondes, `sortDeStationnement` passait faux, le plafond de 2,40 m/s se levait, et elle
+    // depassait Tom en le renversant (releve du chef : pointe 3,34 m/s, 4,3 de tole, le passant a
+    // -4,18 m du pare-chocs, c'est-a-dire DERRIERE). On la repose donc a sa place a CHAQUE image :
+    // la commande, la vitesse et le plafond vivent normalement, seule la geometrie est tenue.
+    const CX = -13, CZ = 8;
+    const epingle = () => { car.x = CX; car.z = CZ; car.h = 0; car.y = car.y || 0;
+      car.g.position.set(car.x, car.y, car.z); car.g.rotation.y = 0; G.vehicleSolid(car); };
     const essai = (images) => {
       if (G.drive.car) G.exitCar();
-      car.busy = false; car.dmg = 0; car.h = 0; car.x = -13; car.z = 8;
-      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      car.busy = false; car.dmg = 0; epingle();
       car.avertPietT = 0; car.pietBloqueT = 0;
       const avant = (car.baseD || 4.4) / 2;
       tom.hp = 100; tom.ko = 0; tom.hitT = 0; tom.wait = 9999; tom.fight = null; tom.fuitDe = null;
@@ -26001,8 +26010,8 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       const trace = []; let degage = -1, vMax = 0, bride = 0, dit = null;
       G.keys.add('KeyW');
       for (let i = 0; i < images; i++) {
-        // le plein gaz, l'enfant qui insiste : la voiture ne bouge pas de son couloir
-        G.step(1 / 60, true);
+        // le plein gaz, l'enfant qui insiste : la voiture reste dans sa place (voir l'epingle)
+        G.step(1 / 60, true); epingle();
         // le passant est pousse par combatTick, appele par step() ; on le suit a chaque image
         const fx = Math.sin(car.h), fz = Math.cos(car.h);
         const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
@@ -26031,8 +26040,7 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     //      ne reste que le klaxon et le plafond de vitesse, c'est-a-dire le jeu d'avant.
     R.avant = (() => {
       if (G.drive.car) G.exitCar();
-      car.busy = false; car.dmg = 0; car.h = 0; car.x = -13; car.z = 8;
-      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      car.busy = false; car.dmg = 0; epingle();
       car.avertPietT = 0; car.pietBloqueT = 0;
       const avant = (car.baseD || 4.4) / 2;
       tom.hp = 100; tom.ko = 0; tom.hitT = 0; tom.wait = 9999; tom.fight = null; tom.fuitDe = null;
@@ -26045,7 +26053,7 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       for (let i = 0; i < 1800; i++) {
         car.pietBloqueT = G.simTime;        // le delai n'est jamais atteint : l'ancien comportement
         tom.fight = null; tom.fuitDe = null;
-        G.step(1 / 60, true);
+        G.step(1 / 60, true); epingle();
         const fx = Math.sin(car.h), fz = Math.cos(car.h);
         const pare = (tom.pos.x - car.x) * fx + (tom.pos.z - car.z) * fz - avant;
         pMin = Math.min(pMin, pare); pMax = Math.max(pMax, pare);
@@ -26087,7 +26095,11 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     + ` · AVANT (l'ancien code rejoue : le delai d'ecartement repousse a chaque image) : ${A.images} images`
     + ` plein gaz, le passant reste entre ${A.pareMin} et ${A.pareMax} m du pare-chocs, il ne degage`
     + ` JAMAIS (${A.degage}), et la voiture reste bridee a ${A.vMax} m/s (${A.kmh} km/h)`
-    + ` · APRES : il degage le couloir a l'image ${B.degage} (${(B.degage / 60).toFixed(1)} s),`
+    + ` · APRES, LA VOITURE EPINGLEE DANS SA PLACE (premier jet de ce test : plein gaz, elle QUITTAIT`
+    + ` le rectangle de parking au bout de deux secondes, le plafond se levait, elle depassait Tom`
+    + ` en le renversant — pointe 3,34 m/s, 4,3 de tole, le passant a -4,18 m du pare-chocs, donc`
+    + ` DERRIERE ; le « degage a l'image 80 » de ce jet-la etait la voiture qui passait, pas le`
+    + ` passant qui s'ecartait) : il degage le couloir a l'image ${B.degage} (${(B.degage / 60).toFixed(1)} s),`
     + ` en s'ecartant DE COTE — ${B.travFin} m de l'axe a la fin, ${B.pareFin} m du pare-chocs —,`
     + ` etat « ${B.fuite} », et il n'a pas une egratignure (${B.hp} PV, ${B.tole} de tole,`
     + ` ambulance=${B.ambulance}) · la voiture reste bridee a ${B.vMax} m/s tant qu'il est la`

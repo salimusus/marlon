@@ -25895,13 +25895,22 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     // ON GELE LE JEU pendant la mesure : `paused = true` arrete step(), donc simTime et toute
     // pastille de proximite qui viendrait salir le releve. Le minuteur du bandeau, lui, tourne.
     const etait = G.paused; if (G.setPause) G.setPause(true);
+    // ON MESURE AVEC UNE HORLOGE, PAS AVEC LA SOMME DES SIESTES DEMANDEES. Premier jet de ce
+    // test : `cumul += ms`, c'est-a-dire le total des `dodo(ms)` DEMANDES. Or la page rend une
+    // image par seconde sous swiftshader et la boucle de rendu affame les minuteurs : un
+    // `dodo(400)` prend deux secondes de vrai temps. Le test a donc annonce « la plainte 1 600 ms
+    // sur les 3 000 demandees » alors que le code tenait ses 3 000 ms — mesure a la sonde :
+    // plainte encore a l'ecran a 2 039 ms de vraie horloge, ambulance a 3 043 ms, bandeau vide a
+    // 5 763 ms. C'etait l'instrument qui mentait, pas le jeu. On lit donc performance.now().
+    const t0 = performance.now();
     const trace = [{ t: 0, txt: lu() }];
-    let cumul = 0;
-    for (const ms of [400, 400, 400, 400, 400, 400, 400, 400, 500, 500, 500, 500, 500, 500]) {
-      await dodo(ms); cumul += ms;
-      const txt = lu();
-      if (txt !== trace[trace.length - 1].txt) trace.push({ t: cumul, txt });
+    for (let i = 0; i < 40; i++) {
+      await dodo(120);
+      const txt = lu(), t = Math.round(performance.now() - t0);
+      if (txt !== trace[trace.length - 1].txt) trace.push({ t, txt });
+      if (t > 9000) break;
     }
+    R.duree = Math.round(performance.now() - t0);
     R.trace = trace;
     if (G.setPause) G.setPause(etait);
     G.exitCar(); G.clearWanted('fin');
@@ -25923,7 +25932,7 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
   const ok = /porter plainte/.test(A.plainte) && /ambulance/.test(A.apresAmbulance)      // LA CAUSE
     && /porter plainte/.test(B.plainte) && /porter plainte/.test(B.apresAmbulance)       // LA REPARATION
     && r.reel.touches >= 1 && r.reel.ambulance === 'route' && /porter plainte/.test(r.reel.banniere)
-    && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 3600
+    && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 7000   // le seuil BAS est la preuve ; le haut est large parce que la page rend une image par seconde
     && iVide > iAmb && T[iVide].t >= T[iAmb].t + 1800
     && /s'asseoir|asseoir/.test(r.temoinPrio0) && /BOOST/.test(r.temoinRemplace);
   return { ok, detail: `LA CAUSE, dans msg() : \`msgPrioT = prio > 0 ? simTime + ms / 1000 : 0\` — une`
@@ -25936,8 +25945,12 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     + ` — et l'ambulance n'est pas PERDUE, elle attend son tour dans la case (« ${B.enAttente} »)`
     + ` · LA VRAIE SEQUENCE DU JEU (un passant renverse a 12 m/s, ${r.reel.touches} touche, ambulance`
     + ` ${r.reel.ambulance}, plainte prevue : ${r.reel.plainteDans}) : le bandeau dit « ${r.reel.banniere} »`
-    + ` · LES DUREES, en horloge reelle (le bandeau s'efface sur un setTimeout, c'est la seule piece`
-    + ` du jeu qui ne se compte pas en images, et le jeu est gele pendant le releve) :`
+    + ` · LES DUREES, LUES A performance.now() (le bandeau s'efface sur un setTimeout : c'est la`
+    + ` seule piece du jeu qui ne se compte pas en images, et le jeu est gele pendant le releve).`
+    + ` PREMIER JET DE CE TEST : il additionnait les siestes DEMANDEES et annoncait « la plainte`
+    + ` 1 600 ms sur 3 000 » ; la page rend UNE IMAGE PAR SECONDE, un dodo(400) prend deux secondes,`
+    + ` et le code tenait bel et bien ses 3 000 ms (sonde a 50 ms : plainte a 2 039 ms, ambulance a`
+    + ` 3 043 ms, vide a 5 763 ms). C'etait l'instrument, pas le jeu :`
     + ` ${T.map(e => `${e.t} ms → « ${e.txt || '(rien)'} »`).join(' | ')} — soit la plainte ${T[iAmb] ? T[iAmb].t : '?'} ms`
     + ` (3 000 demandees), puis l'ambulance ${T[iVide] && T[iAmb] ? T[iVide].t - T[iAmb].t : '?'} ms (2 200 demandees)`
     + ` · ET LES AUTRES BANDEAUX NE SONT PAS DECALES : hors reservation, une pastille de priorite 0`

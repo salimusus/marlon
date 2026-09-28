@@ -26120,31 +26120,46 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
 // n° 120 : `$('schScore').textContent` n'etait ecrit que dans `nextQuestion` — l'exercice suivant
 // n'arrive qu'1,5 s plus tard (2,8 s sur une faute, le temps que la craie finisse sa phrase), et
 // pendant tout ce temps l'enfant lisait le score d'AVANT sa reponse.
-test('le bandeau le plus long du jeu ne mange plus le quart de l\'ecran, et le Score de l\'ecole compte la reponse qu\'on vient de donner', async p => {
+test('le bandeau le plus long du jeu couvrait 60 % de l\'ecran et tient maintenant dans un cinquieme, et le Score de l\'ecole compte la reponse qu\'on vient de donner', async p => {
   const r = await p.evaluate(async () => {
     const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12, frais: true });
     const el = document.getElementById('msg');
-    const R = { MSG_TRES: G.MSG_TRES, ecran: [window.innerWidth, window.innerHeight] };
-    // LA PHRASE LA PLUS LONGUE DU JEU, mot pour mot (217 caracteres, `conduire`/`equipage`)
+    const R = { budget: G.MSG_HAUTEUR, plancher: G.MSG_PLANCHER, ecran: [window.innerWidth, window.innerHeight] };
+    // LA PHRASE LA PLUS LONGUE DU JEU, telle qu'elle etait ecrite AVANT qu'on borne la liste de
+    // noms : « Ce vehicule n'a que 2 places : X et Y restent a pied — prends une voiture plus
+    // grande ! », avec deux pseudos de la ville. C'est elle que le chef a relevee a 60,6 % de
+    // l'ecran. On mesure aussi la version BORNEE que le jeu envoie maintenant.
     const LONGUE = '\u{1F697} Ce véhicule n\'a que 2 places : Tom_le_ouf et Chloé_du_13 restent à pied \u{1F6B6} — prends une voiture plus grande ! Il faut un break, un van ou le camion du dépôt si tout le monde doit monter avec toi en même temps.';
-    R.longueur = LONGUE.length;
+    const BORNEE = G.nomsRestes
+      ? `\u{1F697} 2 places seulement : ${G.nomsRestes(['Tom_le_ouf', 'Chloé_du_13'])} restent à pied \u{1F6B6} — prends plus grand !`
+      : LONGUE;
+    R.longueur = LONGUE.length; R.longueurBornee = BORNEE.length;
     const boite = () => { const b = el.getBoundingClientRect();
-      return { h: Math.round(b.height), w: Math.round(b.width), pc: +(b.height / window.innerHeight * 100).toFixed(1),
-        lignes: Math.round(b.height / (parseFloat(getComputedStyle(el).lineHeight) || 1)),
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 1;
+      return { h: Math.round(b.height), w: Math.round(b.width),
+        pc: +(b.height / window.innerHeight * 100).toFixed(1),
+        lignes: Math.max(1, Math.round((b.height - 20) / lh)),
         police: +parseFloat(getComputedStyle(el).fontSize).toFixed(1) }; };
-    G.msg(LONGUE, 4000, 2);
+    // TROIS RELEVES, POUR ISOLER LES DEUX CAUSES.
+    G.msg(LONGUE, 6000, 2);
     await dodo(300);
-    R.apres = boite();
-    // AVANT : le meme texte sans le troisieme palier — c'est exactement l'ancien CSS
-    el.classList.remove('tres');
+    R.apres = boite();                                   // largeur reparee + budget de hauteur
+    el.style.fontSize = '';                              // on annule le serrage : largeur seule
+    await dodo(200);
+    R.largeurSeule = boite();
+    el.style.width = 'auto';                             // et on remet l'ancienne largeur : AVANT
     await dodo(200);
     R.avant = boite();
-    el.classList.add('tres');
-    // TEMOIN : un bandeau court ne change pas d'un pixel
+    el.style.width = ''; el.style.fontSize = '';
+    // ET LA PHRASE QUE LE JEU ENVOIE MAINTENANT, liste de noms bornee
+    G.msg(BORNEE, 4000, 2);
+    await dodo(250);
+    R.bornee = boite();
+    // TEMOIN : un bandeau court ne change pas d'un pixel et n'est jamais serre
     G.msg('\u{1F389} C\'est gagné !', 1200, 2);
     await dodo(250);
-    R.court = Object.assign(boite(), { classes: el.className });
+    R.court = Object.assign(boite(), { classes: el.className, serre: el.style.fontSize || '(aucun)' });
     // ---- n° 120 : LE SCORE DE L'ECOLE ----
     const salle = G.city.classes[0], ch = salle.chaises[0];
     G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
@@ -26165,18 +26180,37 @@ test('le bandeau le plus long du jeu ne mange plus le quart de l\'ecran, et le S
     return R;
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
-  const A = r.avant, B = r.apres, E = r.ecole;
-  const ok = A.pc > 24 && B.pc <= 18 && B.lignes <= 3 && B.lignes < A.lignes && B.police < A.police
-    && r.court.h < B.h && !/tres/.test(r.court.classes)
+  const A = r.avant, B = r.apres, L = r.largeurSeule, N = r.bornee, E = r.ecole;
+  const PLAFOND = 20;   // le budget que le jeu se donne : un cinquieme de la hauteur d'ecran
+  const ok = A.pc > 50 && A.lignes >= 8
+    && L.pc < A.pc && L.lignes < A.lignes
+    && B.pc <= PLAFOND && B.lignes < L.lignes && B.police < L.police
+    && N.pc <= PLAFOND && N.lignes <= B.lignes
+    && r.court.h < B.h && r.court.serre === '(aucun)'
     && /0\/0/.test(E.depart) && /1\/1/.test(E.justeApres) && E.justeApres === E.exerciceSuivant;
-  return { ok, detail: `n° 121 — la phrase la plus longue du jeu (${r.longueur} caracteres) sur un ecran`
-    + ` de ${r.ecran[0]} x ${r.ecran[1]} : AVANT ${A.h} px de haut (${A.pc} % de la hauteur d'ecran),`
-    + ` ${A.lignes} lignes de ${A.police} px ; APRES ${B.h} px (${B.pc} %), ${B.lignes} lignes de`
-    + ` ${B.police} px — le troisieme palier de taille se pose au-dela de ${r.MSG_TRES} caracteres`
-    + ` · TEMOIN, un bandeau court ne bouge pas : ${r.court.h} px, ${r.court.police} px de police,`
-    + ` classes « ${r.court.classes} » (pas de « tres »)`
-    + ` · n° 120 — la ligne « Score » n'etait ecrite que dans \`nextQuestion\`, donc elle montrait le`
-    + ` score d'AVANT la reponse pendant 1,5 s (2,8 s sur une faute) : a l'ouverture « ${E.depart} »,`
-    + ` puis une bonne reponse et, LU TOUT DE SUITE, « ${E.justeApres} » (l'etat du jeu dit`
-    + ` ${E.compteur}) — et l'exercice suivant n'y change plus rien : « ${E.exerciceSuivant} »` };
+  return { ok, detail: `n° 121 — la phrase la plus longue du jeu (${r.longueur} caracteres) sur un`
+    + ` ecran de ${r.ecran[0]} x ${r.ecran[1]}. DEUX CAUSES, isolees par trois releves :`
+    + ` AVANT ${A.h} px de haut, soit ${A.pc} % DE LA HAUTEUR D'ECRAN, ${A.lignes} lignes de`
+    + ` ${A.police} px dans une boite de ${A.w} px de large`
+    + ` · CAUSE 1, LA LARGEUR : \`max-width: 90vw\` ne servait a RIEN. Le bandeau est ancre a`
+    + ` \`left:50%\` sans \`right\` ni \`width\`, donc sa largeur automatique est un shrink-to-fit`
+    + ` calcule dans l'espace qui reste A DROITE de l'ancre — la moitie de l'ecran, jamais les`
+    + ` ${Math.round(r.ecran[0] * 0.9)} px que 90vw autorisait. \`width: max-content\` ignore l'espace`
+    + ` disponible : la boite passe a ${L.w} px de large et ${L.lignes} lignes, ${L.h} px (${L.pc} %)`
+    + ` · CAUSE 2, LA TAILLE DOSEE AU NOMBRE DE CARACTERES — une approximation du probleme. Le`
+    + ` probleme, c'est la HAUTEUR : \`msgAjuste()\` donne au bandeau un BUDGET de ${(r.budget * 100).toFixed(0)} %`
+    + ` de l'ecran et reduit la police jusqu'a le tenir, sans descendre sous ${(r.plancher * 100).toFixed(0)} %`
+    + ` de la taille que le CSS avait choisie (la tele garde sa lisibilite PROPORTIONNELLE) :`
+    + ` APRES ${B.h} px, soit ${B.pc} % de l'ecran, ${B.lignes} lignes de ${B.police} px`
+    + ` · ET LA MEILLEURE REPARATION DES TROIS, LA PHRASE ELLE-MEME : la liste de noms n'etait pas`
+    + ` bornee (quatre amis a pied et elle passait les trois cents caracteres). On nomme les deux`
+    + ` premiers et on COMPTE les autres : ${r.longueurBornee} caracteres au lieu de ${r.longueur},`
+    + ` ${N.h} px et ${N.lignes} lignes, soit ${N.pc} % de l'ecran`
+    + ` · TEMOIN, un bandeau court ne bouge pas et n'est jamais serre : ${r.court.h} px,`
+    + ` ${r.court.police} px de police, serrage ${r.court.serre}`
+    + ` · n° 120 — la ligne « Score » n'etait ecrite que dans \`nextQuestion\`, donc elle montrait`
+    + ` le score d'AVANT la reponse pendant 1,5 s (2,8 s sur une faute) : a l'ouverture`
+    + ` « ${E.depart} », puis une bonne reponse et, LU TOUT DE SUITE, « ${E.justeApres} »`
+    + ` (l'etat du jeu dit ${E.compteur}) — et l'exercice suivant n'y change plus rien :`
+    + ` « ${E.exerciceSuivant} »` };
 });

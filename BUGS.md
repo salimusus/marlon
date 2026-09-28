@@ -1334,6 +1334,24 @@ Jouées ici en **pas de simulation**, jamais en temps réel, à la touche comme 
 
 ---
 
+### CE QUI EST ACQUIS — round 83 (contrôle r83-qa2) : UNE PARTIE ENTIÈRE, sans script
+
+Jouée en deux moitiés, **en pas de simulation** (≈ 14 000 images, soit un peu moins de quatre
+minutes de jeu d'affilée), en réagissant à ce que je voyais et non à un scénario écrit.
+Le chemin à pied est celui que le jeu donne lui-même (`navEnPieton` + `navPath`), c'est-à-dire
+la rue — c'est ce que fait un enfant, et c'est ce qui manquait à mes deux premiers essais, qui
+marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux du jeu).
+
+1. **Arriver** — (0 ; 3,50), sur la chaussée (voir n° 111), ❤️ 100, « 👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter ».
+2. **Marcher** — la place du centre (**arrivé, 0 blocage**), le parc (**arrivé, 0 blocage**, 768 images), le cinéma du parc (**arrivé**), la fête foraine (à 5,9 m du but, 1 blocage sur 5 points). **❤️ 100 du début à la fin.** Et **la ville se propose toute seule** en chemin : « 🪑 E : s'asseoir », « 🎬 Cinéma en plein air : assieds-toi sur un banc (E) », « 🐱 E : caresser le chat », « 📮 E : donner un coup de main à Paulette », « 🎡 Fête foraine : grande roue et carrousel (E pour monter) », « 🎠 E : monter dans le carrousel ».
+3. **Prendre une voiture** — la plus proche est à 28,5 m (un camion de pompiers) ; « 🚗 Appuie sur E pour conduire », **E met au volant**, « 🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main ».
+4. **Rouler** — 4 690 images (78 s), **123,2 m**, pointe **70 km/h**, 0 étoile, ❤️ 100. *Mais* 552 images figées (12 %) et **55,7 % de tôle** : trois « 💥 BOUM ! Gros choc contre le mur » et un « 🧱 Tu es coincé — recule ou braque ». **Je ne le mets pas au compte du jeu** : je pilotais le plus gros véhicule de la ville avec un volant tout ou rien, et le jeu m'a dit à chaque fois quoi faire.
+5. **Se garer** — frein, 0 km/h, **E descend**, à pied en (−148,7 ; 71,5), ❤️ 100, ★ 0, « 🏚️ La Zone : immeubles ouverts, escaliers et appartements — attention aux gangs ».
+6. **Jouer** — la balançoire : « 🎠 E : s'asseoir sur la balançoire » → assis → amplitude 1,05 → **« 🎠 Wouhou ! »** → Espace pour sauter. (Le trampoline et le ballon de basket ne se sont pas armés à mon approche : je n'affirme pas qu'ils sont cassés, je n'ai pas su les atteindre.)
+7. **Se faire mettre KO, et revenir** — chute de 40 m : **« 💀 Chute mortelle ! 40 m de haut… »** puis **« 🚑 Une ambulance a été appelée »** puis, 1,6 s plus tard, **« 🏥 Tu te réveilles à l'hôpital, remis sur pied — repars tranquille ! »**. Réveil en (22 ; 205,9), **❤️ 100, 0 pièce perdue**, 💀 1, et le journal écrit « 💀 Joueur93 s'est écrasé après une chute de 40 m » puis « L'infirmière : Bonjour, comment puis-je vous aider ? ». **Il repart tout de suite, 0 blocage.** Le n° 97 et le n° 105 sont bien morts.
+- **Captures** : `verification/r83qa2-partie-01-arrivee.png` … `r83qa2-partie-08-apres-le-ko.png`
+- **Mesures brutes** : `verification/r83qa2-partie-1-arriver-rouler-se-garer.json`, `verification/r83qa2-partie-2-jouer-ko-revenir.json`
+
 ## LE CONTRÔLE DU ROUND 83 — r83-qa2 (entrées 117 et suivantes)
 
 ### 117. Dans la cage d'escalier de La Zone, il reste SIX PAS sur cinquante-deux où la caméra entre encore dans le dos de l'enfant

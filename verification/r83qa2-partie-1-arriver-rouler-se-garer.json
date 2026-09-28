@@ -1,0 +1,383 @@
+{
+ "arrivee": {
+  "pos": [
+   0,
+   0,
+   3.5
+  ],
+  "surLaChaussee": true,
+  "hp": 100,
+  "sous": 25,
+  "etoiles": 0,
+  "messages": [
+   {
+    "t": "👋 Bienvenue en ville ! Z Q S D pour marcher · E agir · Espace sauter",
+    "sim": 90.12
+   }
+  ]
+ },
+ "balade": {
+  "etapes": [
+   {
+    "nom": "la place du centre",
+    "but": [
+     0,
+     30
+    ],
+    "points": 3,
+    "images": 280,
+    "bloques": 0,
+    "hpMin": 100,
+    "reste": 0.45,
+    "fin": {
+     "x": 0.41,
+     "y": 0.14,
+     "z": 29.82,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 25,
+     "camD": 9.1,
+     "piece": null,
+     "act": "🏙️ Balade · 0 pts",
+     "sim": 99.22
+    },
+    "arrive": true
+   },
+   {
+    "nom": "le parc",
+    "but": [
+     0,
+     78
+    ],
+    "points": 6,
+    "images": 768,
+    "bloques": 0,
+    "hpMin": 100,
+    "reste": 0.91,
+    "fin": {
+     "x": 0.8,
+     "y": 0.15,
+     "z": 78.43,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 25,
+     "camD": 9.1,
+     "piece": null,
+     "act": "🎬 Cinéma",
+     "sim": 112.12
+    },
+    "arrive": true
+   },
+   {
+    "nom": "le cinema du parc",
+    "but": [
+     0,
+     90
+    ],
+    "points": 5,
+    "images": 146,
+    "bloques": 0,
+    "hpMin": 100,
+    "reste": 0.4,
+    "fin": {
+     "x": 0.06,
+     "y": 0.15,
+     "z": 89.61,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 25,
+     "camD": 9.1,
+     "piece": null,
+     "act": "🎬 Cinéma",
+     "sim": 114.63
+    },
+    "arrive": true
+   },
+   {
+    "nom": "la fete foraine",
+    "but": [
+     -18,
+     152
+    ],
+    "points": 5,
+    "images": 828,
+    "bloques": 1,
+    "hpMin": 100,
+    "reste": 5.9,
+    "fin": {
+     "x": -18.02,
+     "y": 0.14,
+     "z": 146.1,
+     "hp": 100,
+     "sol": true,
+     "mort": false,
+     "etoiles": 0,
+     "argent": 25,
+     "camD": 9.1,
+     "piece": null,
+     "act": "🎡 Fête foraine",
+     "sim": 128.5
+    },
+    "arrive": false
+   }
+  ],
+  "hp": 100,
+  "sous": 25,
+  "messages": [
+   {
+    "t": "🛍️ Vêtements, snack et salle de sport : E devant une vitrine ou un comptoir",
+    "sim": 95.7
+   },
+   {
+    "t": "🤸 Trampolines : saute dessus pour t'envoler vers les pièces de la tour",
+    "sim": 96.13
+   },
+   {
+    "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+    "sim": 106.43
+   },
+   {
+    "t": "🪑 E : s'asseoir",
+    "sim": 111.33
+   },
+   {
+    "t": "🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin animé",
+    "sim": 111.37
+   },
+   {
+    "t": "🪑 E : s'asseoir",
+    "sim": 114.85
+   },
+   {
+    "t": "🐱 E : caresser le chat",
+    "sim": 115.2
+   },
+   {
+    "t": "🪑 E : s'asseoir",
+    "sim": 116.02
+   },
+   {
+    "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+    "sim": 116.85
+   },
+   {
+    "t": "📮 E : donner un coup de main à Paulette",
+    "sim": 118.08
+   },
+   {
+    "t": "🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons",
+    "sim": 122.87
+   },
+   {
+    "t": "🎠 E : monter dans le carrousel",
+    "sim": 124.93
+   }
+  ]
+ },
+ "voiture": {
+  "voiture": "pompier",
+  "aPied": 28.5,
+  "marche": {
+   "points": 3,
+   "images": 447,
+   "bloques": 2,
+   "hpMin": 100,
+   "reste": 1.7,
+   "fin": {
+    "x": -38.3,
+    "y": 0.14,
+    "z": 128,
+    "hp": 100,
+    "sol": true,
+    "mort": false,
+    "etoiles": 0,
+    "argent": 25,
+    "camD": 3.95,
+    "piece": null,
+    "act": "🚗 E : monter",
+    "sim": 138.5
+   }
+  },
+  "arme": true,
+  "auVolant": true,
+  "messages": [
+   {
+    "t": "🚗 E : éjecter le conducteur et voler la voiture (gros délit !)",
+    "sim": 131.03
+   },
+   {
+    "t": "🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau",
+    "sim": 134.8
+   },
+   {
+    "t": "🚒 E : donner un coup de main à Nina",
+    "sim": 135.32
+   },
+   {
+    "t": "🚗 Appuie sur E pour conduire",
+    "sim": 135.33
+   },
+   {
+    "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+    "sim": 138.5
+   },
+   {
+    "t": "🚒 E : donner un coup de main à Sam",
+    "sim": 138.52
+   }
+  ]
+ },
+ "route": {
+  "pointsSuivis": 7,
+  "surPoints": 7,
+  "images": 4690,
+  "parcouru": 123.2,
+  "pointe": 70,
+  "imagesFiges": 552,
+  "degats": 55.7,
+  "etoiles": 0,
+  "hp": 100,
+  "fin": [
+   -150.6,
+   73.7
+  ],
+  "journal": [
+   {
+    "s": 10,
+    "pos": [
+     -52.3,
+     129.5
+    ],
+    "vit": 44,
+    "etoiles": 0,
+    "dmg": 11.9
+   },
+   {
+    "s": 20,
+    "pos": [
+     -112.2,
+     105.6
+    ],
+    "vit": 10,
+    "etoiles": 0,
+    "dmg": 23.4
+   },
+   {
+    "s": 30,
+    "pos": [
+     -112.2,
+     96.3
+    ],
+    "vit": 9,
+    "etoiles": 0,
+    "dmg": 29.6
+   },
+   {
+    "s": 40,
+    "pos": [
+     -138,
+     73.8
+    ],
+    "vit": 7,
+    "etoiles": 0,
+    "dmg": 33.8
+   },
+   {
+    "s": 50,
+    "pos": [
+     -140.3,
+     73.7
+    ],
+    "vit": 4,
+    "etoiles": 0,
+    "dmg": 39.8
+   },
+   {
+    "s": 60,
+    "pos": [
+     -145.1,
+     73.7
+    ],
+    "vit": 3,
+    "etoiles": 0,
+    "dmg": 45.5
+   },
+   {
+    "s": 70,
+    "pos": [
+     -148.7,
+     73.7
+    ],
+    "vit": 5,
+    "etoiles": 0,
+    "dmg": 50.9
+   }
+  ],
+  "messages": [
+   {
+    "t": "💥 BOUM ! Gros choc contre le mur",
+    "sim": 141.95
+   },
+   {
+    "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+    "sim": 145.53
+   },
+   {
+    "t": "🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons",
+    "sim": 146.48
+   },
+   {
+    "t": "🚒 Caserne des pompiers : E pour le camion, O pour déployer la lance à eau",
+    "sim": 148.35
+   },
+   {
+    "t": "💥 BOUM ! Gros choc contre le mur",
+    "sim": 150
+   },
+   {
+    "t": "🚗 Blocs Motors : cinq carrosseries exposées — berline, break, SUV, 4×4, décapotable. Regarde les podiums, puis E au comptoir pour acheter la tienne",
+    "sim": 159.68
+   },
+   {
+    "t": "💥 BOUM ! Gros choc contre le mur",
+    "sim": 159.8
+   },
+   {
+    "t": "🔥 AU FEU ! La caserne envoie le camion",
+    "sim": 190.02
+   }
+  ]
+ },
+ "garer": {
+  "vitesse": 0,
+  "aPied": true,
+  "pos": [
+   -148.7,
+   0.1,
+   71.5
+  ],
+  "hp": 100,
+  "etoiles": 0,
+  "messages": [
+   {
+    "t": "🚗 Appuie sur E pour conduire",
+    "sim": 225.07
+   },
+   {
+    "t": "🚒 E : donner un coup de main à Nina",
+    "sim": 225.08
+   },
+   {
+    "t": "🏚️ La Zone : immeubles ouverts, escaliers et appartements — attention aux gangs",
+    "sim": 225.6
+   }
+  ]
+ },
+ "erreurs": []
+}

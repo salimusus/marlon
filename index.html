@@ -188,6 +188,15 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
   text-shadow:0 3px 0 rgba(0,0,0,.5),0 0 22px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;white-space:nowrap;z-index:4}
 #msg.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;max-width:90vw;text-align:center;line-height:1.15}
+/* UN BANDEAU DE CINQ LIGNES COUVRAIT 28 % DE LA HAUTEUR D'ECRAN (n° 121). Le projet a deja
+   repare un auvent qui bouchait 88,9 % de l'image : les surfaces masquees comptent. `#msg.long`
+   n'a qu'UNE taille, 32 px de haut en clamp(18px, 3,6vw, 32px), pour des textes qui vont de
+   dix-sept caracteres a DEUX CENT DIX-SEPT (« Ce vehicule n'a que 2 places : X et Y restent a
+   pied — prends une voiture plus grande ! ») : a 32 px et 90vw de large, cela fait cinq lignes
+   de 36,8 px, plus 20 px de marges, soit 204 px sur les 640 px de l'ecran du banc. On ajoute
+   donc un TROISIEME palier de taille pour les tres longs textes (`.tres`, pose par msg() au-dela
+   de MSG_TRES caracteres) : la phrase la plus longue du jeu tient alors sur trois lignes. */
+#msg.tres{font-size:clamp(14px,2.4vw,22px);line-height:1.1;padding:8px 16px}
 /* LE BANDEAU SORTAIT PAR LE HAUT SUR UN TELEPHONE COUCHE. Sa POSITION est un pourcentage de la
    HAUTEUR (top: 17 %, centre sur lui-meme) mais sa TAILLE un pourcentage de la LARGEUR (3,6vw) :
    sur un ecran large et bas — 812 x 375, le telephone couche — le message d'accueil « Bienvenue
@@ -201,6 +210,7 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
   #msg{top:10px;transform:translate(-50%,0) scale(.6);font-size:clamp(20px,4.4vw,34px)}
   #msg.show{transform:translate(-50%,0) scale(1)}
   #msg.long{font-size:clamp(15px,2.6vw,22px);max-width:84vw}
+  #msg.tres{font-size:clamp(12px,1.9vw,16px);line-height:1.08;max-width:88vw}
 }
 /* Le VIGNETTAGE et l'ÉTALONNAGE se faisaient ici, en CSS : le navigateur devait recomposer
    toute l'image par-dessus le jeu, et sur la télé on les coupait donc — l'image y était plus
@@ -540,6 +550,7 @@ body.tv #chatIn{font-size:calc(var(--uh) * .7);padding:calc(var(--uh) * .42)}   
 /* le grand message passe SOUS le bandeau à deux rangées : il se posait dessus */
 body.tv #msg{font-size:calc(var(--uh) * 2.6);top:calc(var(--tvpad) + var(--uh) * 7)}
 body.tv #msg.long{font-size:calc(var(--uh) * 1.5)}
+body.tv #msg.tres{font-size:calc(var(--uh) * 1.05);line-height:1.1}   /* n° 121 : cinq lignes couvraient 28 % de la hauteur */
 /* LE RADAR passe dans le coin bas droit : au centre, il masquait le joueur */
 body.tv #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad);transform:none;
   width:calc(var(--uh) * 7.6);height:calc(var(--uh) * 7.6);border-width:4px}
@@ -21901,6 +21912,7 @@ function netTick(dt, myAnim, sp) {
 }
 
 // ================= INTERFACE =================
+const MSG_TRES = 100;   // au-delà de 100 caractères, le bandeau passe à sa plus petite taille (n° 121)
 const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0, msgAttente = null;   // msgAttente : la phrase qui attend son tour (n° 118)
 // Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
 // deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
@@ -21971,7 +21983,9 @@ function msg(text, ms = 1400, prio = 0) {
   }
   msgPrio = prio; msgPrioT = prio > 0 ? simTime + ms / 1000 : 0;
   text = ctrlText(text);
-  msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16); msgEl.classList.add('show');
+  msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16);
+  msgEl.classList.toggle('tres', text.length > MSG_TRES);   // n° 121 : un troisième palier de taille
+  msgEl.classList.add('show');
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => {
     msgPrio = 0; msgPrioT = 0;

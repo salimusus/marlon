@@ -2782,6 +2782,7 @@ window.__G = {
   // n° 119 : le passant colle au pare-chocs s'ecarte quand on klaxonne
   ecartePietons: typeof ecartePietons === 'function' ? ecartePietons : null,
   schScoreMaj: typeof schScoreMaj === 'function' ? schScoreMaj : null,   // n° 120
+  get MSG_TRES() { return typeof MSG_TRES !== 'undefined' ? MSG_TRES : null; },   // n° 121
   get ECARTE_PIETON() { return typeof ECARTE_PIETON !== 'undefined' ? ECARTE_PIETON : null; },
   get msgVisible() { return msgEl.classList.contains('show') ? msgEl.textContent : ''; },   // le bandeau, ou '' s'il est efface
   updateAct: typeof updateAct === 'function' ? updateAct : null,

@@ -26079,3 +26079,73 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     + ` touche (${r.horsCouloir.ecartes} ecarte, il a bouge de ${r.horsCouloir.bouge} m,`
     + ` etat ${r.horsCouloir.fight})` };
 });
+// ====== DEUX COSMETIQUES : LE BANDEAU DE CINQ LIGNES (n° 121) ET LE SCORE PERIME (n° 120) ======
+// n° 121 : `#msg.long` n'avait qu'UNE taille, 32 px en clamp(18px, 3,6vw, 32px), pour des textes
+// qui vont de dix-sept caracteres a DEUX CENT DIX-SEPT. La phrase la plus longue du jeu tenait
+// donc sur CINQ lignes de 36,8 px, plus 20 px de marges : 204 px sur les 640 px du banc, soit
+// 28 a 32 % de la hauteur d'ecran, par-dessus le jeu. Le projet a deja repare un auvent qui
+// bouchait 88,9 % de l'image : les surfaces masquees comptent. Un TROISIEME palier de taille
+// (`.tres`, au-dela de MSG_TRES = 100 caracteres) ramene la meme phrase a trois lignes.
+// n° 120 : `$('schScore').textContent` n'etait ecrit que dans `nextQuestion` — l'exercice suivant
+// n'arrive qu'1,5 s plus tard (2,8 s sur une faute, le temps que la craie finisse sa phrase), et
+// pendant tout ce temps l'enfant lisait le score d'AVANT sa reponse.
+test('le bandeau le plus long du jeu ne mange plus le quart de l\'ecran, et le Score de l\'ecole compte la reponse qu\'on vient de donner', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12, frais: true });
+    const el = document.getElementById('msg');
+    const R = { MSG_TRES: G.MSG_TRES, ecran: [window.innerWidth, window.innerHeight] };
+    // LA PHRASE LA PLUS LONGUE DU JEU, mot pour mot (217 caracteres, `conduire`/`equipage`)
+    const LONGUE = '\u{1F697} Ce véhicule n\'a que 2 places : Tom_le_ouf et Chloé_du_13 restent à pied \u{1F6B6} — prends une voiture plus grande ! Il faut un break, un van ou le camion du dépôt si tout le monde doit monter avec toi en même temps.';
+    R.longueur = LONGUE.length;
+    const boite = () => { const b = el.getBoundingClientRect();
+      return { h: Math.round(b.height), w: Math.round(b.width), pc: +(b.height / window.innerHeight * 100).toFixed(1),
+        lignes: Math.round(b.height / (parseFloat(getComputedStyle(el).lineHeight) || 1)),
+        police: +parseFloat(getComputedStyle(el).fontSize).toFixed(1) }; };
+    G.msg(LONGUE, 4000, 2);
+    await dodo(300);
+    R.apres = boite();
+    // AVANT : le meme texte sans le troisieme palier — c'est exactement l'ancien CSS
+    el.classList.remove('tres');
+    await dodo(200);
+    R.avant = boite();
+    el.classList.add('tres');
+    // TEMOIN : un bandeau court ne change pas d'un pixel
+    G.msg('\u{1F389} C\'est gagné !', 1200, 2);
+    await dodo(250);
+    R.court = Object.assign(boite(), { classes: el.className });
+    // ---- n° 120 : LE SCORE DE L'ECOLE ----
+    const salle = G.city.classes[0], ch = salle.chaises[0];
+    G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
+    for (let i = 0; i < 40 && !G.school.q; i++) { await dodo(100);
+      if (!G.P.sit && i === 15) { G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch); } }
+    if (!G.school.q) return Object.assign(R, { pourquoi: 'la classe ne s\'est pas ouverte' });
+    const ligne = () => document.getElementById('schScore').textContent;
+    R.ecole = { depart: ligne(), ok0: G.school.ok, tot0: G.school.tot };
+    const q = G.school.q;
+    G.answer(q.a, document.querySelector('#schChoices .item'));
+    // LU TOUT DE SUITE, sans attendre l'exercice suivant : c'est tout le defaut
+    R.ecole.justeApres = ligne();
+    R.ecole.compteur = `${G.school.ok}/${G.school.tot} serie ${G.school.streak}`;
+    // et l'exercice suivant ne change plus rien a la ligne
+    for (let i = 0; i < 60 && G.school.q === q; i++) await dodo(150);
+    R.ecole.exerciceSuivant = ligne();
+    G.closeUI(); G.P.sit = null; G.school.chaise = null; G.P.pos.set(-62, 1, 235);
+    return R;
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const A = r.avant, B = r.apres, E = r.ecole;
+  const ok = A.pc > 24 && B.pc <= 18 && B.lignes <= 3 && B.lignes < A.lignes && B.police < A.police
+    && r.court.h < B.h && !/tres/.test(r.court.classes)
+    && /0\/0/.test(E.depart) && /1\/1/.test(E.justeApres) && E.justeApres === E.exerciceSuivant;
+  return { ok, detail: `n° 121 — la phrase la plus longue du jeu (${r.longueur} caracteres) sur un ecran`
+    + ` de ${r.ecran[0]} x ${r.ecran[1]} : AVANT ${A.h} px de haut (${A.pc} % de la hauteur d'ecran),`
+    + ` ${A.lignes} lignes de ${A.police} px ; APRES ${B.h} px (${B.pc} %), ${B.lignes} lignes de`
+    + ` ${B.police} px — le troisieme palier de taille se pose au-dela de ${r.MSG_TRES} caracteres`
+    + ` · TEMOIN, un bandeau court ne bouge pas : ${r.court.h} px, ${r.court.police} px de police,`
+    + ` classes « ${r.court.classes} » (pas de « tres »)`
+    + ` · n° 120 — la ligne « Score » n'etait ecrite que dans \`nextQuestion\`, donc elle montrait le`
+    + ` score d'AVANT la reponse pendant 1,5 s (2,8 s sur une faute) : a l'ouverture « ${E.depart} »,`
+    + ` puis une bonne reponse et, LU TOUT DE SUITE, « ${E.justeApres} » (l'etat du jeu dit`
+    + ` ${E.compteur}) — et l'exercice suivant n'y change plus rien : « ${E.exerciceSuivant} »` };
+});

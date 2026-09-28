@@ -1,0 +1,302 @@
+{
+ "actes": [
+  {
+   "acte": "entrer dans la banque par l'est",
+   "guichet": [
+    -52,
+    75.9
+   ],
+   "etapes": [
+    [
+     -41.6,
+     75.9
+    ],
+    [
+     -41.6,
+     75.9
+    ]
+   ],
+   "bloques": [
+    61,
+    61
+   ],
+   "arme": false,
+   "ui": null,
+   "hp": 100,
+   "messages": [
+    {
+     "t": "🔫 Arme rangée",
+     "sim": 420.02
+    },
+    {
+     "t": "🏦 Banque : dépose ton argent au guichet pour le protéger… les coffres sont au 2ᵉ étage, surveillés",
+     "sim": 420.03
+    }
+   ]
+  },
+  {
+   "acte": "se promener dans le parc et s'asseoir sur un banc",
+   "marche": {
+    "points": 4,
+    "images": 495,
+    "bloques": 0,
+    "reste": 0.83
+   },
+   "assis": {
+    "d": 0.91,
+    "sit": true
+   },
+   "hp": 100,
+   "images": 1031,
+   "messages": [
+    {
+     "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+     "sim": 428.93
+    },
+    {
+     "t": "🐶 E : caresser · écris « adopte » pour l'adopter",
+     "sim": 432.05
+    },
+    {
+     "t": "🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin animé",
+     "sim": 432.17
+    },
+    {
+     "t": "🐶 E : caresser · écris « adopte » pour l'adopter",
+     "sim": 434.52
+    },
+    {
+     "t": "🪑 E : s'asseoir",
+     "sim": 434.72
+    },
+    {
+     "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+     "sim": 435.27
+    },
+    {
+     "t": "🪑 E : s'asseoir",
+     "sim": 438.85
+    },
+    {
+     "t": "🪑 Assis (Espace / SAUT pour se lever)",
+     "sim": 439.52
+    },
+    {
+     "t": "🪑 E : s'asseoir",
+     "sim": 441.55
+    }
+   ]
+  },
+  {
+   "acte": "caresser un chien et l'adopter",
+   "marche": {
+    "points": 2,
+    "images": 23,
+    "bloques": 0,
+    "reste": 0.99
+   },
+   "arme": true,
+   "adopte": true,
+   "hp": 100,
+   "images": 1054,
+   "messages": [
+    {
+     "t": "🐱 E : caresser le chat",
+     "sim": 445.17
+    },
+    {
+     "t": "🐶 E : caresser · écris « adopte » pour l'adopter",
+     "sim": 445.18
+    },
+    {
+     "t": "🐶 E : caresser le chien",
+     "sim": 446.12
+    }
+   ]
+  },
+  {
+   "acte": "monter dans la grande roue",
+   "marche": {
+    "points": 5,
+    "images": 1109,
+    "bloques": 1,
+    "reste": 0.95
+   },
+   "arme": true,
+   "monte": false,
+   "monteHaut": 0,
+   "descendu": true,
+   "hp": 100,
+   "images": 2163,
+   "messages": [
+    {
+     "t": "🐱 E : caresser le chat",
+     "sim": 450.73
+    },
+    {
+     "t": "🪑 E : s'asseoir",
+     "sim": 453.72
+    },
+    {
+     "t": "🎬 Cinéma en plein air : assieds-toi sur un banc (E) et regarde le dessin animé",
+     "sim": 453.82
+    },
+    {
+     "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+     "sim": 454.97
+    },
+    {
+     "t": "🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame",
+     "sim": 459.4
+    },
+    {
+     "t": "🚗 Appuie sur E pour conduire",
+     "sim": 463.85
+    },
+    {
+     "t": "🎡 Fête foraine : grande roue et carrousel (E pour monter), stands et ballons",
+     "sim": 465.38
+    },
+    {
+     "t": "🧹 E : donner un coup de main à Jules",
+     "sim": 467.05
+    }
+   ]
+  },
+  {
+   "acte": "monter au 2e etage d'un immeuble de La Zone",
+   "etapes": [
+    {
+     "but": [
+      -158.4,
+      13.9
+     ],
+     "y": 0.2,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -159.7,
+      10.5
+     ],
+     "y": 1.8,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -159.7,
+      8.6
+     ],
+     "y": 1.8,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -157.1,
+      8.6
+     ],
+     "y": 1.8,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -157.1,
+      14.2
+     ],
+     "y": 3.4,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -159.7,
+      10.5
+     ],
+     "y": 5,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -159.7,
+      8.6
+     ],
+     "y": 5,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -157.1,
+      8.6
+     ],
+     "y": 5,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -157.1,
+      14.2
+     ],
+     "y": 6.6,
+     "bloque": 0,
+     "camD": null
+    },
+    {
+     "but": [
+      -165.9,
+      15.8
+     ],
+     "y": 6.6,
+     "bloque": 0,
+     "camD": null
+    }
+   ],
+   "yHaut": 6.6,
+   "camMin": 99,
+   "hp": 100,
+   "images": 2665,
+   "messages": [
+    {
+     "t": "🚩 Territoire de gang — on n'est pas le bienvenu",
+     "sim": 780.02
+    }
+   ]
+  },
+  {
+   "acte": "la vie continue : deux minutes sans rien faire",
+   "hp0": 100,
+   "hpMin": 100,
+   "hpFin": 100,
+   "etoiles": 0,
+   "mort": false,
+   "images": 9865,
+   "pos": [
+    -165.9,
+    6.6,
+    15.8
+   ],
+   "messages": [
+    {
+     "t": "❄️ Il commence à neiger !",
+     "sim": 791.82
+    },
+    {
+     "t": "🔧 Un véhicule a été ramené à sa place",
+     "sim": 855.8
+    },
+    {
+     "t": "🔥 AU FEU ! La caserne envoie le camion",
+     "sim": 880.03
+    }
+   ]
+  }
+ ],
+ "totalImages": 9865,
+ "erreurs": []
+}

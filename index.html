@@ -21984,8 +21984,8 @@ function ctrlText(t) {
 // simulation sans avancer la montre. Le minuteur d'effacement libère aussi la réservation,
 // pour qu'un menu qui gèle simTime ne verrouille pas la bannière.
 // ===== LE MESSAGE QUI SAUVE L'ENFANT N'EST PLUS RECOUVERT DANS LA MÊME IMAGE (n° 118) =====
-// « Tu as renversé X ! Il va porter plainte… » (ligne 29073) était écrite, puis RÉÉCRITE DANS LA
-// MÊME IMAGE par « Une ambulance a été appelée » (ligne 30202, priorité 1) : c'est le MÊME tour
+// « Tu as renversé X ! Il va porter plainte… » (voir `ecrase`) était écrite, puis RÉÉCRITE DANS LA
+// MÊME IMAGE par « Une ambulance a été appelée » (`ambulanceAppel`, priorité 1) : c'est le MÊME tour
 // de la boucle `ecrase` qui appelle msg() puis, cinq lignes plus bas, ambulanceAppel(), qui
 // msg() à son tour. MESURE AVANT : la première phrase restait à l'écran 0 image et 0 ms sur
 // les 3 000 ms demandées, la seconde ses 2 200 ms. L'enfant ne lisait donc JAMAIS la phrase

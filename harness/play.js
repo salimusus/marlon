@@ -25840,10 +25840,10 @@ test('a la fete foraine, la pastille et la touche disent la meme chose : on mont
 // ====== LE MESSAGE QUI EXPLIQUE LA PUNITION N'EST PLUS RECOUVERT (defaut n° 118) ======
 // « Tu as renverse X ! Il va porter plainte… » (priorite 0) etait recouvert DANS LA MEME IMAGE
 // par « Une ambulance a ete appelee » (priorite 1) : c'est le MEME tour de la boucle `ecrase`
-// (index.html 29073) qui appelle msg(), puis cinq lignes plus bas ambulanceAppel() (30202), qui
+// (`ecrase`, index.html) qui appelle msg(), puis cinq lignes plus bas ambulanceAppel(), qui
 // msg() a son tour. L'enfant ne lisait donc JAMAIS la phrase qui lui explique la chaine de cause
 // a effet qu'on vient de construire pour lui.
-// LA CAUSE PRECISE, dans msg() : `msgPrioT = prio > 0 ? simTime + ms / 1000 : 0` — une phrase de
+// LA CAUSE PRECISE, dans msg() (index.html 22003) : `msgPrioT = prio > 0 ? simTime + ms / 1000 : 0` — une phrase de
 // PRIORITE 0 ne reserve RIEN, et le garde-fou `if (prio < msgPrio && simTime < msgPrioT) return`
 // ne mord donc jamais pour elle. Et une annonce bloquee etait JETEE, pas mise en attente.
 // LES DUREES. Le bandeau s'efface sur un `setTimeout` : c'est la seule piece du jeu qui ne se
@@ -25948,7 +25948,7 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
 // MESURE DU CONTROLEUR : 1 800 images, le passant reste entre 0,78 et 0,98 m du pare-chocs, il ne
 // bouge PAS, et la voiture reste bridee a 8,6 km/h (SORTIE_PAS = 2,4 m/s). L'issue existait
 // (marche arriere : 37,3 m parcourus) mais le message ne disait AUCUNE manœuvre.
-// LA CAUSE : `klaxonne(c)` ne fait que du BRUIT (`if (d < 40) horn(c.kind)`) — rien, dans tout le
+// LA CAUSE : `klaxonne(c)` (index.html 12448) ne fait que du BRUIT (`if (d < 40) horn(c.kind)`) — rien, dans tout le
 // fichier, ne faisait s'ecarter un passant devant un capot. Le commentaire du round 83 promettait
 // « il klaxonne, et le passant s'ecarte en deux secondes » : personne ne l'avait ecrit.
 // LA REPARATION, avec ce que le jeu avait deja : `combatTick` sait faire fuir un habitant

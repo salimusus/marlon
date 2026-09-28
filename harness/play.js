@@ -23859,9 +23859,21 @@ test('plus aucune source sonore du monde n\'echappe au registre : le pont rejoue
     // La crete d'une seule fenetre ne veut rien dire : le fond de scene de la ville monte par
     // moments a 0,18, et la crete d'un meme son varie du simple au tiers selon ou tombe la
     // frontiere des blocs audio (mesure : pok releve entre 0,2171 et 0,3577 sur huit fenetres).
-    // On joue donc chaque son onze fois et on garde la MEDIANE : ni la pollution passagere ni
-    // la gigue des blocs ne peuvent la deplacer.
-    const pic = async faire => { const v = []; for (let k = 0; k < 11; k++) { crete = 0; faire(); await dodo(260); v.push(+crete.toFixed(4)); } v.sort((x, y) => x - y); return v[5]; };
+    // On joue donc chaque son onze fois et on garde un QUANTILE HAUT (le 9e des onze, tries
+    // en croissant), et non la mediane. ARBITRAGE DU CHEF (round 83), et voici la mesure qui
+    // tranche : ce test etait rouge ou vert selon la CHARGE DE LA MACHINE — le rapport de gain
+    // releve valait x0,691 dans une suite lancee seule, x0,576 dans un lot concurrent (rouge,
+    // le seuil est 0,6) et x0,865 au relancement immediat, sans qu'une ligne de son change.
+    // La cause est connue : l'analyseur est un ScriptProcessor, donc sur le FIL PRINCIPAL ;
+    // quand le banc met une seconde a dessiner une image, ses tampons debordent et des
+    // echantillons sont PERDUS. Or une perte d'echantillons ne peut que FAIRE BAISSER une
+    // fenetre, jamais la faire monter : le biais est a sens unique. La mediane, qui a cinq
+    // fenetres basses sous elle, se laisse donc entrainer vers le bas des que la machine
+    // souffle ; un quantile haut, non. Il reste protege de la pollution passagere de la ville
+    // (une crete de fond isolee) parce qu'il rejette les deux fenetres les plus hautes.
+    // Autrement dit : on ne desserre AUCUN seuil, on choisit l'estimateur qui convient au
+    // bruit qu'on subit.
+    const pic = async faire => { const v = []; for (let k = 0; k < 11; k++) { crete = 0; faire(); await dodo(260); v.push(+crete.toFixed(4)); } v.sort((x, y) => x - y); return v[8]; };
     await dodo(400);
     const fond = await pic(() => {});
     const X = G.P.pos.x, Y = G.P.pos.y + 1.4, Z = G.P.pos.z;

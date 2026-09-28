@@ -1205,3 +1205,11 @@ Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout 
 - **La sortie de la cour de la caserne est dégagée** : camion de pompiers pris au dépôt, 14,1 m parcourus jusqu'à la rue, **1 seule image lente sur 700, 0 % de dégâts**. Des trois points de blocage annoncés par le poste VÉHICULES, celui-là est réglé.
 - **Le labyrinthe de paille tient debout** : ses murs de bottes sont continus, on ne passe pas entre deux bottes — 684 images de stick à fond contre un mur, 0 traversée. C'est un vrai labyrinthe : il faut le contourner, pas le traverser (mon pilote automatique, lui, n'a jamais trouvé le cœur).
 - **L'escalier de la première tour du Bois** monte impeccablement de 0,14 m à 2,60 m sans une image de blocage — c'est la rambarde d'en haut qui gâche tout (n° 102).
+
+### 116. Le contrôle « aucun véhicule bloqué sans raison » ne connaît pas le carjacking, un arrêt pourtant légitime du jeu
+- **Gravité** : MINEUR — c'est le CONTRÔLE qui a tort, pas le jeu. Mais il rend le test 450 rouge au hasard de l'ordre des lots, et un test qui crie au loup finit par ne plus être écouté.
+- **Reproduire** : lancer le test 450 dans un lot où le joueur se trouve à portée d'un véhicule de la circulation (mesuré par le poste r83-j dans un lot de 111 tests, sur DEUX versions du jeu — donc ce n'est ni une régression du round 83 ni une sensibilité à l'horloge).
+- **On voit** : un véhicule s'arrête à la portière du joueur et y reste — **7,8 s** sur l'ancien code, **25 s** sur le neuf. Le vidage de diagnostic du test dit `"raison":"braquage"`.
+- **La cause** : `braquage` est le **carjacking du jeu** — un véhicule vient se présenter à l'enfant pour qu'il puisse le prendre. C'est un arrêt voulu, annoncé, et utile. La liste des « raisons légales » que le test 450 accepte ne le contient pas.
+- **On devrait voir** : le test compte `braquage` parmi les raisons légales, et le **nomme** dans son bilan — comme il nomme déjà `degage`, `figeT` et les autres. Ne pas monter son seuil de 5 s : c'est la liste des raisons qui est incomplète, pas le seuil qui est trop serré.
+- **Relevé brut** : journal de la suite propre, `scratchpad/SUITE-PROPRE-121098b.log`, et le lot de 111 tests du poste r83-j.

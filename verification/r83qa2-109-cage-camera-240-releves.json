@@ -1,0 +1,939 @@
+{
+ "confort": 4.6,
+ "immeubles": [
+  {
+   "k": 0,
+   "x": -169,
+   "z": 10,
+   "etages": 3,
+   "h": 3.2,
+   "pire": 4.95,
+   "sousConfort": [],
+   "horsPiece": [],
+   "releves": [
+    {
+     "nom": "palier etage 0",
+     "yVoulu": 0.2,
+     "yReel": 0.2,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 0",
+     "yVoulu": 1.48,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 0",
+     "yVoulu": 1.8,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 0",
+     "yVoulu": 3.08,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 1",
+     "yVoulu": 3.4,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 1",
+     "yVoulu": 4.68,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 1",
+     "yVoulu": 5,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 1",
+     "yVoulu": 6.28,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 2",
+     "yVoulu": 6.6,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 2",
+     "yVoulu": 7.88,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 2",
+     "yVoulu": 8.2,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 2",
+     "yVoulu": 9.48,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    }
+   ]
+  },
+  {
+   "k": 1,
+   "x": -143,
+   "z": 10,
+   "etages": 3,
+   "h": 3.2,
+   "pire": 3.53,
+   "sousConfort": [
+    "volee descendante etage 0 3.81",
+    "volee descendante etage 1 3.53",
+    "volee descendante etage 2 3.53"
+   ],
+   "horsPiece": [],
+   "releves": [
+    {
+     "nom": "palier etage 0",
+     "yVoulu": 0.2,
+     "yReel": 0.2,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 0",
+     "yVoulu": 1.48,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 0",
+     "yVoulu": 1.8,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 0",
+     "yVoulu": 3.08,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      3.81
+     ],
+     "pire": 3.81,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 1",
+     "yVoulu": 3.4,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 1",
+     "yVoulu": 4.68,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 1",
+     "yVoulu": 5,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 1",
+     "yVoulu": 6.28,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      3.53
+     ],
+     "pire": 3.53,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 2",
+     "yVoulu": 6.6,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.86
+     ],
+     "pire": 4.86,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 2",
+     "yVoulu": 7.88,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 2",
+     "yVoulu": 8.2,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 2",
+     "yVoulu": 9.48,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      3.53
+     ],
+     "pire": 3.53,
+     "piece": "cage d'escalier de La Zone"
+    }
+   ]
+  },
+  {
+   "k": 2,
+   "x": -119,
+   "z": 10,
+   "etages": 3,
+   "h": 3.2,
+   "pire": 4.95,
+   "sousConfort": [],
+   "horsPiece": [],
+   "releves": [
+    {
+     "nom": "palier etage 0",
+     "yVoulu": 0.2,
+     "yReel": 0.14,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 0",
+     "yVoulu": 1.48,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 0",
+     "yVoulu": 1.8,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 0",
+     "yVoulu": 3.08,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 1",
+     "yVoulu": 3.4,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 1",
+     "yVoulu": 4.68,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 1",
+     "yVoulu": 5,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 1",
+     "yVoulu": 6.28,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 2",
+     "yVoulu": 6.6,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 2",
+     "yVoulu": 7.88,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 2",
+     "yVoulu": 8.2,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 2",
+     "yVoulu": 9.48,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    }
+   ]
+  },
+  {
+   "k": 3,
+   "x": -169,
+   "z": 58,
+   "etages": 3,
+   "h": 3.2,
+   "pire": 4.95,
+   "sousConfort": [],
+   "horsPiece": [],
+   "releves": [
+    {
+     "nom": "palier etage 0",
+     "yVoulu": 0.2,
+     "yReel": 0.2,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 0",
+     "yVoulu": 1.48,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 0",
+     "yVoulu": 1.8,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 0",
+     "yVoulu": 3.08,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 1",
+     "yVoulu": 3.4,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 1",
+     "yVoulu": 4.68,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 1",
+     "yVoulu": 5,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 1",
+     "yVoulu": 6.28,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 2",
+     "yVoulu": 6.6,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 2",
+     "yVoulu": 7.88,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 2",
+     "yVoulu": 8.2,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 2",
+     "yVoulu": 9.48,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    }
+   ]
+  },
+  {
+   "k": 4,
+   "x": -131,
+   "z": 58,
+   "etages": 3,
+   "h": 3.2,
+   "pire": 2.38,
+   "sousConfort": [
+    "palier etage 0 2.38",
+    "volee montante etage 0 4.34"
+   ],
+   "horsPiece": [],
+   "releves": [
+    {
+     "nom": "palier etage 0",
+     "yVoulu": 0.2,
+     "yReel": 0.2,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      2.38
+     ],
+     "pire": 2.38,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 0",
+     "yVoulu": 1.48,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.34
+     ],
+     "pire": 4.34,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 0",
+     "yVoulu": 1.8,
+     "yReel": 1.8,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 0",
+     "yVoulu": 3.08,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 1",
+     "yVoulu": 3.4,
+     "yReel": 3.4,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 1",
+     "yVoulu": 4.68,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 1",
+     "yVoulu": 5,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 1",
+     "yVoulu": 6.28,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "palier etage 2",
+     "yVoulu": 6.6,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee montante etage 2",
+     "yVoulu": 7.88,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "demi-tour etage 2",
+     "yVoulu": 8.2,
+     "yReel": 5,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    },
+    {
+     "nom": "volee descendante etage 2",
+     "yVoulu": 9.48,
+     "yReel": 6.6,
+     "caps": [
+      4.95,
+      4.95,
+      4.95,
+      4.95
+     ],
+     "pire": 4.95,
+     "piece": "cage d'escalier de La Zone"
+    }
+   ]
+  }
+ ],
+ "temoins": {
+  "rue degagee": [
+   9.1,
+   9.1,
+   9.1,
+   9.1
+  ],
+  "petit appartement": [
+   5.31,
+   5.31,
+   4.12,
+   5.31
+  ]
+ },
+ "contreEpreuve": [
+  {
+   "nom": "palier du rez",
+   "caps": [
+    64.26,
+    64.26,
+    64.26,
+    64.26
+   ],
+   "pire": 64.26,
+   "piece": null
+  },
+  {
+   "nom": "1re volee",
+   "caps": [
+    67.14,
+    67.14,
+    67.14,
+    67.14
+   ],
+   "pire": 67.14,
+   "piece": null
+  },
+  {
+   "nom": "palier du 1er",
+   "caps": [
+    63.93,
+    63.93,
+    63.93,
+    63.93
+   ],
+   "pire": 63.93,
+   "piece": null
+  },
+  {
+   "nom": "coursive du 1er",
+   "caps": [
+    67.36,
+    67.36,
+    67.36,
+    67.36
+   ],
+   "pire": 67.36,
+   "piece": null
+  }
+ ],
+ "pireGlobal": 2.38,
+ "nbReleves": 240,
+ "gabarit": {
+  "palX": -158.4,
+  "zS": 14.8,
+  "pal": 1.8,
+  "monte": 0.32,
+  "giron": 0.6,
+  "nm": 5,
+  "b0": -159.7,
+  "b1": -157.1,
+  "zM0": 7.1,
+  "zM1": 10,
+  "courZ0": 14.8,
+  "courZ1": 16.8,
+  "pontX0": -177,
+  "pontX1": -155.8,
+  "larg": 2.6,
+  "im0": {
+   "x": -169,
+   "z": 10,
+   "w": 16,
+   "d": 10,
+   "h": 3.2,
+   "etages": 3
+  }
+ }
+}

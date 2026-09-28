@@ -1,0 +1,631 @@
+{
+ "a_quoi_en_43_13": {
+  "voisins": [
+   {
+    "i": 0,
+    "x": 43,
+    "z": -13,
+    "heli": true,
+    "d": 0
+   }
+  ],
+  "parkings": [
+   {
+    "nom": "Parking du Sud",
+    "x": 20,
+    "z": -85,
+    "w": 24.599999999999998,
+    "d": 17.8,
+    "dedans43": false
+   },
+   {
+    "nom": "Parking du centre",
+    "x": -13,
+    "z": 8.5,
+    "w": 24,
+    "d": 16,
+    "dedans43": false
+   },
+   {
+    "nom": "Parking du casino",
+    "x": 30,
+    "z": 328,
+    "w": 26,
+    "d": 20,
+    "dedans43": false
+   },
+   {
+    "nom": "Parvis du garage",
+    "x": -45,
+    "z": 103,
+    "w": 30,
+    "d": 18,
+    "dedans43": false
+   },
+   {
+    "nom": "Cour du dépôt municipal",
+    "x": 27,
+    "z": 131,
+    "w": 48,
+    "d": 26,
+    "dedans43": false
+   },
+   {
+    "nom": "Cour de la caserne",
+    "x": -40,
+    "z": 131,
+    "w": 26,
+    "d": 20,
+    "dedans43": false
+   },
+   {
+    "nom": "Parking du commissariat",
+    "x": -47,
+    "z": 14,
+    "w": 26,
+    "d": 14,
+    "dedans43": false
+   },
+   {
+    "nom": "Parking de l'hôpital",
+    "x": 29,
+    "z": 216.5,
+    "w": 18,
+    "d": 44,
+    "dedans43": false
+   },
+   {
+    "nom": "Héliport",
+    "x": 43,
+    "z": -13,
+    "w": 22,
+    "d": 20,
+    "dedans43": true
+   },
+   {
+    "nom": "Parking de l'armurerie",
+    "x": 67,
+    "z": 6.5,
+    "w": 16,
+    "d": 5,
+    "dedans43": false
+   },
+   {
+    "nom": "Hélistation nord",
+    "x": 8,
+    "z": 230,
+    "w": 22,
+    "d": 20,
+    "dedans43": false
+   },
+   {
+    "nom": "Rampe de mise à l'eau",
+    "x": 125,
+    "z": 45,
+    "w": 12,
+    "d": 20,
+    "dedans43": false
+   },
+   {
+    "nom": "Dépôt du rallye",
+    "x": -70,
+    "z": -70,
+    "w": 14,
+    "d": 20,
+    "dedans43": false
+   },
+   {
+    "nom": "Rack à vélos du parc",
+    "x": -20.4,
+    "z": 51,
+    "w": 12,
+    "d": 8,
+    "dedans43": false
+   },
+   {
+    "nom": "Grille de départ",
+    "x": 152,
+    "z": -117,
+    "w": 70,
+    "d": 24,
+    "dedans43": false
+   },
+   {
+    "nom": "Base Les Frelons Jaunes",
+    "x": -169,
+    "z": 25,
+    "w": 20,
+    "d": 16,
+    "dedans43": false
+   },
+   {
+    "nom": "Base Les Requins Rouges",
+    "x": -119,
+    "z": 25,
+    "w": 20,
+    "d": 16,
+    "dedans43": false
+   }
+  ],
+  "zone": {
+   "nom": "Héliport",
+   "emoji": "🚁"
+  },
+  "premiereVoiture": {
+   "x": 43,
+   "z": -13,
+   "heli": true
+  }
+ },
+ "b_helico": {
+  "heli": true,
+  "aBord": true,
+  "approche": {
+   "x": 41.3,
+   "y": 0,
+   "z": -13,
+   "hp": 100,
+   "sol": true,
+   "mort": false,
+   "etoiles": 0,
+   "argent": 25,
+   "camD": 5.01,
+   "piece": null,
+   "act": "🚗 E : monter",
+   "sim": 152.78
+  },
+  "messages": [],
+  "releves": [
+   {
+    "t": 1,
+    "x": 43,
+    "z": -9.12,
+    "y": 0.2,
+    "parcouru": 3.88,
+    "act": "🚁 0 m"
+   },
+   {
+    "t": 4,
+    "x": 43,
+    "z": -8.2,
+    "y": 0.2,
+    "parcouru": 4.8,
+    "act": "🚁 0 m"
+   },
+   {
+    "t": 7,
+    "x": 43,
+    "z": -8.2,
+    "y": 0.2,
+    "parcouru": 4.8,
+    "act": "🚁 0 m"
+   },
+   {
+    "t": 10,
+    "x": 43,
+    "z": -8.2,
+    "y": 0.2,
+    "parcouru": 4.8,
+    "act": "🚁 0 m"
+   },
+   {
+    "t": 13,
+    "x": 43,
+    "z": -8.2,
+    "y": 0.2,
+    "parcouru": 4.8,
+    "act": "🚁 0 m"
+   },
+   {
+    "t": 15,
+    "x": 43,
+    "z": -8.2,
+    "y": 0.2,
+    "parcouru": 4.8,
+    "act": "🚁 0 m"
+   }
+  ]
+ },
+ "c_vraie_voiture": {
+  "voiture": "ambulance",
+  "poteaux": [
+   {
+    "x": 43.9,
+    "z": -5.3,
+    "w": 0.36,
+    "h": 2.4,
+    "d": 0.36
+   }
+  ],
+  "cassablesAvant": [
+   {
+    "x": 43.9,
+    "z": -5.3,
+    "r": 0.45,
+    "casse": false
+   }
+  ],
+  "cassablesApres": [
+   {
+    "x": 43.9,
+    "casse": true
+   }
+  ],
+  "total": 17.48,
+  "dmg": 17.1,
+  "messages": [],
+  "releves": [
+   {
+    "t": 1,
+    "x": 43.04,
+    "z": -8.38,
+    "parcouru": 4.62,
+    "reel": 52.7,
+    "act": "⚙️ A2 · 28 km/h · 🔧 5%",
+    "dmg": 5
+   },
+   {
+    "t": 2,
+    "x": 43.04,
+    "z": 4.19,
+    "parcouru": 17.19,
+    "reel": 83.8,
+    "act": "⚙️ A1 · 4 km/h · 🔧 10%",
+    "dmg": 10
+   },
+   {
+    "t": 3,
+    "x": 43.04,
+    "z": 4.44,
+    "parcouru": 17.45,
+    "reel": 18.1,
+    "act": "⚙️ A1 · 8 km/h · 🔧 10%",
+    "dmg": 10.2
+   },
+   {
+    "t": 4,
+    "x": 43.04,
+    "z": 4.53,
+    "parcouru": 17.53,
+    "reel": 16.4,
+    "act": "⚙️ A1 · 8 km/h · 🔧 11%",
+    "dmg": 10.8
+   },
+   {
+    "t": 5,
+    "x": 43.04,
+    "z": 4.51,
+    "parcouru": 17.51,
+    "reel": 15.7,
+    "act": "⚙️ A1 · 8 km/h · 🔧 11%",
+    "dmg": 11.3
+   },
+   {
+    "t": 6,
+    "x": 43.04,
+    "z": 4.4,
+    "parcouru": 17.4,
+    "reel": 14.3,
+    "act": "⚙️ A1 · 6 km/h · 🔧 12%",
+    "dmg": 11.9
+   },
+   {
+    "t": 7,
+    "x": 43.04,
+    "z": 4.34,
+    "parcouru": 17.34,
+    "reel": 14.1,
+    "act": "⚙️ A1 · 3 km/h · 🔧 12%",
+    "dmg": 12.4
+   },
+   {
+    "t": 8,
+    "x": 43.04,
+    "z": 4.34,
+    "parcouru": 17.34,
+    "reel": 14.2,
+    "act": "⚙️ A1 · 2 km/h · 🔧 13%",
+    "dmg": 13
+   },
+   {
+    "t": 9,
+    "x": 43.04,
+    "z": 4.37,
+    "parcouru": 17.37,
+    "reel": 15.8,
+    "act": "⚙️ A1 · 4 km/h · 🔧 14%",
+    "dmg": 13.5
+   },
+   {
+    "t": 10,
+    "x": 43.04,
+    "z": 4.46,
+    "parcouru": 17.46,
+    "reel": 14,
+    "act": "⚙️ A1 · 10 km/h · 🔧 14%",
+    "dmg": 14.1
+   },
+   {
+    "t": 11,
+    "x": 43.04,
+    "z": 4.54,
+    "parcouru": 17.54,
+    "reel": 15.6,
+    "act": "⚙️ A1 · 12 km/h · 🔧 15%",
+    "dmg": 14.6
+   },
+   {
+    "t": 12,
+    "x": 43.04,
+    "z": 4.62,
+    "parcouru": 17.62,
+    "reel": 15.6,
+    "act": "⚙️ A1 · 14 km/h · 🔧 15%",
+    "dmg": 15.2
+   },
+   {
+    "t": 13,
+    "x": 43.04,
+    "z": 4.62,
+    "parcouru": 17.62,
+    "reel": 15.3,
+    "act": "⚙️ A1 · 9 km/h · 🔧 16%",
+    "dmg": 16
+   },
+   {
+    "t": 14,
+    "x": 43.04,
+    "z": 4.51,
+    "parcouru": 17.51,
+    "reel": 14.1,
+    "act": "⚙️ A1 · 8 km/h · 🔧 17%",
+    "dmg": 16.5
+   },
+   {
+    "t": 15,
+    "x": 43.04,
+    "z": 4.48,
+    "parcouru": 17.48,
+    "reel": 15.3,
+    "act": "⚙️ A1 · 7 km/h · 🔧 17%",
+    "dmg": 17.1
+   }
+  ]
+ },
+ "d_message_bloque": {
+  "messages": [],
+  "releves": [
+   {
+    "t": 1,
+    "parcouru": 3.39,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 12 km/h · 🔧 1%",
+    "coinceT": 1.08
+   },
+   {
+    "t": 2,
+    "parcouru": 6.79,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 12 km/h · 🔧 2%",
+    "coinceT": 2.08
+   },
+   {
+    "t": 3,
+    "parcouru": 9.01,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 12 km/h · 🔧 2%",
+    "coinceT": 3.08
+   },
+   {
+    "t": 4,
+    "parcouru": 9.4,
+    "reel": 12.2,
+    "act": "⚙️ A1 · 6 km/h · 🔧 3%",
+    "coinceT": 4.08
+   },
+   {
+    "t": 5,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 7 km/h · 🔧 4%",
+    "coinceT": 5.08
+   },
+   {
+    "t": 6,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 4 km/h · 🔧 4%",
+    "coinceT": 6.08
+   },
+   {
+    "t": 7,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 7 km/h · 🔧 5%",
+    "coinceT": 7.08
+   },
+   {
+    "t": 8,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 2 km/h · 🔧 5%",
+    "coinceT": 8.08
+   },
+   {
+    "t": 9,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 7 km/h · 🔧 6%",
+    "coinceT": 9.08
+   },
+   {
+    "t": 10,
+    "parcouru": 9.4,
+    "reel": 0,
+    "act": "⚙️ A1 · 0 km/h · 🔧 6%",
+    "coinceT": 10.08
+   }
+  ]
+ },
+ "e_bulldozer": {
+  "place": [
+   28.2,
+   138.06
+  ],
+  "voisins": [
+   {
+    "kind": "grue",
+    "x": 24.4,
+    "z": 128,
+    "air": 2.1
+   },
+   {
+    "kind": "pelle",
+    "x": 29.6,
+    "z": 129,
+    "air": 3.1
+   },
+   {
+    "kind": "benne",
+    "x": 19.2,
+    "z": 128.5,
+    "air": 6.6
+   },
+   {
+    "kind": "tracteur",
+    "x": 14,
+    "z": 128.5,
+    "air": 11.8
+   },
+   {
+    "kind": "fourgon",
+    "x": 53.57,
+    "z": 97.98,
+    "air": 22.88
+   }
+  ],
+  "fiche": 36,
+  "total": 16.56,
+  "pointe": 21.3,
+  "imagesFiges": 3,
+  "coinceT": 0,
+  "messages": [],
+  "releves": [
+   {
+    "t": 1,
+    "parcouru": 2.77,
+    "reel": 21.3,
+    "act": "⚙️ A1 · 5 km/h · 🔧 1%"
+   },
+   {
+    "t": 2,
+    "parcouru": 4.3,
+    "reel": 7.7,
+    "act": "⚙️ A2 · 7 km/h · 🔧 1%"
+   },
+   {
+    "t": 3,
+    "parcouru": 5.81,
+    "reel": 7.8,
+    "act": "⚙️ A1 · 7 km/h · 🔧 1%"
+   },
+   {
+    "t": 4,
+    "parcouru": 7.35,
+    "reel": 7.8,
+    "act": "⚙️ A1 · 8 km/h · 🔧 1%"
+   },
+   {
+    "t": 5,
+    "parcouru": 8.89,
+    "reel": 7.8,
+    "act": "⚙️ A2 · 7 km/h · 🔧 1%"
+   },
+   {
+    "t": 6,
+    "parcouru": 10.42,
+    "reel": 7.8,
+    "act": "⚙️ A1 · 8 km/h · 🔧 1%"
+   },
+   {
+    "t": 7,
+    "parcouru": 11.96,
+    "reel": 7.8,
+    "act": "⚙️ A2 · 7 km/h · 🔧 1%"
+   },
+   {
+    "t": 8,
+    "parcouru": 13.49,
+    "reel": 7.8,
+    "act": "⚙️ A1 · 8 km/h · 🔧 1%"
+   },
+   {
+    "t": 9,
+    "parcouru": 15.03,
+    "reel": 7.8,
+    "act": "⚙️ A2 · 8 km/h · 🔧 1%"
+   },
+   {
+    "t": 10,
+    "parcouru": 16.56,
+    "reel": 7.8,
+    "act": "⚙️ A1 · 7 km/h · 🔧 1%"
+   }
+  ]
+ },
+ "f_maneges": [
+  {
+   "k": 0,
+   "nom": "la grande roue",
+   "kind": "wheel",
+   "e": "🎡",
+   "rayon": 5,
+   "armeA": 7,
+   "monteA": 6,
+   "monte": true,
+   "bouge": true,
+   "messages": [],
+   "descendu": true
+  },
+  {
+   "k": 1,
+   "nom": "le carrousel",
+   "kind": "carousel",
+   "e": "🎠",
+   "rayon": 5.5,
+   "armeA": 9,
+   "monteA": 8,
+   "monte": true,
+   "bouge": true,
+   "messages": [],
+   "descendu": true
+  },
+  {
+   "k": 2,
+   "nom": "le tourniquet",
+   "kind": "carousel",
+   "e": "🎡",
+   "rayon": 3.1,
+   "armeA": 7,
+   "monteA": 6,
+   "monte": true,
+   "bouge": true,
+   "messages": [],
+   "descendu": true
+  },
+  {
+   "k": 3,
+   "nom": "le manège à poneys",
+   "kind": "carousel",
+   "e": "🐴",
+   "rayon": 5.2,
+   "armeA": 9,
+   "monteA": 8,
+   "monte": true,
+   "bouge": true,
+   "messages": [],
+   "descendu": true
+  }
+ ],
+ "erreurs": []
+}

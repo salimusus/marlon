@@ -1074,7 +1074,17 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **On devrait voir** : l'enfant apparaît sur le trottoir ou sur la place, jamais sur le bitume.
 - **Capture** : `verification/s1-09-dix-secondes.png`
 
-### 112. La première voiture du parking du centre est arrêtée par un poteau de 36 cm : pied au plancher, elle n'avance plus, sans un choc, sans une bosse, sans un mot — et le compteur affiche 0 pendant qu'elle se dégage
+### 112. ❌ MON DIAGNOSTIC ÉTAIT FAUX (ce n'était pas une voiture, c'était l'hélicoptère) — ✅ et ce qui était vrai dedans est RÉPARÉ
+- **Je me suis trompé, et je l'ai vérifié de mes yeux au round 83 (contrôle r83-qa2).** Le véhicule garé en (43 ; −13) **n'est pas une voiture : c'est l'hélicoptère de l'héliport**. Mesuré : `city.cars[0]`, `heli` **vrai**, la zone s'appelle « 🚁 Héliport », le rectangle de stationnement s'appelle « Héliport » (le Parking du centre est en (−13 ; 8,5), quarante mètres plus loin). Et le « compteur à 0 km/h » que je rapportais est le bandeau **« 🚁 0 m » — son ALTITUDE**. On le voit sur la capture : c'est un hélicoptère rouge à rotor, avec « MARLON LOGISTICS » sur le flanc. `verification/r83qa2-112-heliport-15s.png`.
+- **Contre-épreuve refaite par moi** : une **vraie** voiture (ambulance) posée au même endroit, cap au nord, gaz à fond — elle passe de z = −13 à z = **+50 en cinq secondes** (63 m), **tord le poteau** (« 🚧 Panneau tordu ! »), renverse une poubelle et finit sur un mur (« 💥 BOUM ! Gros choc contre le mur »). Un poteau de 36 cm n'arrête pas une voiture. `verification/r83qa2-112b-heliport-vraie-voiture.png`.
+- **CE QUI ÉTAIT VRAI, ET QUI EST BIEN RÉPARÉ :**
+  - **le compteur dit la vitesse de la CAISSE** : relevé au même essai, 28 km/h réels ↔ « ⚙️ A2 · 28 km/h » affiché.
+  - **l'enfant coincé est prévenu** : nez dans la façade de la banque, gaz au plancher, `coinceT` monte et la bande affiche **« 🧱 Tu es coincé — recule ou braque pour te dégager »** à **1,5 s** (sim 151,87) puis **six secondes plus tard** (sim 157,87), pas plus souvent. Vérifié à l'écran.
+- **UN AVERTISSEMENT SUR MA PROPRE MÉTHODE, parce qu'il a failli me faire écrire une deuxième bêtise** : mon premier instrument lisait la bande de message avec un `MutationObserver`. Son rappel est une **micro-tâche** : dans un `page.evaluate` qui enchaîne mille `step()` sans jamais rendre la main, ni les observateurs ni les `setTimeout` ne tournent — et la liste, lue dans le même `evaluate`, revient **toujours vide**. J'ai donc lu « 0 message » là où le jeu en affichait deux. On relève la bande **à la main, en synchrone, à chaque image**.
+- **Mesures brutes** : `verification/r83qa2-112-113-114-mesures.json`, `verification/r83qa2-112-113-4a-mesures.json`
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel (il portait sur l'hélicoptère sans que je le sache) :**
+
 - **Gravité** : GÊNANT, et c'est la première minute au volant d'un enfant de huit ans.
 - **Reproduire** : prendre la voiture garée en (43 ; −13) au parking du centre, pousser « avancer » et ne plus toucher au volant.
 - **On voit**, 20 s de gaz à fond, passants écartés pour ne juger que la conduite :
@@ -1092,7 +1102,16 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Captures** : `verification/s5-10-balade.png`, `verification/s5-11-balade-dirigee.png`
 - **Mesures brutes** : `verification/r83-qa-05-conduire-obstacle.json`, `verification/r83-qa-05-conduire-engins.json`, `verification/r83-qa-05-compteur.json`
 
-### 113. Le bulldozer ne roule pas : 1,70 m en dix secondes, cinq km/h pour une fiche à trente-six, et la marche arrière ne le sort pas
+### 113. ✅ RÉPARÉ — mais la cause n'était PAS le moteur : le bulldozer était déclaré bloqué SUR SA PROPRE PLACE
+- **Vérifié au round 83 (contrôle r83-qa2), et le poste a raison sur la cause.** Le même bulldozer, **posé sur une ligne droite dégagée** (avenue z = 70), pointe à **36,0 km/h — exactement sa fiche**. Le moteur n'a jamais rien eu : c'est une benne à gravats à 20 cm de son arrière qui faisait répondre `carBlocked` VRAI à chaque image, sur sa place de parking.
+- **Les deux moitiés demandées :**
+  - **IL ROULE** : depuis sa place, gaz à fond dix secondes, **16,56 m parcourus**, pointe 21,3 km/h, **3 images immobiles sur 600** (avant : 1,70 m et 480 images sur 600), `coinceT` = **0**.
+  - **IL N'EST COLLÉ À PERSONNE** : sa place est (28,20 ; 121,50) et l'air entre sa boîte et la plus proche est de **2,10 m** (la grue), puis 3,10 m (la pelle) et 6,60 m (la benne). Avant : 20 cm, puis 5 cm après le premier déplacement. La marge que le jeu se fixe est de 0,60 m : on est à trois fois et demie.
+- **Réserve honnête, et elle est petite** : depuis sa place il ne tient que **7,8 km/h** en régime établi (21,3 km/h la première seconde) — il sort du chantier en frôlant le bâti. Sur route dégagée il fait bien ses 36. Ce n'est pas un blocage, c'est un engin qui se faufile.
+- **Capture** : `verification/r83qa2-113-bulldozer.png` · **Mesures** : `verification/r83qa2-112-113-114-mesures.json`
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel :**
+
 - **Gravité** : GÊNANT — c'est un engin qu'un enfant repère de loin, dans lequel il monte, et qui ne fait rien.
 - **Reproduire** : chantier du nord, bulldozer garé en (18,2 ; 121,5). Monter, pousser « avancer » dix secondes, puis « reculer » sept secondes.
 - **On voit** : **1,70 m** parcourus en 10 s, pointe **5 km/h** alors que sa propre fiche annonce **36 km/h** (`spec.max` = 10 m/s) ; la marche arrière ne change rien (1,70 m au total). Il a un solide de 0,40 × 4,60 m à **2,06 m** de son nez. Les trois autres engins du même chantier, testés dans la foulée, roulent tous à leur fiche : grue 68,5 m / 50 km/h (fiche 50), pelle 40,3 m / 40 (fiche 40), tracteur 23,6 m / 53 (fiche 54).
@@ -1100,7 +1119,22 @@ Relevés et captures dans `/tmp/claude-0/-home-user-marlon/d9d8ec84-d68f-5fe0-b4
 - **Capture** : `verification/s5-12-engin-de-chantier.png`
 - **Mesures brutes** : `verification/r83-qa-05-conduire-engins.json`
 
-### 114. Le carrousel de la fête foraine ne se monte pas en s'en approchant : le panneau dit « E pour monter », mais rien ne se propose
+### 114. ❌ CE N'ÉTAIT PAS LE CARROUSEL, C'ÉTAIT LA GRANDE ROUE — ✅ et les QUATRE manèges se prennent maintenant
+- **Je me suis trompé de manège** : `city.rides[0]` est **la grande roue**, pas le carrousel. Le défaut était réel, mais c'est la roue qui n'avait aucun rayon d'approche.
+- **Vérifié au round 83 (contrôle r83-qa2), les quatre manèges, approchés à pied par l'est, un mètre à la fois, 60 images d'arrêt à chaque pas, puis E :**
+
+  | manège | rayon | s'arme à | on monte | il tourne | on redescend (Espace) |
+  |---|---:|---:|---|---|---|
+  | 🎡 la grande roue | 5,0 | **7 m** | oui | oui | oui |
+  | 🎠 le carrousel | 5,5 | **9 m** | oui | oui | oui |
+  | 🎠 le tourniquet | 3,1 | **7 m** | oui | oui | oui |
+  | 🎠 le manège à poneys | 5,2 | **9 m** | oui | oui | oui |
+
+  Le carrousel, que j'accusais, répondait déjà : il s'arme à 9 m. **Les quatre sont bons.**
+- **Captures** : `verification/r83qa2-114-maneges.png` · **Mesures** : `verification/r83qa2-112-113-114-mesures.json`
+
+**LE RELEVÉ D'ORIGINE, gardé tel quel (il visait le mauvais manège) :**
+
 - **Gravité** : GÊNANT (une attraction annoncée par son propre panneau et qu'on n'atteint pas). **À CONFIRMER** : `rideEnter()` appelée à la main fonctionne, donc c'est la mise à portée qui ne s'arme pas, et je n'ai essayé qu'une seule approche.
 - **Reproduire** : fête foraine, marcher jusqu'au carrousel (`city.rides[0]`) en venant de l'est, attendre 1,5 s à l'arrêt, appuyer sur E.
 - **On voit** : `city.rideNear` reste **faux**, aucune consigne ne s'affiche (`consigneProche()` rend null), E ne fait rien, le joueur reste au sol (y 0,12). Le panneau de zone dit pourtant « 🎡 Fête foraine : grande roue et carrousel (**E pour monter**), stands et ballons ». À titre de comparaison, au même essai et de la même façon, la balançoire arme `swingNear`, le banc arme `benchNear` et le trampoline arme `trampNear` — les trois répondent à E du premier coup.

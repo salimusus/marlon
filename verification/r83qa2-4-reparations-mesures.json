@@ -1,0 +1,222 @@
+{
+ "a_peut_partir": [
+  {
+   "cas": "personne",
+   "parcouru": 4.13,
+   "fin": [
+    -12.97,
+    12.63
+   ],
+   "hpPieton": null,
+   "dPieton": null,
+   "encoreDansLaBoite": null,
+   "messages": [
+    {
+     "t": "🚗 Boîte automatique · 📯 klaxon · Espace maintenu = frein à main",
+     "sim": 150.5
+    },
+    {
+     "t": "💥 Lampadaire renversé !",
+     "sim": 150.9
+    },
+    {
+     "t": "💥 Vitrine fissurée",
+     "sim": 151.4
+    },
+    {
+     "t": "⚠️ casser une vitrine : la police laisse passer (avertissement 1/4)",
+     "sim": 151.42
+    },
+    {
+     "t": "💥 Vitrine fissurée",
+     "sim": 151.43
+    },
+    {
+     "t": "💥 Vitrine brisée !",
+     "sim": 151.45
+    }
+   ]
+  },
+  {
+   "cas": "un passant devant",
+   "parcouru": 4.18,
+   "fin": [
+    -12.94,
+    12.68
+   ],
+   "hpPieton": 100,
+   "dPieton": 0.98,
+   "encoreDansLaBoite": true,
+   "messages": [
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste devant la voiture",
+     "sim": 180.83
+    },
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste derrière la voiture",
+     "sim": 183.15
+    }
+   ]
+  },
+  {
+   "cas": "un passant devant, puis on RECULE",
+   "parcouru": 37.3,
+   "fin": [
+    -12.94,
+    -28.8
+   ],
+   "hpPieton": 100,
+   "dPieton": 40.5,
+   "encoreDansLaBoite": false,
+   "messages": [
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste devant la voiture",
+     "sim": 211.17
+    },
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste derrière la voiture",
+     "sim": 213.48
+    },
+    {
+     "t": "🚸 Attention ! Quelqu'un est juste devant la voiture",
+     "sim": 223.08
+    },
+    {
+     "t": "⚽ Fonce dans le ballon et marque !",
+     "sim": 225.35
+    },
+    {
+     "t": "🧰 2 objets cassés ont été remplacés",
+     "sim": 228.02
+    },
+    {
+     "t": "💥 Choc contre le mur",
+     "sim": 229.02
+    },
+    {
+     "t": "⚽ BUT ! 1",
+     "sim": 229.22
+    },
+    {
+     "t": "🧱 Tu es coincé — recule ou braque pour te dégager",
+     "sim": 240.45
+    }
+   ]
+  }
+ ],
+ "b_plainte": {
+  "choc": {
+   "image": 80,
+   "s": 1.33,
+   "vitesse": 100.2,
+   "hp": 30,
+   "plainteDans": 6,
+   "aTerrePour": 40
+  },
+  "etoile": {
+   "s": 41.35,
+   "apresChoc": 40.02,
+   "etoiles": 1
+  },
+  "etoilesFin": 1,
+  "journal": [
+   {
+    "s": 0,
+    "etoiles": 0,
+    "hpVictime": 100,
+    "aTerre": false,
+    "plainteDue": 0
+   },
+   {
+    "s": 10,
+    "etoiles": 0,
+    "hpVictime": 30,
+    "aTerre": true,
+    "plainteDue": -2.7
+   },
+   {
+    "s": 20,
+    "etoiles": 0,
+    "hpVictime": 30,
+    "aTerre": true,
+    "plainteDue": -12.7
+   },
+   {
+    "s": 30,
+    "etoiles": 0,
+    "hpVictime": 30,
+    "aTerre": true,
+    "plainteDue": -22.7
+   },
+   {
+    "s": 40,
+    "etoiles": 0,
+    "hpVictime": 30,
+    "aTerre": true,
+    "plainteDue": -32.7
+   }
+  ],
+  "messages": [
+   {
+    "t": "🌳 Parc : balançoires, boules, vélos, propulseur et animaux !",
+    "sim": 242.05
+   },
+   {
+    "t": "🚑 Une ambulance a été appelée",
+    "sim": 243.38
+   },
+   {
+    "t": "🔥 AU FEU ! La caserne envoie le camion",
+    "sim": 250.02
+   },
+   {
+    "t": "📝 Lucas_2014 a porté plainte : tu es recherché pour l'avoir renversé",
+    "sim": 283.4
+   }
+  ]
+ },
+ "c_contourne": {
+  "habitant": "Lucas_2014",
+  "vitesse": 5.6,
+  "avecLeJoueurAuMilieu": {
+   "images": 181,
+   "dMin": 1.17,
+   "travers": 0,
+   "fin": [
+    -4.26,
+    7.76
+   ],
+   "passe": true
+  },
+  "sansPersonne": {
+   "images": 156,
+   "dMin": 99,
+   "travers": 0,
+   "fin": [
+    -4.26,
+    8
+   ],
+   "passe": true
+  },
+  "coutDuDetour": 25
+ },
+ "d_riposte": {
+  "sansRancune": {
+   "coups": 9,
+   "ko": true,
+   "retourne": 5,
+   "hpJoueur": 82,
+   "suite": "86^ 72^ 46^ 46^ 32X 18X 6X 6X 0",
+   "fuitDeFin": null
+  },
+  "avecVieilleRancune": {
+   "coups": 8,
+   "ko": true,
+   "retourne": 5,
+   "hpJoueur": 91,
+   "suite": "86^ 60^ 60^ 46^ 32X 6X 6X 0",
+   "fuitDeFin": null
+  }
+ },
+ "erreurs": []
+}

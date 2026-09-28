@@ -1297,6 +1297,86 @@ Le chef a besoin de savoir ce qui est gagné, pas seulement ce qui manque. Tout 
 - **Le labyrinthe de paille tient debout** : ses murs de bottes sont continus, on ne passe pas entre deux bottes — 684 images de stick à fond contre un mur, 0 traversée. C'est un vrai labyrinthe : il faut le contourner, pas le traverser (mon pilote automatique, lui, n'a jamais trouvé le cœur).
 - **L'escalier de la première tour du Bois** monte impeccablement de 0,14 m à 2,60 m sans une image de blocage — c'est la rambarde d'en haut qui gâche tout (n° 102).
 
+### CE QUI EST ACQUIS — round 83 (contrôle r83-qa2) : les quatre réparations que personne n'avait encore JOUÉES
+
+Elles étaient mesurées et protégées par des tests verts, mais aucun humain ne les avait vues.
+Jouées ici en **pas de simulation**, jamais en temps réel, à la touche comme un enfant.
+
+- **🚸 UNE VOITURE QUI SORT D'UNE PLACE N'ÉCRASE PLUS LE PASSANT.** Mesure au Parking du centre,
+  gaz à fond trente secondes : personne dans la boîte → la voiture monte à **73,3 km/h** ; un
+  passant dans la boîte → **8,6 km/h, plafond exact (SORTIE_PAS = 2,4 m/s)**, **1 800 images sur
+  1 800 bridées**, et le passant finit à **100 PV** — il n'est pas touché une seule fois. Avant, il
+  était écrasé à 31,6 km/h. **Le klaxon sonne et la bande dit, en toutes lettres et lisiblement :
+  « 🚸 Attention ! Quelqu'un est juste devant la voiture »** (capture `r83qa2-4a-le-passant-s-ecarte.png`).
+  *Réserve chiffrée, en n° 119.*
+- **📝 LA VICTIME PORTE PLAINTE, et la chaîne se lit.** Avenue dégagée, police écartée : choc à
+  **1,33 s à 100,2 km/h**, la victime tombe à 30 PV, reste **à terre 40 s**, l'ambulance part —
+  puis, **40,02 s après le choc**, la bande affiche
+  **« 📝 Lucas_2014 a porté plainte : tu es recherché pour l'avoir renversé »** et **★ passe à 1**.
+  Le message final **nomme la cause**, c'est ce qui rend la leçon lisible. *Réserve en n° 118.*
+- **🚶 UN HABITANT CONTOURNE LE JOUEUR PLANTÉ SUR SON CHEMIN.** Joueur pile au milieu en (0 ; 8),
+  l'habitant part de (6 ; 8) vers (−6 ; 8) : il arrive en **181 images**, **passe de l'autre côté**
+  (x = −4,26), **0 image dans le joueur**, jamais plus près que **1,17 m** (la séparation vaut
+  1,16 m). Sans personne au milieu : 156 images. **Le détour coûte 25 images, soit 0,42 s.**
+  Avant, il restait épinglé à 1,09 m pour toujours.
+- **👊 UN HABITANT FRAPPÉ SE RETOURNE, même avec une vieille rancune.** Frappé **à la touche V**,
+  quatorze coups au plus : sans rancune il se retourne au **coup 5** (KO en 9 coups,
+  86 → 72 → 46 → 46 → 32⚔ → 18⚔ → 6⚔ → 6⚔ → 0) ; **avec une vieille rancune montée à la main**
+  (`b.fuitDe` = un voisin, bagarre finie) il se retourne **aussi au coup 5** (KO en 8). Avant :
+  jamais. *Attention au montage : si l'on pose `b.fight = 'flee'` en plus de `b.fuitDe`, la
+  réparation ne joue PAS — et c'est voulu, elle ne touche jamais une bagarre en cours. Mon premier
+  essai s'y est trompé et lisait « jamais ».*
+- **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
+
+---
+
+## LE CONTRÔLE DU ROUND 83 — r83-qa2 (entrées 117 et suivantes)
+
+### 117. Dans la cage d'escalier de La Zone, il reste SIX PAS sur cinquante-deux où la caméra entre encore dans le dos de l'enfant
+- **Gravité** : GÊNANT. C'est le reliquat du n° 109, qui est réparé par ailleurs (voir son entrée) : on est passé de **18 relevés sur 24 sous deux mètres** à **6 relevés sur 208 sous le confort**.
+- **Reproduire** : La Zone, immeuble (−169 ; 10). Se placer en **(−159,70 ; 1,16 ; 12,10)** (bande montante du rez, deux marches au-dessus du palier) et tourner la caméra **plein ouest**.
+- **On voit** : balayage fin de toute la cage, **52 pas de 30 cm**, 4 caps chacun (208 relevés), caméra convergée à la main (120 images de `camPerche` + `interieurTick`), joueur posé puis laissé tomber au sol. Confort du jeu `CAM_CONFORT` = 4,60 m.
+
+  | bande | étage | z | y | pire | cap fautif |
+  |---|---:|---:|---:|---:|---|
+  | montante | 0 | 12,10 | 1,16 | **0,85 m** | ouest |
+  | montante | 0 | 11,80 | 1,16 | **0,85 m** | ouest |
+  | descendante | 0 | 11,50 | 3,08 | **0,85 m** | est |
+  | descendante | 0 | 11,80 | 3,08 | **1,30 m** | est |
+  | montante | 1 | 11,50 | 4,68 | **0,85 m** | ouest |
+  | montante | 1 | 11,20 | 4,68 | **1,30 m** | ouest |
+
+  Aux **46 autres pas**, les quatre caps donnent **4,91 m** et l'enfant occupe 29 % de la hauteur d'écran. Aux six-là, il en occupe **114 à 228 %** : **ses pieds sortent du cadre** et le dos remplit tout. C'est toujours **un seul cap sur quatre** — le cap LATÉRAL, celui qui regarde en travers de la cage — et jamais celui de la montée.
+- **Ce que ça coûte vraiment, et je le mesure aussi** : en **montant l'escalier pour de bon**, du trottoir au 2ᵉ étage, la perche ne descend jamais sous **2,54 m** et les pieds sont dans le cadre à chaque arrêt. Un enfant ne tombe donc dessus **que s'il pousse le stick droit de côté en s'arrêtant sur l'une de ces trois marches**, et un pas de plus le libère.
+- **On devrait voir** : 4,60 m au moins sur les quatre caps, partout dans la cage.
+- **Captures** : `verification/r83qa2-109d-pire-montante-etage0.png` (0,85 m, le dos remplit l'écran), à comparer avec `verification/r83qa2-109c-02-haut-de-volee-montante.png` (4,91 m, on voit tout).
+- **Mesures brutes** : `verification/r83qa2-109-balayage-fin-52-points.json`
+
+### 118. Quand l'enfant renverse quelqu'un, le message qui explique la suite est recouvert dans la même image par celui de l'ambulance
+- **Gravité** : MINEUR, mais c'est exactement le maillon de la chaîne de cause à effet que la réparation voulait donner à l'enfant.
+- **Reproduire** : rouler sur un passant à plus de 30 km/h, hors de vue de la police.
+- **On voit** : `ecraseAuSol` affiche d'abord **« 🚑 Tu as renversé X ! Il va porter plainte… »** (`msg(..., 3000)`, **priorité 0**), puis, **dans la même image**, l'appel des secours affiche **« 🚑 Une ambulance a été appelée »** (`msg(..., 2200, 1)`, **priorité 1**). La priorité 1 écrase la priorité 0 et tient 2,2 s : le premier message **n'est jamais lu**. Relevé de ma mesure : la bande passe de « 🌳 Parc… » à « 🚑 Une ambulance a été appelée », sans jamais montrer « il va porter plainte ». Puis **quarante secondes de silence**, et l'étoile tombe avec « 📝 Lucas_2014 a porté plainte… ».
+- **On devrait voir** : les deux, ou au moins celui qui annonce la suite (le jeu peut lui donner la priorité 1 lui aussi, ou l'afficher après l'ambulance).
+- **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
+
+### 119. Un passant collé au pare-chocs ne s'écarte jamais, et le jeu ne dit pas à l'enfant quoi faire
+- **Gravité** : MINEUR (l'enfant s'en sort tout seul en reculant), mais c'est trente secondes d'incompréhension.
+- **Reproduire** : au Parking du centre, quelqu'un devant le capot, gaz à fond.
+- **On voit** : le bridage à 2,4 m/s est **juste** et il sauve le passant (100 PV). Mais le passant **ne s'écarte pas** : sur **1 800 images (30 s)** il reste entre **0,78 et 0,98 m** de la caisse, **qu'il ait un but ailleurs ou non** (les deux cas mesurés), et `pietonDevant`/`pietonDerriere` répond encore VRAI à la fin. Le commentaire du jeu dit « le passant s'écarte en deux secondes » : **ce n'est pas ce que je mesure**. La voiture ne fait que **4,18 m en 30 s**.
+  **L'ISSUE EXISTE, et elle est franche** : en passant la marche arrière au bout de dix secondes, la caisse fait **37,3 m**, le passant finit à **40,5 m**, hors de la boîte, **à 100 PV**. L'enfant n'est donc jamais prisonnier.
+- **On devrait voir** : soit le passant recule vraiment, soit le message le dit — « 🚸 Attention ! Quelqu'un est juste devant la voiture » **n'indique aucune manœuvre**, alors que le message du blocage sur un mur, lui, dit « recule ou braque ».
+- **Mesures brutes** : `verification/r83qa2-4-reparations-mesures.json`
+
+### 120. À l'école, la ligne « Score » ne se rafraîchit qu'à l'exercice suivant : juste après une bonne réponse elle affiche encore l'ancien score
+- **Gravité** : COSMÉTIQUE.
+- **On voit** : on répond juste (« 🎉 C'est gagné ! », +3 🪙, la craie écrit « ✅ GAGNÉ ! +3 pièces »), et le bandeau du haut affiche toujours **« Score : 0/0 · série 0 »**. `$('schScore')` n'est écrit que dans `nextQuestion()`. Sur la capture prise plus tard, on lit même **« Score : 0/0 · série 1 »** — la série compte, le score non.
+- **Capture** : `verification/r83qa2-ecole-la-question.png`
+
+### 121. Certains bandeaux de message occupent cinq lignes et le quart haut de l'écran
+- **Gravité** : MINEUR, noté comme une gêne de lecture, pas comme une panne.
+- **On voit** : « 🏗️ Dépôt municipal : benne, grue, pelleteuse, BULLDOZER, tracteur, fourgon — E pour monter, O pour creuser / lever / baisser la lame » tient sur **cinq lignes** et couvre environ **200 px sur 720**, soit **28 % de la hauteur**, au milieu du haut de l'écran. Idem pour « 💪 Séance finie : 76 foulées en 30 s (2.5/s) · 📈 Performance +10 → 27/100 ★ · 🏆 Record personnel battu (76) : +2 de bonus ». C'est beaucoup de texte d'un coup pour un enfant de huit ans, et ça masque ce qu'il y a devant pendant deux à quatre secondes.
+- **Captures** : `verification/r83qa2-113-bulldozer-et-ses-voisins.png`, `verification/r83qa2-sport-par-la-porte.png`
+
 ### 116. Le contrôle « aucun véhicule bloqué sans raison » ne connaît pas le carjacking, un arrêt pourtant légitime du jeu
 - **Gravité** : MINEUR — c'est le CONTRÔLE qui a tort, pas le jeu. Mais il rend le test 450 rouge au hasard de l'ordre des lots, et un test qui crie au loup finit par ne plus être écouté.
 - **Reproduire** : lancer le test 450 dans un lot où le joueur se trouve à portée d'un véhicule de la circulation (mesuré par le poste r83-j dans un lot de 111 tests, sur DEUX versions du jeu — donc ce n'est ni une régression du round 83 ni une sensibilité à l'horloge).

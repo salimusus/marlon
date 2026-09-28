@@ -25891,6 +25891,10 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     const touches = G.ecraseAuSol(car, { speed: 12 });
     const amb = G.city.ambulances.find(a => a.victime === v);
     R.reel = { touches, ambulance: amb ? amb.etat : null, banniere: lu(), plainteDans: v.porteplainte ? 'oui' : 'non' };
+    // LA PROMESSE, EN TEMPS DE JEU, lue A L'INSTANT ou l'ecrasement vient de poser la phrase.
+    // C'est ELLE que la reparation garantit : une reservation de 3 s a la priorite 2. Un releve
+    // en horloge reelle, lui, ne peut pas etre une preuve ici — voir plus bas.
+    R.promesse = { prio: G.msgPrio, reste: G.msgReste, attente: G.msgAttente };
     // ---- 4. LES DUREES, EN HORLOGE REELLE (le bandeau s'efface sur un setTimeout).
     // ON GELE LE JEU pendant la mesure : `paused = true` arrete step(), donc simTime et toute
     // pastille de proximite qui viendrait salir le releve. Le minuteur du bandeau, lui, tourne.
@@ -25908,7 +25912,7 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
       await dodo(120);
       const txt = lu(), t = Math.round(performance.now() - t0);
       if (txt !== trace[trace.length - 1].txt) trace.push({ t, txt });
-      if (t > 9000) break;
+      if (t > 14000) break;   // large : ce releve nourrit le BILAN, il ne decide d'aucune assertion
     }
     R.duree = Math.round(performance.now() - t0);
     R.trace = trace;
@@ -25924,7 +25928,20 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     R.temoinRemplace = lu();
     return R;
   });
-  const A = r.avant, B = r.apres, T = r.trace;
+  const A = r.avant, B = r.apres, T = r.trace, R = {};
+  // POURQUOI ON NE JUGE PLUS SUR UNE HORLOGE REELLE. Ce test a ete rouge puis vert sans qu'une
+  // ligne du jeu change : vert lance seul, vert avec le test voisin devant lui, ROUGE dans un lot
+  // de quatre. La raison n'est pas une pollution — les deux tests suivants tournent APRES lui —
+  // c'est que le bandeau s'efface sur un setTimeout et qu'une page qui rend une image par seconde
+  // n'OBSERVE la bascule qu'a l'echantillon suivant, lequel tombe ou la charge machine veut. La
+  // premiere version additionnait les siestes DEMANDEES (1 600 ms annonces pour 3 000 tenues), la
+  // seconde lisait performance.now() avec une fenetre de 2 800 a 7 000 ms — et elle decidait
+  // encore au hasard. Elargir la fenetre, c'est arreter de verifier.
+  // Ce que la reparation PROMET est verifiable sans horloge : une reservation de 3 s a la
+  // priorite 2, ecrite en temps de JEU, plus l'ORDRE des bandeaux. On juge donc la promesse et
+  // l'ordre ; les horodatages restent au bilan, pour le lecteur, sans jamais decider du verdict.
+  R.PROMESSE_PRIO = r.promesse.prio === 2;
+  R.PROMESSE_RESTE = Math.abs(r.promesse.reste - 3) < 0.35;
   // la trace : la plainte, PUIS l'ambulance, PUIS plus rien
   const etapes = T.map(e => e.txt);
   const iAmb = etapes.findIndex(t => /ambulance/.test(t));
@@ -25932,8 +25949,16 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
   const ok = /porter plainte/.test(A.plainte) && /ambulance/.test(A.apresAmbulance)      // LA CAUSE
     && /porter plainte/.test(B.plainte) && /porter plainte/.test(B.apresAmbulance)       // LA REPARATION
     && r.reel.touches >= 1 && r.reel.ambulance === 'route' && /porter plainte/.test(r.reel.banniere)
-    && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 7000   // le seuil BAS est la preuve ; le haut est large parce que la page rend une image par seconde
-    && iVide > iAmb && T[iVide].t >= T[iAmb].t + 1800
+    && R.PROMESSE_PRIO && R.PROMESSE_RESTE   // LA PROMESSE : priorite 2, et 3 s reservees EN TEMPS DE JEU
+    && iAmb > 0   // L'ORDRE : la plainte d'abord, l'ambulance ensuite — vrai quelle que soit la charge
+    // ET L'AMBULANCE N'EST PAS PERDUE : c'est `r.promesse.attente` qui le prouve (elle est dans la
+    // case d'attente au moment ou la plainte prend l'ecran) et `iAmb > 0` qui le confirme (elle a
+    // bien eu son tour a l'ecran). On NE juge PAS sur l'observation du bandeau VIDE : elle arrive
+    // apres 3 s + 2,2 s, et sur une page qui rend une image par seconde l'echantillon suivant peut
+    // tomber au-dela de la fenetre de relevé — mesure : ambulance vue a 6 413 ms dans un lot de
+    // quatre tests, donc le vide attendu vers 8 600 ms, hors de portee. Ce serait rendre le verdict
+    // dependant de la charge machine pour une information que la promesse donne deja.
+    && r.promesse.attente && /ambulance/.test(r.promesse.attente)
     && /s'asseoir|asseoir/.test(r.temoinPrio0) && /BOOST/.test(r.temoinRemplace);
   return { ok, detail: `LA CAUSE, dans msg() : \`msgPrioT = prio > 0 ? simTime + ms / 1000 : 0\` — une`
     + ` phrase de PRIORITE 0 ne reserve RIEN, donc le garde-fou \`prio < msgPrio && simTime < msgPrioT\``
@@ -25951,7 +25976,12 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     + ` 1 600 ms sur 3 000 » ; la page rend UNE IMAGE PAR SECONDE, un dodo(400) prend deux secondes,`
     + ` et le code tenait bel et bien ses 3 000 ms (sonde a 50 ms : plainte a 2 039 ms, ambulance a`
     + ` 3 043 ms, vide a 5 763 ms). C'etait l'instrument, pas le jeu :`
-    + ` ${T.map(e => `${e.t} ms → « ${e.txt || '(rien)'} »`).join(' | ')} — soit la plainte ${T[iAmb] ? T[iAmb].t : '?'} ms`
+    + ` LA PROMESSE, seule chose jugee ici parce qu'elle ne depend d'aucune charge machine : priorite ${r.promesse.prio}`
+    + ` et ${r.promesse.reste} s reservees EN TEMPS DE JEU (3 s demandees), l'ambulance en attente dans la case`
+    + ` (« ${r.promesse.attente || '(vide)'} ») · ET L'ORDRE : plainte, puis ambulance, puis plus rien`
+    + ` · les horodatages qui suivent sont donnes POUR LE LECTEUR et ne decident de rien — leur resolution`
+    + ` est celle d'une page qui rend une image par seconde :`
+    + ` ${T.map(e => `${e.t} ms → « ${e.txt || '(rien)'} »`).join(' | ')} — soit la plainte ${T[iAmb] ? T[iAmb].t : '?'} ms observes`
     + ` (3 000 demandees), puis l'ambulance ${T[iVide] && T[iAmb] ? T[iVide].t - T[iAmb].t : '?'} ms (2 200 demandees)`
     + ` · ET LES AUTRES BANDEAUX NE SONT PAS DECALES : hors reservation, une pastille de priorite 0`
     + ` prend l'ecran a l'instant (« ${r.temoinPrio0} ») et la suivante la remplace a l'instant`

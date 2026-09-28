@@ -2795,6 +2795,14 @@ window.__G = {
   // la page pendant une attente, et son step() ferait vivre la ville sous le releve.
   setPause(v) { paused = !!v; },
   get msgAttente() { return msgAttente ? msgAttente.text : null; },
+  // LA RESERVATION DU BANDEAU, EN TEMPS DE JEU. Le n° 118 se mesurait en horloge REELLE, et le
+  // test 536 decidait donc au hasard : une page qui rend une image par seconde n'observe une
+  // bascule qu'a l'echantillon suivant, et cet echantillon tombe ou la charge machine veut.
+  // Or ce que la reparation PROMET n'est pas une duree observee, c'est une reservation, et elle
+  // est ecrite en temps de JEU (msgPrioT = simTime + ms / 1000). On expose donc la promesse :
+  // le test verifie ce que le jeu s'est engage a tenir, ce qui ne depend d'aucune charge.
+  get msgPrio() { return msgPrio; },
+  get msgReste() { return msgPrioT ? +(msgPrioT - simTime).toFixed(3) : 0; },
   get ECARTE_PIETON() { return typeof ECARTE_PIETON !== 'undefined' ? ECARTE_PIETON : null; },
   get msgVisible() { return msgEl.classList.contains('show') ? msgEl.textContent : ''; },   // le bandeau, ou '' s'il est efface
   updateAct: typeof updateAct === 'function' ? updateAct : null,

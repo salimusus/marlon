@@ -2775,6 +2775,24 @@ window.__G = {
   get habitants() { return typeof city !== 'undefined' ? (city.habitants || []) : []; },
   lacheBalancoire: typeof lacheBalancoire === 'function' ? lacheBalancoire : null,
   consigneProche: typeof consigneProche === 'function' ? consigneProche : null,
+  // n° 122 : l'arbitre de la chaîne d'action (le manège contre la voiture)
+  arbitreMontee: typeof arbitreMontee === 'function' ? arbitreMontee : null,
+  distManege: typeof distManege === 'function' ? distManege : null,
+  distCarrosserie: typeof distCarrosserie === 'function' ? distCarrosserie : null,
+  // n° 119 : le passant colle au pare-chocs s'ecarte quand on klaxonne
+  ecartePietons: typeof ecartePietons === 'function' ? ecartePietons : null,
+  schScoreMaj: typeof schScoreMaj === 'function' ? schScoreMaj : null,   // n° 120
+  get MSG_TRES() { return typeof MSG_TRES !== 'undefined' ? MSG_TRES : null; },   // n° 121
+  // n° 118 : le banc doit pouvoir repartir d'une banniere SANS reservation en cours, sinon un
+  // message laisse par un test voisin decide du releve.
+  msgRaz() { msgPrio = 0; msgPrioT = 0; msgAttente = null; clearTimeout(msgTimer);
+    msgEl.classList.remove('show', 'long', 'tres'); msgEl.textContent = ''; },
+  // GELER LE JEU pendant une mesure en horloge reelle : la boucle de rendu tourne encore dans
+  // la page pendant une attente, et son step() ferait vivre la ville sous le releve.
+  setPause(v) { paused = !!v; },
+  get msgAttente() { return msgAttente ? msgAttente.text : null; },
+  get ECARTE_PIETON() { return typeof ECARTE_PIETON !== 'undefined' ? ECARTE_PIETON : null; },
+  get msgVisible() { return msgEl.classList.contains('show') ? msgEl.textContent : ''; },   // le bandeau, ou '' s'il est efface
   updateAct: typeof updateAct === 'function' ? updateAct : null,
   remiseEnJeu: typeof remiseEnJeu === 'function' ? remiseEnJeu : null,
   relevageTick: typeof relevageTick === 'function' ? relevageTick : null,

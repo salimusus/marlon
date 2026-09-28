@@ -188,6 +188,15 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
   text-shadow:0 3px 0 rgba(0,0,0,.5),0 0 22px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;white-space:nowrap;z-index:4}
 #msg.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;max-width:90vw;text-align:center;line-height:1.15}
+/* UN BANDEAU DE CINQ LIGNES COUVRAIT 28 % DE LA HAUTEUR D'ECRAN (n° 121). Le projet a deja
+   repare un auvent qui bouchait 88,9 % de l'image : les surfaces masquees comptent. `#msg.long`
+   n'a qu'UNE taille, 32 px de haut en clamp(18px, 3,6vw, 32px), pour des textes qui vont de
+   dix-sept caracteres a DEUX CENT DIX-SEPT (« Ce vehicule n'a que 2 places : X et Y restent a
+   pied — prends une voiture plus grande ! ») : a 32 px et 90vw de large, cela fait cinq lignes
+   de 36,8 px, plus 20 px de marges, soit 204 px sur les 640 px de l'ecran du banc. On ajoute
+   donc un TROISIEME palier de taille pour les tres longs textes (`.tres`, pose par msg() au-dela
+   de MSG_TRES caracteres) : la phrase la plus longue du jeu tient alors sur trois lignes. */
+#msg.tres{font-size:clamp(14px,2.4vw,22px);line-height:1.1;padding:8px 16px}
 /* LE BANDEAU SORTAIT PAR LE HAUT SUR UN TELEPHONE COUCHE. Sa POSITION est un pourcentage de la
    HAUTEUR (top: 17 %, centre sur lui-meme) mais sa TAILLE un pourcentage de la LARGEUR (3,6vw) :
    sur un ecran large et bas — 812 x 375, le telephone couche — le message d'accueil « Bienvenue
@@ -201,6 +210,7 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
   #msg{top:10px;transform:translate(-50%,0) scale(.6);font-size:clamp(20px,4.4vw,34px)}
   #msg.show{transform:translate(-50%,0) scale(1)}
   #msg.long{font-size:clamp(15px,2.6vw,22px);max-width:84vw}
+  #msg.tres{font-size:clamp(12px,1.9vw,16px);line-height:1.08;max-width:88vw}
 }
 /* Le VIGNETTAGE et l'ÉTALONNAGE se faisaient ici, en CSS : le navigateur devait recomposer
    toute l'image par-dessus le jeu, et sur la télé on les coupait donc — l'image y était plus
@@ -540,6 +550,7 @@ body.tv #chatIn{font-size:calc(var(--uh) * .7);padding:calc(var(--uh) * .42)}   
 /* le grand message passe SOUS le bandeau à deux rangées : il se posait dessus */
 body.tv #msg{font-size:calc(var(--uh) * 2.6);top:calc(var(--tvpad) + var(--uh) * 7)}
 body.tv #msg.long{font-size:calc(var(--uh) * 1.5)}
+body.tv #msg.tres{font-size:calc(var(--uh) * 1.05);line-height:1.1}   /* n° 121 : cinq lignes couvraient 28 % de la hauteur */
 /* LE RADAR passe dans le coin bas droit : au centre, il masquait le joueur */
 body.tv #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad);transform:none;
   width:calc(var(--uh) * 7.6);height:calc(var(--uh) * 7.6);border-width:4px}
@@ -12287,6 +12298,47 @@ function pietonDerriere(c) {
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
   return false;
 }
+// ---- LE PASSANT COLLÉ AU PARE-CHOCS S'ÉCARTE QUAND ON KLAXONNE (n° 119) ----
+// MESURE DU CONTRÔLEUR : 1 800 images, le passant reste entre 0,78 et 0,98 m du pare-chocs, il
+// NE BOUGE PAS, et la voiture reste bridée à 8,6 km/h (SORTIE_PAS). Le klaxon ne faisait que
+// du BRUIT : `klaxonne` joue un son, point. Le commentaire du round 83 promettait « il
+// klaxonne, et le passant s'écarte en deux secondes » — personne ne l'avait écrit.
+// LE JEU SAIT DÉJÀ FAIRE FUIR UN HABITANT, et c'est `combatTick` : `b.fight = 'flee'` avec
+// `b.fuitDe` (l'objet dont il s'éloigne, relu à CHAQUE image), `b.fuiteFin` et `b.fightT`.
+// Quand ce qu'il fuit n'est pas le joueur (`parBot`), il RECULE à 2,6 m/s au lieu de détaler à
+// 5,5 — c'est exactement ce qu'on veut d'un passant devant un capot : il s'écarte, il ne
+// traverse pas la ville. On lui donne donc LA VOITURE à fuir (`{ pos: c }`, donc les
+// coordonnées vivantes de la caisse), et il ne fait pas demi-tour pour se battre puisque
+// `combatTick` ne l'autorise que si `b.fuitDe` est vide.
+function ecartePietons(c, avant) {
+  let n = 0;
+  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  // le MÊME couloir que `pietonDevant` / `pietonDerriere`, sur 3 m de plus que la carrosserie :
+  // celui qu'on bride est celui qu'on écarte, jamais un passant du trottoir d'en face.
+  const lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.6), portee = (c.baseD || 4.4) / 2 + 3;
+  for (const b of bots) {
+    if (b.drive || b.ko || b.prison || !b.av || !b.av.group || !b.av.group.visible) continue;
+    const dx = b.pos.x - c.x, dz = b.pos.z - c.z;
+    const al = (dx * fx + dz * fz) * (avant ? 1 : -1);
+    if (al <= 0 || al > portee || Math.abs(-dx * fz + dz * fx) >= lat + 0.4) continue;
+    if (Math.abs(b.pos.y - (c.y || 0)) > 2.4) continue;
+    // IL S'ÉCARTE DE CÔTÉ, IL NE COURT PAS DEVANT LE CAPOT. Ce qu'il fuit n'est pas la voiture
+    // (il resterait dans son couloir, poussé en avant, et la voiture le suivrait) : c'est SA
+    // PROPRE PROJECTION SUR L'AXE de la caisse. S'éloigner de ce point-là, c'est sortir du
+    // couloir par le côté le plus court — exactement ce que fait un passant.
+    let trav = -dx * fz + dz * fx;
+    // pile dans l'axe : il choisit un côté, et toujours LE MÊME (aucun tirage au sort)
+    if (Math.abs(trav) < 0.15) trav = ((b.pos.x + b.pos.z) % 1 + 1) % 1 < 0.5 ? -0.15 : 0.15;
+    const surAxe = { x: b.pos.x + fz * trav, y: c.y || 0, z: b.pos.z - fx * trav };
+    b.fight = 'flee'; b.fuitDe = { pos: surAxe };   // ce n'est pas l'enfant qu'il fuit : 2,6 m/s
+    b.fuiteFin = simTime + ECARTE_PIETON; b.fightT = simTime + ECARTE_PIETON;
+    b.wait = 0; b.dance = 0; b.garde = false; if (b.av.rig) b.av.rig.garde = false;
+    n++;
+  }
+  return n;
+}
+const ECARTE_PIETON = 3.2;   // il s'écarte 3,2 s : un peu plus que le repos du klaxon (2,4 s)
+const ECARTE_DELAI = 2.4;    // il ne s'écarte qu'au SECOND coup de klaxon (2,4 s bloqué)
 // ================= LE DEMI-TOUR SUR PLACE =================
 // LA PIECE QUI MANQUAIT AUX DEUX PILOTES AUTOMATIQUES. Un vehicule a l'arret qui doit repartir
 // DANS L'AUTRE SENS ne savait pas tourner : il recevait un point de passage derriere lui et
@@ -14331,13 +14383,21 @@ function schLire() {   // relit la question et les réponses
   const n = ['un', 'deux', 'trois', 'quatre'];
   schDire(`${q.q} ... ${q.opts.map((o, i) => `Réponse ${n[i]} : ${o}`).join('. ')}`);
 }
+// LA LIGNE « SCORE » SE RAFRAÎCHIT TOUT DE SUITE (n° 120). Elle n'était écrite que dans
+// `nextQuestion`, donc elle montrait le score d'AVANT la réponse qu'on venait de donner, et
+// l'exercice suivant n'arrive qu'1,5 s plus tard (2,8 s sur une faute, le temps que la craie
+// finisse sa phrase) : pendant tout ce temps l'enfant lisait un score périmé.
+function schScoreMaj() {
+  const el = $('schScore'); if (!el) return;
+  el.textContent = `Score : ${school.ok}/${school.tot} · série ${school.streak}`;
+}
 function nextQuestion() {
   const q = schTirage(school.subj, school.age); school.q = q;
   $('schQuestion').textContent = q.q; $('schFig').innerHTML = q.fig ? `<div style="font-size:30px">${q.fig}</div>` : '';
   const num = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
   $('schChoices').innerHTML = q.opts.map((o, i) => `<div class="item" data-i="${i}"><span class="e">${num[i]}</span>${o}</div>`).join('');
   $('schChoices').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => answer(q.opts[+el.dataset.i], el)));
-  $('schScore').textContent = `Score : ${school.ok}/${school.tot} · série ${school.streak}`;
+  schScoreMaj();
   tableauQuestion(q);
   schLire();
 }
@@ -14351,6 +14411,7 @@ function answer(v, el) {
     // la bonne carte se repérait par son texte : le numéro ajouté devant l'avait cassé
     $('schChoices').querySelectorAll('.item').forEach(x => { if (q.opts[+x.dataset.i] === q.a) { x.style.background = '#d6ffd6'; x.style.borderColor = '#5cc453'; } });
     schDire(`Faux ! La bonne réponse était : ${q.a}`); }
+  schScoreMaj();   // n° 120 : le score compte la réponse qu'on vient de donner, pas la précédente
   const craie = tableauVerdict(q, v, good, Math.max(0, wallet - w0)) || 0;
   // on laisse la craie finir sa phrase avant de passer a l'exercice suivant
   school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, Math.max(good ? 1500 : 2800, craie * 1000 + 1200));
@@ -20327,6 +20388,30 @@ function interieurEntre(r) {
   // CE QUI CONTINUE DE FERMER LA VUE : tout ce qui est à HAUTEUR D'HOMME dans la cage. Une marche
   // devant soi, le limon, une carcasse garée au pied de l'escalier, un meuble du même étage. La
   // caméra ne peut donc pas passer sous l'escalier, ni traverser une volée par le flanc.
+  // ---- CE QU'IL RESTE, MESURÉ, ET POURQUOI ON N'Y TOUCHE PAS (n° 117) ----
+  // BALAYAGE DE TOUTE LA CAGE AU PAS DE 30 cm, du palier du rez à la coursive du 1er, quatre caps
+  // par pas : 63 pas, 252 relevés. HUIT relevés sous le confort de 4,60 m, pire 1,15 m, et TOUJOURS
+  // sur un seul cap sur quatre : les pas 10 à 13 (volée montante, x -159,70, y 1,16 et 1,48) au cap
+  // OUEST, et les pas 44 à 47 (volée descendante, x -157,10, y 2,76 et 3,08) au cap EST — les 3ᵉ et
+  // 4ᵉ marches de chaque demi-volée, symétriquement. Tout le reste rend 4,94 à 4,95 m, `cam.plafond`
+  // vaut 9 m et `cam.pmax` 0,42 rad aux 252 relevés : la montee n'est plus interdite, le n° 109 tient.
+  // EN MONTANT NORMALEMENT la perche ne descend JAMAIS sous 4,94 m (cap nord sur la volée montante,
+  // cap sud sur la descendante, 63 pas sur 63) : il faut s'arrêter sur l'une de ces quatre marches
+  // ET pousser le stick de côté.
+  // LA GÉOMÉTRIE QUI FERME CE CAP-LÀ : c'est LE FLANC DE L'AUTRE DEMI-VOLÉE. Les marches de la bande
+  // voisine (2,60 × 0,32 × 0,66 m, à 2,60 m en travers, face la plus proche à 1,00 m) se trouvent
+  // pile à hauteur d'œil de la caméra quand l'enfant est au milieu de sa propre volée : sur la
+  // montante la caméra bute sur les marches de la descendante à y 1,80 / 2,12 / 2,44 / 2,76 m, et
+  // réciproquement. Elles ne sont ni un garde-corps (`rambarde`), ni une dalle (leur petit côté fait
+  // 0,66 m, il en faut 1,20), ni un mur (0,32 m de haut, il en faut 2,20) : elles ferment donc,
+  // exactement comme le dit la règle ci-dessous.
+  // ON N'Y TOUCHE PAS, ET C'EST UN CHOIX. Les rendre traversables, c'est rendre traversable UNE
+  // VOLÉE D'ESCALIER — ce que l'enfant doit voir, et ce que le n° 109 interdit noir sur blanc
+  // (« UNE CAGE D'ESCALIER N'EFFACE RIEN ») : la caméra passerait derrière l'autre volée et la
+  // ferait fondre à 22 %, c'est-à-dire le défaut d'origine (« on ne voit ni escalier ni plancher ni
+  // mur »). Elles ne sont pas non plus « étroites » au sens du jeu : 2,60 m, soit 3,7 fois le seuil
+  // de 0,70 m en dessous duquel la caméra a le droit de regarder à côté d'un poteau. Huit relevés
+  // sur 252 (3,2 %), sur un geste que l'enfant ne fait pas en montant : on paie ce prix-là.
   if (r.cage) {
     const yObj = P.pos.y + 1.5, yCeint = P.pos.y + 0.45;
     const emprises = [{ x: r.x, z: r.z, w: r.w, d: r.d }].concat(r.emprises || []);
@@ -21851,7 +21936,8 @@ function netTick(dt, myAnim, sp) {
 }
 
 // ================= INTERFACE =================
-const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0;
+const MSG_TRES = 100;   // au-delà de 100 caractères, le bandeau passe à sa plus petite taille (n° 121)
+const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0, msgAttente = null;   // msgAttente : la phrase qui attend son tour (n° 118)
 // Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
 // deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
 // au lieu d'une quarantaine de libellés qui parlaient de « E » et « Espace ».
@@ -21897,12 +21983,40 @@ function ctrlText(t) {
 // L'horloge est celle du JEU (simTime), comme l'appui long de la croix : le banc avance la
 // simulation sans avancer la montre. Le minuteur d'effacement libère aussi la réservation,
 // pour qu'un menu qui gèle simTime ne verrouille pas la bannière.
+// ===== LE MESSAGE QUI SAUVE L'ENFANT N'EST PLUS RECOUVERT DANS LA MÊME IMAGE (n° 118) =====
+// « Tu as renversé X ! Il va porter plainte… » (voir `ecrase`) était écrite, puis RÉÉCRITE DANS LA
+// MÊME IMAGE par « Une ambulance a été appelée » (`ambulanceAppel`, priorité 1) : c'est le MÊME tour
+// de la boucle `ecrase` qui appelle msg() puis, cinq lignes plus bas, ambulanceAppel(), qui
+// msg() à son tour. MESURE AVANT : la première phrase restait à l'écran 0 image et 0 ms sur
+// les 3 000 ms demandées, la seconde ses 2 200 ms. L'enfant ne lisait donc JAMAIS la phrase
+// qui lui explique la chaîne de cause à effet qu'on vient de construire pour lui.
+// DEUX CORRECTIFS, tous les deux avec ce que la bannière avait déjà :
+//   1. la phrase de la plainte passe en PRIORITÉ 2 — c'est exactement ce que le n° 97 appelle
+//      « une annonce qui raconte ce qui vient d'arriver » : elle réserve l'écran pour ses 3 s ;
+//   2. une annonce (prio >= 1) qui arrive pendant une réservation n'est plus JETÉE : elle
+//      attend son tour dans UNE case et prend l'écran dès que la réservation se libère. UNE
+//      seule case (la dernière arrivée gagne) et SEULEMENT pour les annonces : les conseils de
+//      proximité (prio 0) se reposent à chaque image et restent simplement ignorés, sinon le
+//      bandeau partirait en file de plusieurs centaines d'entrées.
+// APRÈS : « Tu as renversé… » 3 000 ms, PUIS « Une ambulance a été appelée » 2 200 ms — les
+// deux se lisent, dans l'ordre de la chaîne de cause à effet.
 function msg(text, ms = 1400, prio = 0) {
-  if (prio < msgPrio && simTime < msgPrioT) return;
+  if (prio < msgPrio && simTime < msgPrioT) {
+    if (prio > 0) msgAttente = { text, ms, prio };   // elle attend son tour au lieu d'être perdue
+    return;
+  }
   msgPrio = prio; msgPrioT = prio > 0 ? simTime + ms / 1000 : 0;
   text = ctrlText(text);
-  msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16); msgEl.classList.add('show');
-  clearTimeout(msgTimer); msgTimer = setTimeout(() => { msgEl.classList.remove('show'); msgPrio = 0; msgPrioT = 0; }, ms);
+  msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16);
+  msgEl.classList.toggle('tres', text.length > MSG_TRES);   // n° 121 : un troisième palier de taille
+  msgEl.classList.add('show');
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => {
+    msgPrio = 0; msgPrioT = 0;
+    const suite = msgAttente; msgAttente = null;
+    if (suite) msg(suite.text, suite.ms, suite.prio);   // la phrase en attente prend l'écran
+    else msgEl.classList.remove('show');
+  }, ms);
 }
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -28556,10 +28670,19 @@ function conduire(c, cmd, dt) {
     const devant = pietonDevant(c, V.speed), derriere = pietonDerriere(c);
     if (devant || derriere) {
       V.speed = clamp(V.speed, -SORTIE_PAS, SORTIE_PAS);
+      if (!c.pietBloqueT) c.pietBloqueT = simTime;   // n° 119 : depuis quand quelqu'un est-il dans le couloir ?
       if (simTime > (c.avertPietT || 0)) { c.avertPietT = simTime + 2.4; klaxonne(c);
-        msg(devant ? '🚸 Attention ! Quelqu\'un est juste devant la voiture' : '🚸 Attention ! Quelqu\'un est juste derrière la voiture', 1800); }
-    }
-  }
+        // n° 119, LES DEUX MOITIÉS. 1) Le klaxon ÉCARTE vraiment le passant — mais pas au premier
+        // blip : personne ne bondit au premier coup de klaxon, et le plafond de vitesse doit
+        // garder le temps de mordre (c'est LUI qui rend l'écrasement impossible). Dès le SECOND
+        // coup (ECARTE_DELAI = 2,4 s bloqué), il s'écarte de côté pour de bon.
+        // 2) Le bandeau DIT LA MANŒUVRE : la seule issue mesurée était la marche arrière (37,3 m
+        // parcourus) et le message n'en parlait pas. Reculer, c'est S au clavier, L2 à la manette.
+        if (simTime - c.pietBloqueT >= ECARTE_DELAI) ecartePietons(c, !!devant);
+        msg(devant ? '🚸 Attention ! Quelqu\'un devant — recule (S ou L2) pour te dégager'
+          : '🚸 Attention ! Quelqu\'un derrière — avance doucement pour te dégager', 1800); }
+    } else c.pietBloqueT = 0;   // le couloir est libre : le compteur d'attente repart de zéro
+  } else if (c.pietBloqueT) c.pietBloqueT = 0;   // on a quitté la place : le compteur ne survit pas
   const accLong = (V.speed - v0) / Math.max(dt, 1e-3);
   if (pilote && P.jumpBuf > 0) { P.jumpBuf = 0; if (c.kind === 'buggy') { if (!c.airborne && (c.vy || 0) <= 0.01 && simTime > (c.hopT || 0)) { c.hopT = simTime + 0.9; c.vy = 9.5; c.airborne = true; c.susp = -0.2; sfx.jump(); burst(c.x, c.y + 0.3, c.z, 0xc9a86a, 6); } } else horn(c.kind); }   // SAUT : le buggy bondit, les autres klaxonnent
   if (c.rider) { c.tilt += ((-ix * (sp.lean || 0.3) * Math.min(1, Math.abs(V.speed) / 8)) - c.tilt) * Math.min(1, dt * 6); }
@@ -29070,7 +29193,7 @@ function ecraseAuSol(c, V) {
       // « pas de témoin, pas d'étoile » reste entière, on lui ajoute un témoin.
       if (policeTemoin(28)) infraction('écraser ' + b.name, 1, 2);
       else { b.porteplainte = simTime + PLAINTE_ECRASE;
-        msg(`🚑 Tu as renversé ${b.name} ! Il va porter plainte…`, 3000);
+        msg(`🚑 Tu as renversé ${b.name} ! Il va porter plainte…`, 3000, 2);   // n° 118 : prio 2, elle réserve l'écran ; l'ambulance (prio 1) attend son tour
         botSay(b, ['je vais porter plainte !', 'tu vas le regretter…', 'je le dirai à la police !']); }
       vehicleDamage(c, 4); }
     // L'AMBULANCE VIENT AUSSI POUR UN BLESSE LOURD. Elle n'etait appelee qu'a zero point de
@@ -31112,6 +31235,59 @@ function cityVie(dt) {
   jailAttenteTick();
   const cp2 = consigneProche(); if (cp2 !== VILLE.consigne) { VILLE.consigne = cp2; updateAct(); }
 }
+// ========== L'ACTION LA PLUS PROCHE, ET A EGALITE LA MOINS PUNISSANTE (defaut n° 122) ==========
+// « Un enfant de huit ans marche vers la grande roue — l'endroit du jeu ou il va en premier —,
+// la consigne s'arme, il appuie sur △, et la police le recherche pour vol de voiture. »
+// LA CAUSE, lue dans le code : la touche E (et △, qui passe par le meme keydown, voir
+// PAD_MAP[3] et telTouche) execute LA PREMIERE action d'une chaine de quarante-cinq `else if`,
+// et cette chaine teste `city.near` (voiture libre) puis `city.jackNear` (voiture OCCUPEE,
+// deux etoiles de recherche) AVANT `city.rideNear`, qui vient trente branches plus loin.
+// MESURE AVANT (fete foraine, moyeu de la grande roue en (12 ; 158), rayon d'accroche 5 m,
+// 4 caps x 12 distances = 48 releves par scenario) :
+//   - la roue seule : 28 releves montent bien dans la roue... mais la PASTILLE est vide sur
+//     48 releves sur 48 — `consigneProche` ne parlait d'aucun manege ;
+//   - une voiture LIBRE a 2,2 m : 48 releves sur 48 mettent au volant, la roue n'est JAMAIS
+//     atteignable, pastille « 🚗 E : monter » ;
+//   - une voiture OCCUPEE a 2,2 m : 39 releves sur 48 volent la voiture (+2 etoiles), dont 28
+//     ou la roue etait armee au meme instant, et la pastille est vide sur 48 sur 48.
+// LES DISTANCES DES DEUX CONSIGNES, au meme endroit (6 m a l'est du moyeu, le point du
+// controleur) : la SURFACE de la roue est a 1,00 m du joueur (6 m du moyeu moins les 5 m de
+// rayon), la carrosserie de la voiture a 0,80 m. Vingt centimetres d'ecart : pour la main de
+// l'enfant, les deux actions sont au meme endroit. De 1 a 5 m du moyeu la roue est a 0,00 m,
+// donc STRICTEMENT plus proche ; a 7 m elle est a 2,00 m, donc franchement plus loin.
+// CE QU'ON RETIENT — deux regles, et pas « le manege avant la voiture » dans l'absolu :
+//   1. l'action la plus proche gagne, en distance a la SURFACE de l'objet (c'est ce que
+//      l'enfant voit : il est contre la roue, ou contre la portiere) ;
+//   2. a EGALITE — moins de MEME_ENDROIT d'ecart — la moins punissante gagne ; et une action
+//      qui rend l'enfant RECHERCHE ne gagne jamais contre une action inoffensive armee au
+//      meme endroit, quelle que soit la distance. Voler une voiture occupee est la seule
+//      action de cette chaine qui coute deux etoiles.
+// Le vol de voiture n'est pas desarme pour autant : sans manege a portee, `arbitreMontee`
+// rend null, la chaine ne change pas d'un iota et △ vole toujours la voiture (contre-epreuve).
+const MEME_ENDROIT = 0.5;   // deux surfaces a moins d'un demi-pas : pour la main, le meme endroit
+// Distance du joueur a la CARROSSERIE (boite orientee du vehicule), et non a son centre.
+function distCarrosserie(c) {
+  if (!c) return Infinity;
+  const dx = P.pos.x - c.x, dz = P.pos.z - c.z, cs = Math.cos(c.h || 0), sn = Math.sin(c.h || 0);
+  const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, half = c.half || [1.4, 2.4];
+  return Math.hypot(Math.max(0, Math.abs(lx) - half[0]), Math.max(0, Math.abs(lz) - half[1]));
+}
+// Distance du joueur au manege : le pourtour pour ceux qui ont un rayon, sinon le point d'entree.
+function distManege(r) {
+  if (!r) return Infinity;
+  const e = Math.hypot(P.pos.x - r.ex, P.pos.z - r.ez);
+  return r.rayon ? Math.min(e, Math.max(0, Math.hypot(P.pos.x - r.x, P.pos.z - r.z) - r.rayon)) : e;
+}
+// 'manege' : le manege doit passer devant la voiture. 'voiture' : la voiture garde la main.
+// null : AUCUN conflit (pas de manege, ou pas de voiture) — la chaine de E reste telle quelle.
+function arbitreMontee() {
+  if (!city.on || P.ride || drive.car) return null;
+  if (!city.rideNear || (!city.near && !city.jackNear)) return null;
+  const dm = distManege(city.rideNear), dl = distCarrosserie(city.near);
+  // Il ne reste que la roue et une voiture OCCUPEE : la punition ne gagne jamais ici.
+  if (!city.near) return 'manege';
+  return dm <= dl + MEME_ENDROIT ? 'manege' : 'voiture';
+}
 // CE QU'ON PEUT FAIRE ICI, EN UNE LIGNE. Devant le guichet de la banque ou le comptoir du
 // concessionnaire, la pastille disait « 🚩 Il te faut un membre de ton gang… » ou le nom du
 // quartier : rien ne disait quoi faire (n° 23 du Joueur). Le message fugitif « E : … » ne
@@ -31127,6 +31303,12 @@ function consigneProche() {
   if (P.swing) return '🎠 Espace : saut';
   if (P.ride) return '🎡 Espace : descendre';
   if (drive.car || P.sit || P.ride || P.swing) return null;
+  // n° 122 : LA PASTILLE DIT CE QUE LA TOUCHE VA FAIRE. Quand une voiture est garée contre un
+  // manège, la chaîne de E fait maintenant monter dans le MANÈGE (voir arbitreMontee) : la
+  // pastille doit le dire au même instant, sinon on retombe sur le défaut d'origine — la
+  // pastille annonçait « 🚗 E : monter » alors que l'enfant visait le manège.
+  const montee = arbitreMontee();
+  if (montee === 'manege') return `${city.rideNear.e} E : monter dans ${city.rideNear.n}`;
   if (city.deskNear) return '🏦 E : déposer ou retirer';
   if (city.concesNear) return '🚗 E : acheter une voiture';
   if (city.tuneNear) return '🔧 E : garage';
@@ -31137,10 +31319,16 @@ function consigneProche() {
   if (city.gunNear) return '🔫 E : armurerie';
   if (city.vitNear) return '🛍️ E : entrer dans la boutique';
   if (city.offNear) return '📋 E : les missions';
+  // À sa place EXACTE dans la chaîne de E (juste après les missions). La pastille était vide
+  // sur 48 relèvés sur 48 devant la grande roue : rien ne proposait le manège à l'enfant.
+  if (city.rideNear && !montee) return `${city.rideNear.e} E : monter dans ${city.rideNear.n}`;
   if (city.slotNear) return '🎰 E : jouer';
   if (city.tableNear) return '🃏 E : jouer';
   if (city.classNear) return '🏫 E : la leçon';
   if (city.near) return '🚗 E : monter';
+  // ON PRÉVIENT AVANT DE PUNIR : voler une voiture OCCUPÉE coûte deux étoiles de recherche, et
+  // rien ne le disait à l'écran passée la bulle de 1,8 s.
+  if (city.jackNear) return '🚗 E : voler cette voiture (la police te cherchera !)';
   if (city.benchNear) return '🪑 E : s\'asseoir';
   return null;
 }
@@ -32695,7 +32883,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyT' && running && !paused && !uiOpen) { $('chat').classList.add('open'); $('chatBtn').classList.add('on'); micro.demarrer(); return; }   // T comme « talk » : parler au micro
   // KeyE : cette branche sortait AVANT keys.add(e.code) — keys.has('KeyE') restait donc
   // toujours faux et le maintien de E pour forcer un coffre ne fonctionnait pas.
-  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof jouetActionPrete === 'function' ? jouetActionPrete() : null; if (flr) jouetAction(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else if (typeof drone !== 'undefined' && drone.actif && !drone.vol && Math.hypot(drone.x - P.pos.x, drone.z - P.pos.z) < 3.5) dronePoser(); else startDance(3); return; }
+  if (e.code === 'KeyE' && running && !paused) { keys.add('KeyE'); const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof jouetActionPrete === 'function' ? jouetActionPrete() : null; if (flr) jouetAction(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) coupMonter(); else if (city.rideBot) botDescendre(city.rideBot, true); else if (city.botCarNear) monterAvecBot(city.botCarNear); else if (drive.car) exitCar(); else if (arbitreMontee() === 'manege') rideEnter(city.rideNear); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.voileNear) prendreVoile(city.voileNear); else if (P.voile) rangeVoile(false); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); else if (city.boulotNear) prendreBoulot(city.boulotNear); else if (typeof drone !== 'undefined' && drone.actif && !drone.vol && Math.hypot(drone.x - P.pos.x, drone.z - P.pos.z) < 3.5) dronePoser(); else startDance(3); return; }
   if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') && running && !paused && !drive.car) {
     const t = performance.now();
     if (t - (P.tapT || -9999) < 340 && !P.essouffle && P.energie > 10) { P.run = true; msg('🏃 Tu cours !', 900); }
@@ -32833,7 +33021,8 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 $('aimBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.aimToggle = !P.aimToggle; $('aimBtn').classList.toggle('on', P.aimToggle); });
 $('drawBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) drawWeapon(); });
 for (const [id, k] of [['aimUp', 'upHeld'], ['aimDown', 'downHeld2']]) { $(id).addEventListener('pointerdown', e => { e.preventDefault(); P[k === 'downHeld2' ? 'downAim' : 'upHeld'] = true; }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $(id).addEventListener(ev, () => { P[k === 'downHeld2' ? 'downAim' : 'upHeld'] = false; }); }
-$('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
+$('carBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (!running || paused) return; if (city.jackNear && !city.near && arbitreMontee() === 'manege') { msg(`${city.rideNear.e} Appuie sur E pour monter dans ${city.rideNear.n}`, 1600); return; }   // ctrlText traduit le E en ✋ ou en △   // n° 122 : pas deux étoiles pour rien
+if (coup.etat === 'pret' && coup.car && Math.hypot(P.pos.x - coup.car.x, P.pos.z - coup.car.z) < 4.5) { coupMonter(); return; } if (city.rideBot) { botDescendre(city.rideBot, true); return; } if (city.botCarNear) { monterAvecBot(city.botCarNear); return; } if (drive.car) exitCar(); else if (city.near) enterCar(city.near); else if (city.jackNear) stealCar(city.jackNear); });
 $('raceBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused) { if (drive.car && drive.car.heli) startHeliRace(); else launchRace(); } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('racketBtn').addEventListener(ev, () => { P.handHeld = false; });
 $('racketBtn').addEventListener('pointerdown', e => { e.preventDefault(); P.handHeld = true; if (running && !paused) { const kid = typeof peutKidnapper === 'function' ? peutKidnapper() : null, otg = typeof otageProche === 'function' ? otageProche() : null, dte = typeof membreQuiDoute === 'function' ? membreQuiDoute() : null, rec = typeof recrueAchetable === 'function' ? recrueAchetable() : null; const flr = typeof jouetActionPrete === 'function' ? jouetActionPrete() : null; if (flr) jouetAction(flr); else if (dte) retiensMembre(dte); else if (rec) acheterRecrue(rec); else if (kid) kidnapper(kid); else if (otg) interroger(otg); else if (city.slotNear) ouvreCasino('machine', city.slotNear); else if (city.tableNear) ouvreCasino(city.tableNear.kind, city.tableNear); else if (city.rackNear) toggleRacket(); else if (P.deco) dropDecor(); else if (city.parcelNear) grabParcel(city.parcelNear); else if (city.decoNear) reprendreDeco(city.decoNear); else if (city.hoopNear || (city.hoop && city.hoop.held)) grabBall(); else if (city.trampNear) { P.vel.y = Math.sqrt(2 * G * 11); P.grounded = false; P.standing = null; sfx.bounce(); burst(P.pos.x, P.pos.y, P.pos.z, 0x4f8dff, 6); } else if (P.snack && !P.eat) eatCarried(); else if (city.medNear) openHospital(); else if (city.fridgeNear) openFridge(); else if (city.stoveNear) useStove(); else if (city.bedNear) sleepBed(); else if (city.meterNear) payMeter(); else if (city.safeNear) { /* maintien géré dans safesTick */ } else if (city.tuneNear) openAtelier(); else if (city.concesNear) openConces(); else if (city.tatooNear) openTatoo(); else if (city.coiffeurNear) openCoiffeur(); else if (city.plainteNear) openPlainte(); else if (city.deskNear) openBank(); else if (city.vitNear) openStore(city.vitNear.tab, city.vitNear.key); else if (city.gunNear) openStore('armes'); else if (city.offNear) openMissions(true); else if (city.rideNear) rideEnter(city.rideNear); else if (P.sit && P.sit.ecole) openSchool(P.sit.ecole); else if (city.benchNear && !P.sit) sitBench(city.benchNear); else if (city.classNear) openSchool(city.classNear); else if (city.shopNear) startGym(city.shopNear); else if (city.jetNear) toggleJet(); else if (city.swingNear) sitSwing(city.swingNear); else if (city.bouleNear) throwBoule(); else if (city.petNear) petAnimal(city.petNear); } });

@@ -25895,13 +25895,22 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     // ON GELE LE JEU pendant la mesure : `paused = true` arrete step(), donc simTime et toute
     // pastille de proximite qui viendrait salir le releve. Le minuteur du bandeau, lui, tourne.
     const etait = G.paused; if (G.setPause) G.setPause(true);
+    // ON MESURE AVEC UNE HORLOGE, PAS AVEC LA SOMME DES SIESTES DEMANDEES. Premier jet de ce
+    // test : `cumul += ms`, c'est-a-dire le total des `dodo(ms)` DEMANDES. Or la page rend une
+    // image par seconde sous swiftshader et la boucle de rendu affame les minuteurs : un
+    // `dodo(400)` prend deux secondes de vrai temps. Le test a donc annonce « la plainte 1 600 ms
+    // sur les 3 000 demandees » alors que le code tenait ses 3 000 ms — mesure a la sonde :
+    // plainte encore a l'ecran a 2 039 ms de vraie horloge, ambulance a 3 043 ms, bandeau vide a
+    // 5 763 ms. C'etait l'instrument qui mentait, pas le jeu. On lit donc performance.now().
+    const t0 = performance.now();
     const trace = [{ t: 0, txt: lu() }];
-    let cumul = 0;
-    for (const ms of [400, 400, 400, 400, 400, 400, 400, 400, 500, 500, 500, 500, 500, 500]) {
-      await dodo(ms); cumul += ms;
-      const txt = lu();
-      if (txt !== trace[trace.length - 1].txt) trace.push({ t: cumul, txt });
+    for (let i = 0; i < 40; i++) {
+      await dodo(120);
+      const txt = lu(), t = Math.round(performance.now() - t0);
+      if (txt !== trace[trace.length - 1].txt) trace.push({ t, txt });
+      if (t > 9000) break;
     }
+    R.duree = Math.round(performance.now() - t0);
     R.trace = trace;
     if (G.setPause) G.setPause(etait);
     G.exitCar(); G.clearWanted('fin');
@@ -25923,7 +25932,7 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
   const ok = /porter plainte/.test(A.plainte) && /ambulance/.test(A.apresAmbulance)      // LA CAUSE
     && /porter plainte/.test(B.plainte) && /porter plainte/.test(B.apresAmbulance)       // LA REPARATION
     && r.reel.touches >= 1 && r.reel.ambulance === 'route' && /porter plainte/.test(r.reel.banniere)
-    && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 3600
+    && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 7000   // le seuil BAS est la preuve ; le haut est large parce que la page rend une image par seconde
     && iVide > iAmb && T[iVide].t >= T[iAmb].t + 1800
     && /s'asseoir|asseoir/.test(r.temoinPrio0) && /BOOST/.test(r.temoinRemplace);
   return { ok, detail: `LA CAUSE, dans msg() : \`msgPrioT = prio > 0 ? simTime + ms / 1000 : 0\` — une`
@@ -25936,8 +25945,12 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     + ` — et l'ambulance n'est pas PERDUE, elle attend son tour dans la case (« ${B.enAttente} »)`
     + ` · LA VRAIE SEQUENCE DU JEU (un passant renverse a 12 m/s, ${r.reel.touches} touche, ambulance`
     + ` ${r.reel.ambulance}, plainte prevue : ${r.reel.plainteDans}) : le bandeau dit « ${r.reel.banniere} »`
-    + ` · LES DUREES, en horloge reelle (le bandeau s'efface sur un setTimeout, c'est la seule piece`
-    + ` du jeu qui ne se compte pas en images, et le jeu est gele pendant le releve) :`
+    + ` · LES DUREES, LUES A performance.now() (le bandeau s'efface sur un setTimeout : c'est la`
+    + ` seule piece du jeu qui ne se compte pas en images, et le jeu est gele pendant le releve).`
+    + ` PREMIER JET DE CE TEST : il additionnait les siestes DEMANDEES et annoncait « la plainte`
+    + ` 1 600 ms sur 3 000 » ; la page rend UNE IMAGE PAR SECONDE, un dodo(400) prend deux secondes,`
+    + ` et le code tenait bel et bien ses 3 000 ms (sonde a 50 ms : plainte a 2 039 ms, ambulance a`
+    + ` 3 043 ms, vide a 5 763 ms). C'etait l'instrument, pas le jeu :`
     + ` ${T.map(e => `${e.t} ms → « ${e.txt || '(rien)'} »`).join(' | ')} — soit la plainte ${T[iAmb] ? T[iAmb].t : '?'} ms`
     + ` (3 000 demandees), puis l'ambulance ${T[iVide] && T[iAmb] ? T[iVide].t - T[iAmb].t : '?'} ms (2 200 demandees)`
     + ` · ET LES AUTRES BANDEAUX NE SONT PAS DECALES : hors reservation, une pastille de priorite 0`
@@ -25974,10 +25987,19 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     // et Tom PLANTE a 0,90 m du pare-chocs, dans l'axe — la mesure du controleur.
     const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14)
       || G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    // L'EPINGLE. Ce test pretend mesurer « un passant colle au pare-chocs d'une voiture qui SORT
+    // D'UNE PLACE » : il doit donc rester dans cet etat-la du debut a la fin. Premier jet : plein
+    // gaz pendant 600 images, la voiture QUITTAIT le rectangle de parking au bout de deux
+    // secondes, `sortDeStationnement` passait faux, le plafond de 2,40 m/s se levait, et elle
+    // depassait Tom en le renversant (releve du chef : pointe 3,34 m/s, 4,3 de tole, le passant a
+    // -4,18 m du pare-chocs, c'est-a-dire DERRIERE). On la repose donc a sa place a CHAQUE image :
+    // la commande, la vitesse et le plafond vivent normalement, seule la geometrie est tenue.
+    const CX = -13, CZ = 8;
+    const epingle = () => { car.x = CX; car.z = CZ; car.h = 0; car.y = car.y || 0;
+      car.g.position.set(car.x, car.y, car.z); car.g.rotation.y = 0; G.vehicleSolid(car); };
     const essai = (images) => {
       if (G.drive.car) G.exitCar();
-      car.busy = false; car.dmg = 0; car.h = 0; car.x = -13; car.z = 8;
-      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      car.busy = false; car.dmg = 0; epingle();
       car.avertPietT = 0; car.pietBloqueT = 0;
       const avant = (car.baseD || 4.4) / 2;
       tom.hp = 100; tom.ko = 0; tom.hitT = 0; tom.wait = 9999; tom.fight = null; tom.fuitDe = null;
@@ -25985,18 +26007,25 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       tom.pos.set(car.x, 0.14, car.z + avant + 0.9); tom.av.group.position.copy(tom.pos);
       tom.av.group.visible = true;
       P.pos.set(car.x, (car.y || 0) + 0.4, car.z); G.enterCar(car);
-      const trace = []; let degage = -1, vMax = 0, bride = 0, dit = null;
+      // DEUX POINTES, PAS UNE. Premier jet : `vMax` sur toute la course, releve a 21 m/s — et
+      // c'etait JUSTE : des que le passant s'est ecarte, `pietonDevant` rend faux, le plafond se
+      // leve, et l'enfant qui tient toujours le gaz RECUPERE SA VOITURE. Mesurer la pointe
+      // apres le degagement pour juger le bridage etait un contresens. On mesure donc la pointe
+      // PENDANT que le plafond s'applique, et celle d'APRES separement : la seconde est la preuve
+      // qu'on n'a rien confisque a l'enfant.
+      const trace = []; let degage = -1, vBride = 0, vApres = 0, bride = 0, dit = null;
       G.keys.add('KeyW');
       for (let i = 0; i < images; i++) {
-        // le plein gaz, l'enfant qui insiste : la voiture ne bouge pas de son couloir
-        G.step(1 / 60, true);
+        // le plein gaz, l'enfant qui insiste : la voiture reste dans sa place (voir l'epingle)
+        G.step(1 / 60, true); epingle();
         // le passant est pousse par combatTick, appele par step() ; on le suit a chaque image
         const fx = Math.sin(car.h), fz = Math.cos(car.h);
         const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
         const al = dx * fx + dz * fz, trav = Math.abs(-dx * fz + dz * fx);
         const pare = al - (car.baseD || 4.4) / 2;   // distance au PARE-CHOCS
-        vMax = Math.max(vMax, Math.abs(G.drive.speed || 0));
-        if (G.sortDeStationnement(car, G.drive.speed) && G.pietonDevant(car, G.drive.speed)) bride++;
+        const v = Math.abs(G.drive.speed || 0);
+        const plafonne = G.sortDeStationnement(car, G.drive.speed) && G.pietonDevant(car, G.drive.speed);
+        if (plafonne) { bride++; vBride = Math.max(vBride, v); } else if (degage > 0) vApres = Math.max(vApres, v);
         if (!dit) { const t = el.textContent || ''; if (/Attention/.test(t)) dit = t.trim(); }
         if (i % 60 === 0 || i === images - 1) trace.push({ img: i, pare: +pare.toFixed(2), trav: +trav.toFixed(2) });
         // DEGAGE = il n'est plus dans le couloir de freinage de la voiture
@@ -26005,7 +26034,7 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       G.keys.delete('KeyW');
       const fx = Math.sin(car.h), fz = Math.cos(car.h);
       const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
-      const res = { degage, bride, dit, vMax: +vMax.toFixed(2), trace,
+      const res = { degage, bride, dit, vBride: +vBride.toFixed(2), vApres: +vApres.toFixed(2), trace,
         pareFin: +(dx * fx + dz * fz - (car.baseD || 4.4) / 2).toFixed(2),
         travFin: +Math.abs(-dx * fz + dz * fx).toFixed(2),
         hp: +(tom.hp == null ? 100 : tom.hp).toFixed(1), tole: +(car.dmg || 0).toFixed(2),
@@ -26018,8 +26047,7 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     //      ne reste que le klaxon et le plafond de vitesse, c'est-a-dire le jeu d'avant.
     R.avant = (() => {
       if (G.drive.car) G.exitCar();
-      car.busy = false; car.dmg = 0; car.h = 0; car.x = -13; car.z = 8;
-      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      car.busy = false; car.dmg = 0; epingle();
       car.avertPietT = 0; car.pietBloqueT = 0;
       const avant = (car.baseD || 4.4) / 2;
       tom.hp = 100; tom.ko = 0; tom.hitT = 0; tom.wait = 9999; tom.fight = null; tom.fuitDe = null;
@@ -26032,7 +26060,7 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
       for (let i = 0; i < 1800; i++) {
         car.pietBloqueT = G.simTime;        // le delai n'est jamais atteint : l'ancien comportement
         tom.fight = null; tom.fuitDe = null;
-        G.step(1 / 60, true);
+        G.step(1 / 60, true); epingle();
         const fx = Math.sin(car.h), fz = Math.cos(car.h);
         const pare = (tom.pos.x - car.x) * fx + (tom.pos.z - car.z) * fz - avant;
         pMin = Math.min(pMin, pare); pMax = Math.max(pMax, pare);
@@ -26066,7 +26094,8 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     && B.degage > 0 && B.degage < 400 && B.travFin > A.pareMin
     && B.hp === 100 && B.tole === 0 && !B.ambulance
     && /Attention/.test(B.dit || '') && /recule/.test(B.dit || '')
-    && B.vMax <= r.SORTIE_PAS + 0.05
+    && B.vBride <= r.SORTIE_PAS + 0.05        // bridee TANT QU'IL EST LA
+    && B.vApres > r.SORTIE_PAS + 1            // et l'enfant recupere sa voiture des qu'il s'ecarte
     && r.horsCouloir.ecartes === 0 && r.horsCouloir.bouge === 0;
   return { ok, detail: `LA CAUSE : \`klaxonne(c)\` ne fait que du BRUIT (\`if (d < 40) horn(c.kind)\`) —`
     + ` rien, dans tout le fichier, ne faisait s'ecarter un passant devant un capot, et le bandeau`
@@ -26074,11 +26103,17 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
     + ` · AVANT (l'ancien code rejoue : le delai d'ecartement repousse a chaque image) : ${A.images} images`
     + ` plein gaz, le passant reste entre ${A.pareMin} et ${A.pareMax} m du pare-chocs, il ne degage`
     + ` JAMAIS (${A.degage}), et la voiture reste bridee a ${A.vMax} m/s (${A.kmh} km/h)`
-    + ` · APRES : il degage le couloir a l'image ${B.degage} (${(B.degage / 60).toFixed(1)} s),`
+    + ` · APRES, LA VOITURE EPINGLEE DANS SA PLACE (premier jet de ce test : plein gaz, elle QUITTAIT`
+    + ` le rectangle de parking au bout de deux secondes, le plafond se levait, elle depassait Tom`
+    + ` en le renversant — pointe 3,34 m/s, 4,3 de tole, le passant a -4,18 m du pare-chocs, donc`
+    + ` DERRIERE ; le « degage a l'image 80 » de ce jet-la etait la voiture qui passait, pas le`
+    + ` passant qui s'ecartait) : il degage le couloir a l'image ${B.degage} (${(B.degage / 60).toFixed(1)} s),`
     + ` en s'ecartant DE COTE — ${B.travFin} m de l'axe a la fin, ${B.pareFin} m du pare-chocs —,`
     + ` etat « ${B.fuite} », et il n'a pas une egratignure (${B.hp} PV, ${B.tole} de tole,`
-    + ` ambulance=${B.ambulance}) · la voiture reste bridee a ${B.vMax} m/s tant qu'il est la`
-    + ` (${B.bride} images) · LE MESSAGE DIT LA MANŒUVRE : « ${B.dit} » (avant : « 🚸 Attention !`
+    + ` ambulance=${B.ambulance}) · la voiture reste bridee a ${B.vBride} m/s tant qu'il est la`
+    + ` (${B.bride} images) et L'ENFANT RECUPERE SA VOITURE des qu'il s'est ecarte : pointe`
+    + ` ${B.vApres} m/s ensuite, plafond leve — on ne lui a rien confisque`
+    + ` · LE MESSAGE DIT LA MANŒUVRE : « ${B.dit} » (avant : « 🚸 Attention !`
     + ` Quelqu'un est juste devant la voiture », aucune manœuvre)`
     + ` · relevés, une ligne par seconde : ${B.trace.map(t => `${t.img}: ${t.pare} m du pare-chocs, ${t.trav} m de l'axe`).join(' | ')}`
     + ` · TEMOIN, on n'ecarte que qui est dans le couloir : un passant a 4 m de l'axe n'est pas`
@@ -26095,31 +26130,46 @@ test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message 
 // n° 120 : `$('schScore').textContent` n'etait ecrit que dans `nextQuestion` — l'exercice suivant
 // n'arrive qu'1,5 s plus tard (2,8 s sur une faute, le temps que la craie finisse sa phrase), et
 // pendant tout ce temps l'enfant lisait le score d'AVANT sa reponse.
-test('le bandeau le plus long du jeu ne mange plus le quart de l\'ecran, et le Score de l\'ecole compte la reponse qu\'on vient de donner', async p => {
+test('le bandeau le plus long du jeu couvrait 60 % de l\'ecran et tient maintenant dans un cinquieme, et le Score de l\'ecole compte la reponse qu\'on vient de donner', async p => {
   const r = await p.evaluate(async () => {
     const G = __G, dodo = ms => new Promise(rr => setTimeout(rr, ms));
     __SHOT.go({ world: 4, x: -62, y: 1, z: 220, hour: 12, frais: true });
     const el = document.getElementById('msg');
-    const R = { MSG_TRES: G.MSG_TRES, ecran: [window.innerWidth, window.innerHeight] };
-    // LA PHRASE LA PLUS LONGUE DU JEU, mot pour mot (217 caracteres, `conduire`/`equipage`)
+    const R = { budget: G.MSG_HAUTEUR, plancher: G.MSG_PLANCHER, ecran: [window.innerWidth, window.innerHeight] };
+    // LA PHRASE LA PLUS LONGUE DU JEU, telle qu'elle etait ecrite AVANT qu'on borne la liste de
+    // noms : « Ce vehicule n'a que 2 places : X et Y restent a pied — prends une voiture plus
+    // grande ! », avec deux pseudos de la ville. C'est elle que le chef a relevee a 60,6 % de
+    // l'ecran. On mesure aussi la version BORNEE que le jeu envoie maintenant.
     const LONGUE = '\u{1F697} Ce véhicule n\'a que 2 places : Tom_le_ouf et Chloé_du_13 restent à pied \u{1F6B6} — prends une voiture plus grande ! Il faut un break, un van ou le camion du dépôt si tout le monde doit monter avec toi en même temps.';
-    R.longueur = LONGUE.length;
+    const BORNEE = G.nomsRestes
+      ? `\u{1F697} 2 places seulement : ${G.nomsRestes(['Tom_le_ouf', 'Chloé_du_13'])} restent à pied \u{1F6B6} — prends plus grand !`
+      : LONGUE;
+    R.longueur = LONGUE.length; R.longueurBornee = BORNEE.length;
     const boite = () => { const b = el.getBoundingClientRect();
-      return { h: Math.round(b.height), w: Math.round(b.width), pc: +(b.height / window.innerHeight * 100).toFixed(1),
-        lignes: Math.round(b.height / (parseFloat(getComputedStyle(el).lineHeight) || 1)),
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 1;
+      return { h: Math.round(b.height), w: Math.round(b.width),
+        pc: +(b.height / window.innerHeight * 100).toFixed(1),
+        lignes: Math.max(1, Math.round((b.height - 20) / lh)),
         police: +parseFloat(getComputedStyle(el).fontSize).toFixed(1) }; };
-    G.msg(LONGUE, 4000, 2);
+    // TROIS RELEVES, POUR ISOLER LES DEUX CAUSES.
+    G.msg(LONGUE, 6000, 2);
     await dodo(300);
-    R.apres = boite();
-    // AVANT : le meme texte sans le troisieme palier — c'est exactement l'ancien CSS
-    el.classList.remove('tres');
+    R.apres = boite();                                   // largeur reparee + budget de hauteur
+    el.style.fontSize = '';                              // on annule le serrage : largeur seule
+    await dodo(200);
+    R.largeurSeule = boite();
+    el.style.width = 'auto';                             // et on remet l'ancienne largeur : AVANT
     await dodo(200);
     R.avant = boite();
-    el.classList.add('tres');
-    // TEMOIN : un bandeau court ne change pas d'un pixel
+    el.style.width = ''; el.style.fontSize = '';
+    // ET LA PHRASE QUE LE JEU ENVOIE MAINTENANT, liste de noms bornee
+    G.msg(BORNEE, 4000, 2);
+    await dodo(250);
+    R.bornee = boite();
+    // TEMOIN : un bandeau court ne change pas d'un pixel et n'est jamais serre
     G.msg('\u{1F389} C\'est gagné !', 1200, 2);
     await dodo(250);
-    R.court = Object.assign(boite(), { classes: el.className });
+    R.court = Object.assign(boite(), { classes: el.className, serre: el.style.fontSize || '(aucun)' });
     // ---- n° 120 : LE SCORE DE L'ECOLE ----
     const salle = G.city.classes[0], ch = salle.chaises[0];
     G.P.pos.set(ch.x, 0.6, ch.z + 0.3); G.sitBench(ch);
@@ -26140,18 +26190,37 @@ test('le bandeau le plus long du jeu ne mange plus le quart de l\'ecran, et le S
     return R;
   });
   if (r.pourquoi) return { ok: false, detail: r.pourquoi };
-  const A = r.avant, B = r.apres, E = r.ecole;
-  const ok = A.pc > 24 && B.pc <= 18 && B.lignes <= 3 && B.lignes < A.lignes && B.police < A.police
-    && r.court.h < B.h && !/tres/.test(r.court.classes)
+  const A = r.avant, B = r.apres, L = r.largeurSeule, N = r.bornee, E = r.ecole;
+  const PLAFOND = 20;   // le budget que le jeu se donne : un cinquieme de la hauteur d'ecran
+  const ok = A.pc > 50 && A.lignes >= 8
+    && L.pc < A.pc && L.lignes < A.lignes
+    && B.pc <= PLAFOND && B.lignes < L.lignes && B.police < L.police
+    && N.pc <= PLAFOND && N.lignes <= B.lignes
+    && r.court.h < B.h && r.court.serre === '(aucun)'
     && /0\/0/.test(E.depart) && /1\/1/.test(E.justeApres) && E.justeApres === E.exerciceSuivant;
-  return { ok, detail: `n° 121 — la phrase la plus longue du jeu (${r.longueur} caracteres) sur un ecran`
-    + ` de ${r.ecran[0]} x ${r.ecran[1]} : AVANT ${A.h} px de haut (${A.pc} % de la hauteur d'ecran),`
-    + ` ${A.lignes} lignes de ${A.police} px ; APRES ${B.h} px (${B.pc} %), ${B.lignes} lignes de`
-    + ` ${B.police} px — le troisieme palier de taille se pose au-dela de ${r.MSG_TRES} caracteres`
-    + ` · TEMOIN, un bandeau court ne bouge pas : ${r.court.h} px, ${r.court.police} px de police,`
-    + ` classes « ${r.court.classes} » (pas de « tres »)`
-    + ` · n° 120 — la ligne « Score » n'etait ecrite que dans \`nextQuestion\`, donc elle montrait le`
-    + ` score d'AVANT la reponse pendant 1,5 s (2,8 s sur une faute) : a l'ouverture « ${E.depart} »,`
-    + ` puis une bonne reponse et, LU TOUT DE SUITE, « ${E.justeApres} » (l'etat du jeu dit`
-    + ` ${E.compteur}) — et l'exercice suivant n'y change plus rien : « ${E.exerciceSuivant} »` };
+  return { ok, detail: `n° 121 — la phrase la plus longue du jeu (${r.longueur} caracteres) sur un`
+    + ` ecran de ${r.ecran[0]} x ${r.ecran[1]}. DEUX CAUSES, isolees par trois releves :`
+    + ` AVANT ${A.h} px de haut, soit ${A.pc} % DE LA HAUTEUR D'ECRAN, ${A.lignes} lignes de`
+    + ` ${A.police} px dans une boite de ${A.w} px de large`
+    + ` · CAUSE 1, LA LARGEUR : \`max-width: 90vw\` ne servait a RIEN. Le bandeau est ancre a`
+    + ` \`left:50%\` sans \`right\` ni \`width\`, donc sa largeur automatique est un shrink-to-fit`
+    + ` calcule dans l'espace qui reste A DROITE de l'ancre — la moitie de l'ecran, jamais les`
+    + ` ${Math.round(r.ecran[0] * 0.9)} px que 90vw autorisait. \`width: max-content\` ignore l'espace`
+    + ` disponible : la boite passe a ${L.w} px de large et ${L.lignes} lignes, ${L.h} px (${L.pc} %)`
+    + ` · CAUSE 2, LA TAILLE DOSEE AU NOMBRE DE CARACTERES — une approximation du probleme. Le`
+    + ` probleme, c'est la HAUTEUR : \`msgAjuste()\` donne au bandeau un BUDGET de ${(r.budget * 100).toFixed(0)} %`
+    + ` de l'ecran et reduit la police jusqu'a le tenir, sans descendre sous ${(r.plancher * 100).toFixed(0)} %`
+    + ` de la taille que le CSS avait choisie (la tele garde sa lisibilite PROPORTIONNELLE) :`
+    + ` APRES ${B.h} px, soit ${B.pc} % de l'ecran, ${B.lignes} lignes de ${B.police} px`
+    + ` · ET LA MEILLEURE REPARATION DES TROIS, LA PHRASE ELLE-MEME : la liste de noms n'etait pas`
+    + ` bornee (quatre amis a pied et elle passait les trois cents caracteres). On nomme les deux`
+    + ` premiers et on COMPTE les autres : ${r.longueurBornee} caracteres au lieu de ${r.longueur},`
+    + ` ${N.h} px et ${N.lignes} lignes, soit ${N.pc} % de l'ecran`
+    + ` · TEMOIN, un bandeau court ne bouge pas et n'est jamais serre : ${r.court.h} px,`
+    + ` ${r.court.police} px de police, serrage ${r.court.serre}`
+    + ` · n° 120 — la ligne « Score » n'etait ecrite que dans \`nextQuestion\`, donc elle montrait`
+    + ` le score d'AVANT la reponse pendant 1,5 s (2,8 s sur une faute) : a l'ouverture`
+    + ` « ${E.depart} », puis une bonne reponse et, LU TOUT DE SUITE, « ${E.justeApres} »`
+    + ` (l'etat du jeu dit ${E.compteur}) — et l'exercice suivant n'y change plus rien :`
+    + ` « ${E.exerciceSuivant} »` };
 });

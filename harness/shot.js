@@ -2782,7 +2782,11 @@ window.__G = {
   // n° 119 : le passant colle au pare-chocs s'ecarte quand on klaxonne
   ecartePietons: typeof ecartePietons === 'function' ? ecartePietons : null,
   schScoreMaj: typeof schScoreMaj === 'function' ? schScoreMaj : null,   // n° 120
-  get MSG_TRES() { return typeof MSG_TRES !== 'undefined' ? MSG_TRES : null; },   // n° 121
+  // n° 121 : le budget de hauteur du bandeau
+  msgAjuste: typeof msgAjuste === 'function' ? msgAjuste : null,
+  nomsRestes: typeof nomsRestes === 'function' ? nomsRestes : null,
+  get MSG_HAUTEUR() { return typeof MSG_HAUTEUR !== 'undefined' ? MSG_HAUTEUR : null; },
+  get MSG_PLANCHER() { return typeof MSG_PLANCHER !== 'undefined' ? MSG_PLANCHER : null; },
   // n° 118 : le banc doit pouvoir repartir d'une banniere SANS reservation en cours, sinon un
   // message laisse par un test voisin decide du releve.
   msgRaz() { msgPrio = 0; msgPrioT = 0; msgAttente = null; clearTimeout(msgTimer);

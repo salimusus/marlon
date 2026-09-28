@@ -1464,3 +1464,26 @@ le nord ni par l'est.
 - **Mesures brutes** : `verification/r83qa2-122-touche-e-mesures.json`
 - **Loyauté** : la seule erreur console de tout mon contrôle (`botDriveTick … reading 'speed'`) vient de **mon** montage du troisième cas — j'ai posé un conducteur à la main (`b.drive = v ; v.rider = b`) sans les champs que le jeu attend. **Ce n'est pas un défaut du jeu** et je ne le compte pas comme tel ; partout ailleurs, sur onze sessions, **zéro erreur console**.
 
+
+## LE POSTE RÉPARATEUR DU ROUND 83 — r83-k (entrées 123 et 124)
+
+Deux constats **mesurés et volontairement NON réparés** pendant la réparation du n° 122. Ils sortent du périmètre qu'on m'avait donné (la fête foraine) et chacun est un chantier à part.
+
+### 123. La pastille d'action et la chaîne de la touche E ne sont d'accord que pour le couple manège / voiture — ailleurs, la pastille annonce une action et E en fait une autre
+- **Gravité** : GÊNANT. C'est **la même famille que le n° 122**, hors de la fête foraine, et le n° 122 était le défaut qui retenait la livraison.
+- **La cause, lue dans le code** : il y a **deux listes de priorités qui ne sont pas dans le même ordre**, et rien ne les tient ensemble.
+  - la **chaîne d'action**, `index.html` (le `keydown` de `KeyE`) : **49 branches `else if`**, et `city.near` (monter dans une voiture) y est en **11ᵉ** position, juste après `drive.car`.
+  - la **pastille**, `consigneProche()` : elle teste `deskNear`, `concesNear`, `tuneNear`, `medNear`, `plainteNear`, `tatooNear`, `coiffeurNear`, `gunNear`, `vitNear`, `offNear`, `slotNear`, `tableNear`, `classNear` — **treize couples** — **AVANT** `city.near`, alors que dans la chaîne tous ces treize-là viennent **après**.
+- **Exemple parlant, à reproduire** : devant le guichet de la banque, avec une voiture garée à **moins de 3,6 m** (la portée de `city.near`). La pastille affiche **« 🏦 E : déposer ou retirer »** et **E met au volant de la voiture**. Le même raisonnement vaut pour le concessionnaire, le garage, l'hôpital, le guichet des plaintes, le tatoueur, le coiffeur, l'armurerie, une vitrine, le bureau des missions, une machine ou une table de casino, et une salle de classe.
+- **Ce que le round 83 a réparé, et ce qu'il n'a pas réparé** : `arbitreMontee()` rend la pastille et la touche cohérentes **pour le seul couple manège / voiture** (mesuré : 144 relevés, 0 incohérence). Les **treize autres couples** restent à arbitrer, et chacun demande la même question qu'au n° 122 : *laquelle des deux actions est la plus proche, et à égalité laquelle punit le moins ?*
+- **Pourquoi je ne l'ai pas réparé** : treize arbitrages, chacun avec sa géométrie (un comptoir n'a pas de rayon, une vitrine en a un), sur la ligne la plus chargée du fichier. Ce n'est pas une retouche, c'est un chantier — et le faire à la va-vite dans le round qui livre, c'est exactement le risque que le n° 122 vient de nous coûter.
+- **Ce qui est déjà mesuré** : rien de ce paragraphe n'est relevé au banc. Les deux ordres sont **lus dans le code**, branche par branche ; l'exemple de la banque est une **déduction**, pas une capture. Le premier travail du prochain poste est de le relever.
+
+### 124. Le chemin TACTILE de l'action n'est couvert par aucun des 538 tests — deux boutons, deux chaînes différentes
+- **Gravité** : MINEUR pour un enfant qui joue sur PC, TV ou PS5 (le jeu visé) ; **inconnu** sur téléphone, faute de mesure.
+- **Ce que j'ai lu dans le code** : sur un écran tactile le jeu a **deux** boutons d'action, et **ils n'exécutent pas la même chaîne** :
+  - **✋ `racketBtn`** : sa chaîne **ne contient ni `city.near` ni `city.jackNear`**. C'est ce bouton que la pastille nomme (le « E » de `consigneProche` devient « ✋ » par `ctrlText`). Il ne peut donc **pas** prendre une voiture, ni en voler une.
+  - **🚗 `carBtn`** : chaîne à lui, qui finit par `near` (monter) puis `jackNear` (**voler**, deux étoiles).
+- **Conséquence mesurée nulle part** : avant le round 83, à la fête foraine, le bouton 🚗 volait la voiture occupée pendant que la pastille ne proposait rien. Un garde-fou a été posé (le bouton 🚗 refuse de voler quand l'arbitre donne le manège, et il dit quel bouton monte dans le manège), **mais il est raisonné sur le code, pas relevé** : aucun des 538 tests n'appuie sur `carBtn`.
+- **Ce qu'il faudrait** : un test qui presse les deux boutons tactiles dans les situations où les deux chaînes divergent (voiture à portée, voiture occupée, manège armé), avec `document.body.classList.add('touch')`. Et se demander, tant qu'on y est, si deux chaînes d'action valent mieux qu'une.
+- **Piège pour le prochain** : un libellé qui nomme un bouton **en dur** (« appuie sur ✋ ») mentira sur un autre appareil. Tous les messages doivent écrire « E » et laisser `ctrlText` le traduire en ✋ ou en △ — c'est la règle du n° 15/30/44 du Joueur, et je me suis fait prendre une fois en l'écrivant.

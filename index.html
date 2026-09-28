@@ -187,16 +187,24 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
   padding:10px 22px;border-radius:16px;background:rgba(10,14,26,.42);
   text-shadow:0 3px 0 rgba(0,0,0,.5),0 0 22px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;white-space:nowrap;z-index:4}
 #msg.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
-#msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;max-width:90vw;text-align:center;line-height:1.15}
-/* UN BANDEAU DE CINQ LIGNES COUVRAIT 28 % DE LA HAUTEUR D'ECRAN (n° 121). Le projet a deja
-   repare un auvent qui bouchait 88,9 % de l'image : les surfaces masquees comptent. `#msg.long`
-   n'a qu'UNE taille, 32 px de haut en clamp(18px, 3,6vw, 32px), pour des textes qui vont de
-   dix-sept caracteres a DEUX CENT DIX-SEPT (« Ce vehicule n'a que 2 places : X et Y restent a
-   pied — prends une voiture plus grande ! ») : a 32 px et 90vw de large, cela fait cinq lignes
-   de 36,8 px, plus 20 px de marges, soit 204 px sur les 640 px de l'ecran du banc. On ajoute
-   donc un TROISIEME palier de taille pour les tres longs textes (`.tres`, pose par msg() au-dela
-   de MSG_TRES caracteres) : la phrase la plus longue du jeu tient alors sur trois lignes. */
-#msg.tres{font-size:clamp(14px,2.4vw,22px);line-height:1.1;padding:8px 16px}
+#msg.long{font-size:clamp(18px,3.6vw,32px);white-space:normal;width:max-content;max-width:90vw;text-align:center;line-height:1.15}
+/* UN BANDEAU DE ONZE LIGNES COUVRAIT 60,6 % DE LA HAUTEUR D'ECRAN (n° 121). Le projet a deja
+   repare un auvent qui bouchait 88,9 % de l'image : les surfaces masquees comptent.
+   DEUX CAUSES, MESUREES au banc sur 1024 x 640, avec la phrase la plus longue du jeu :
+   1. LA LARGEUR. `max-width: 90vw` ne servait A RIEN. Le bandeau est `position:fixed` ancre a
+      `left:50%` sans `right` ni `width` : sa largeur automatique est un SHRINK-TO-FIT calcule
+      dans l'espace qui reste A DROITE de son ancre, soit 512 px sur 1024 — jamais les 921 px
+      que `90vw` autorisait. Le texte se pliait donc dans une colonne deux fois trop etroite :
+      ONZE lignes. `width: max-content` ignore l'espace disponible, `max-width: 90vw` le borne
+      ensuite : le bandeau a enfin la largeur qu'on croyait lui avoir donnee.
+   2. LA TAILLE. Elle etait dosee au NOMBRE DE CARACTERES (un palier `.tres` au-dela de cent),
+      c'est-a-dire a une APPROXIMATION du probleme. Le probleme, c'est la HAUTEUR : la meme
+      phrase ne fait pas le meme nombre de lignes sur un telephone couche et sur une tele.
+      `msgAjuste()` (voir msg()) donne donc au bandeau un BUDGET DE HAUTEUR — MSG_HAUTEUR du
+      haut de l'ecran — et reduit la police jusqu'a le tenir, sans jamais descendre sous
+      MSG_PLANCHER de la taille que le CSS avait choisie (un enfant a trois metres d'une tele
+      doit encore lire : c'est `body.tv` qui fixe le point de depart, le budget ne fait que
+      serrer par rapport a lui). L'interligne est sans unite (1,15), il suit donc la police. */
 /* LE BANDEAU SORTAIT PAR LE HAUT SUR UN TELEPHONE COUCHE. Sa POSITION est un pourcentage de la
    HAUTEUR (top: 17 %, centre sur lui-meme) mais sa TAILLE un pourcentage de la LARGEUR (3,6vw) :
    sur un ecran large et bas — 812 x 375, le telephone couche — le message d'accueil « Bienvenue
@@ -209,8 +217,7 @@ body.lobby #top,body.lobby #chat,body.lobby #jumpBtn,body.lobby #joyHome,body.lo
 @media (max-height:560px){
   #msg{top:10px;transform:translate(-50%,0) scale(.6);font-size:clamp(20px,4.4vw,34px)}
   #msg.show{transform:translate(-50%,0) scale(1)}
-  #msg.long{font-size:clamp(15px,2.6vw,22px);max-width:84vw}
-  #msg.tres{font-size:clamp(12px,1.9vw,16px);line-height:1.08;max-width:88vw}
+  #msg.long{font-size:clamp(15px,2.6vw,22px);width:max-content;max-width:88vw}
 }
 /* Le VIGNETTAGE et l'ÉTALONNAGE se faisaient ici, en CSS : le navigateur devait recomposer
    toute l'image par-dessus le jeu, et sur la télé on les coupait donc — l'image y était plus
@@ -550,7 +557,6 @@ body.tv #chatIn{font-size:calc(var(--uh) * .7);padding:calc(var(--uh) * .42)}   
 /* le grand message passe SOUS le bandeau à deux rangées : il se posait dessus */
 body.tv #msg{font-size:calc(var(--uh) * 2.6);top:calc(var(--tvpad) + var(--uh) * 7)}
 body.tv #msg.long{font-size:calc(var(--uh) * 1.5)}
-body.tv #msg.tres{font-size:calc(var(--uh) * 1.05);line-height:1.1}   /* n° 121 : cinq lignes couvraient 28 % de la hauteur */
 /* LE RADAR passe dans le coin bas droit : au centre, il masquait le joueur */
 body.tv #gps{left:auto;right:var(--tvpadx);bottom:var(--tvpad);transform:none;
   width:calc(var(--uh) * 7.6);height:calc(var(--uh) * 7.6);border-width:4px}
@@ -21936,7 +21942,10 @@ function netTick(dt, myAnim, sp) {
 }
 
 // ================= INTERFACE =================
-const MSG_TRES = 100;   // au-delà de 100 caractères, le bandeau passe à sa plus petite taille (n° 121)
+// LE BANDEAU A UN BUDGET DE HAUTEUR, PAS UN QUOTA DE CARACTÈRES (n° 121). Voir le CSS de #msg.
+const MSG_HAUTEUR = 0.20;   // il ne couvre jamais plus d'un cinquième de la hauteur d'écran
+const MSG_PLANCHER = 0.45;  // et il ne descend jamais sous 45 % de la taille choisie par le CSS
+const MSG_MIN_PX = 13;      // ni sous 13 px : en dessous, plus personne ne lit
 const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0, msgAttente = null;   // msgAttente : la phrase qui attend son tour (n° 118)
 // Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
 // deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
@@ -22000,6 +22009,35 @@ function ctrlText(t) {
 //      bandeau partirait en file de plusieurs centaines d'entrées.
 // APRÈS : « Tu as renversé… » 3 000 ms, PUIS « Une ambulance a été appelée » 2 200 ms — les
 // deux se lisent, dans l'ordre de la chaîne de cause à effet.
+// LA POLICE SE SERRE JUSQU'À TENIR DANS LE BUDGET (n° 121). On repart TOUJOURS de la taille que
+// le CSS a choisie pour cet écran-là (téléphone couché, télé, bureau : trois tailles différentes),
+// puis on réduit par pas de 12 % tant que la boîte dépasse MSG_HAUTEUR de l'écran. Deux planchers :
+// jamais sous MSG_PLANCHER de la taille de départ (la télé garde sa lisibilité PROPORTIONNELLE) et
+// jamais sous MSG_MIN_PX. Lire `offsetHeight` force une mise en page, mais msg() n'est appelé
+// qu'au CHANGEMENT de bandeau, pas à chaque image, et la boucle fait au plus douze tours.
+// UNE LISTE DE NOMS BORNÉE (n° 121). C'est la phrase la plus longue du jeu qui débordait :
+// « Ce véhicule n'a que 2 places : X et Y restent à pied — prends une voiture plus grande ! »,
+// 212 caractères avec deux pseudos, et rien ne bornait la liste : quatre amis à pied et elle
+// passait les trois cents. On nomme les deux premiers — ceux que l'enfant cherche des yeux — et
+// on COMPTE les autres. Le plus court des deux messages possibles fait 52 caractères.
+function nomsRestes(liste) {
+  const n = liste.length;
+  if (n <= 2) return liste.join(' et ');
+  return `${liste[0]}, ${liste[1]} et ${n - 2} autre${n - 2 > 1 ? 's' : ''}`;
+}
+function msgAjuste() {
+  msgEl.style.fontSize = '';   // on oublie le serrage du message précédent
+  if (!msgEl.classList.contains('long')) return null;   // une phrase courte tient sur une ligne
+  const budget = Math.max(72, (window.innerHeight || 640) * MSG_HAUTEUR);
+  const depart = parseFloat(getComputedStyle(msgEl).fontSize) || 20;
+  const plancher = Math.max(MSG_MIN_PX, depart * MSG_PLANCHER);
+  let px = depart, tours = 0;
+  while (msgEl.offsetHeight > budget && px > plancher + 0.1 && tours++ < 12) {
+    px = Math.max(plancher, px * 0.88);
+    msgEl.style.fontSize = px.toFixed(1) + 'px';
+  }
+  return { depart: +depart.toFixed(1), px: +px.toFixed(1), h: msgEl.offsetHeight, budget: Math.round(budget), tours };
+}
 function msg(text, ms = 1400, prio = 0) {
   if (prio < msgPrio && simTime < msgPrioT) {
     if (prio > 0) msgAttente = { text, ms, prio };   // elle attend son tour au lieu d'être perdue
@@ -22008,7 +22046,7 @@ function msg(text, ms = 1400, prio = 0) {
   msgPrio = prio; msgPrioT = prio > 0 ? simTime + ms / 1000 : 0;
   text = ctrlText(text);
   msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16);
-  msgEl.classList.toggle('tres', text.length > MSG_TRES);   // n° 121 : un troisième palier de taille
+  msgAjuste();   // n° 121 : la police se serre jusqu'à tenir dans son budget de hauteur
   msgEl.classList.add('show');
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => {
@@ -22957,7 +22995,7 @@ function monterAvecBot(b) {
     if (chien.pet && placesDe(c).chien && !chien.couche && !chien.attaque) { c.chien = true; chien.enVoiture = c; }   // même règle qu'au volant (défaut n° 95)
     const eqp = embarqueOccupants(c, ['avant']);
     if (eqp.montes.length) msg(`🚗 ${eqp.montes.join(', ')} ${eqp.montes.length > 1 ? 'montent' : 'monte'} derrière`, 3000);
-    if (eqp.restes.length) msg(`🚗 Plus de place assise : ${eqp.restes.join(' et ')} ${eqp.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶`, 4200);
+    if (eqp.restes.length) msg(`🚗 Plus de place assise : ${nomsRestes(eqp.restes)} ${eqp.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶`, 4200);   // n° 121 : la liste est bornée
   }
   botSay(b, [moto ? `monte derrière moi et accroche-toi ! dis-moi où on va 🏍️` : `installe-toi ! dis-moi où on va (« ${b.name} va à la villa ») 🚗`]);
   msg(`${moto ? '🏍️ En croupe derrière' : '🚗 Tu es monté avec'} ${b.name} · dis-lui où aller, ou E pour descendre`, 3600);
@@ -27777,7 +27815,7 @@ function enterCar(c) {
   const nomChien = c.chien ? ' + ' + (chien.nom || 'le chien') + ' 🐕' : '';
   if (eq.montes.length) msg(`🚗 ${eq.montes.join(', ')} ${eq.montes.length > 1 ? 'montent' : 'monte'} avec toi${nomChien}${c.robot ? ' + ' + robot.nom + ' 🤖' : ''} · ${eq.places} places`, 3400);
   else if (c.chien || c.robot) msg(`🚗 ${(nomChien + (c.robot ? ' + ' + robot.nom + ' 🤖' : '')).replace(/^ \+ /, '')} monte avec toi · ${eq.places} places`, 2600);
-  if (eq.restes.length) msg(`🚗 ${eq.places === 2 ? 'Ce véhicule n\'a que 2 places' : 'Il n\'y a plus de place assise'} : ${eq.restes.join(' et ')} ${eq.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶 — prends une voiture plus grande !`, 5200);
+  if (eq.restes.length) msg(`🚗 ${eq.places} places seulement : ${nomsRestes(eq.restes)} ${eq.restes.length > 1 ? 'restent' : 'reste'} à pied 🚶 — prends plus grand !`, 5200);   // n° 121 : 212 caractères avant, la liste n'était pas bornée
 }
 function exitCar() {
   const c = drive.car; if (!c) return;

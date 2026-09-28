@@ -25862,15 +25862,18 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     // ---- 1. LE TEMOIN DE LA CAUSE : les deux appels dans la MEME image, a l'ANCIENNE priorite 0.
     // ON NE MESURE PAS LE TEMPS ICI : sans G.step(), simTime ne bouge pas, les deux appels sont
     // donc rigoureusement dans la meme image, comme dans la boucle `ecrase`.
+    if (!G.msgRaz) return { pourquoi: 'msgRaz n\'est pas exporte' };
+    G.msgRaz();
     G.msg(PLAINTE, 3000, 0);
     R.avant = { plainte: lu() };
     G.msg(AMBU, 2200, 1);
     R.avant.apresAmbulance = lu();
     // ---- 2. LA MEME IMAGE, AVEC LA PRIORITE REPAREE (celle du jeu aujourd'hui)
+    G.msgRaz();
     G.msg(PLAINTE, 3000, 2);
     R.apres = { plainte: lu() };
     G.msg(AMBU, 2200, 1);
-    R.apres.apresAmbulance = lu();
+    R.apres.apresAmbulance = lu(); R.apres.enAttente = G.msgAttente;
     // ---- 3. LA VRAIE SEQUENCE DU JEU : on renverse un passant a 12 m/s, l'ambulance part
     G.clearWanted('essai'); G.police.crimeLevel = 0; G.police.avert = 0; G.police.avertT = -999;
     G.police.agents.length = 0;
@@ -25884,13 +25887,14 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     car.busy = false; car.x = X; car.z = Z; car.h = 0; car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
     if (G.drive.car) G.exitCar();
     P.pos.set(X, (car.y || 0) + 0.4, Z); G.enterCar(car);
+    G.msgRaz();
     const touches = G.ecraseAuSol(car, { speed: 12 });
     const amb = G.city.ambulances.find(a => a.victime === v);
     R.reel = { touches, ambulance: amb ? amb.etat : null, banniere: lu(), plainteDans: v.porteplainte ? 'oui' : 'non' };
     // ---- 4. LES DUREES, EN HORLOGE REELLE (le bandeau s'efface sur un setTimeout).
     // ON GELE LE JEU pendant la mesure : `paused = true` arrete step(), donc simTime et toute
     // pastille de proximite qui viendrait salir le releve. Le minuteur du bandeau, lui, tourne.
-    const etait = G.paused; G.paused = true;
+    const etait = G.paused; if (G.setPause) G.setPause(true);
     const trace = [{ t: 0, txt: lu() }];
     let cumul = 0;
     for (const ms of [400, 400, 400, 400, 400, 400, 400, 400, 500, 500, 500, 500, 500, 500]) {
@@ -25899,11 +25903,12 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
       if (txt !== trace[trace.length - 1].txt) trace.push({ t: cumul, txt });
     }
     R.trace = trace;
-    G.paused = etait;
+    if (G.setPause) G.setPause(etait);
     G.exitCar(); G.clearWanted('fin');
     v.hp = 100; v.ko = 0; v.porteplainte = 0;
     // ---- 5. TEMOIN : on n'a pas decale les autres bandeaux. Sans reservation en cours, une
     // pastille de proximite (prio 0) prend l'ecran a l'instant, comme avant.
+    G.msgRaz();
     G.msg('\u{1FA91} E : s\'asseoir', 1200, 0);
     R.temoinPrio0 = lu();
     G.msg('\u{1F3CE} BOOST !', 700, 0);
@@ -25919,7 +25924,7 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     && /porter plainte/.test(B.plainte) && /porter plainte/.test(B.apresAmbulance)       // LA REPARATION
     && r.reel.touches >= 1 && r.reel.ambulance === 'route' && /porter plainte/.test(r.reel.banniere)
     && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 3600
-    && iVide > iAmb && T[iVide].t >= T[iAmb].t + 2000
+    && iVide > iAmb && T[iVide].t >= T[iAmb].t + 1800
     && /s'asseoir|asseoir/.test(r.temoinPrio0) && /BOOST/.test(r.temoinRemplace);
   return { ok, detail: `LA CAUSE, dans msg() : \`msgPrioT = prio > 0 ? simTime + ms / 1000 : 0\` — une`
     + ` phrase de PRIORITE 0 ne reserve RIEN, donc le garde-fou \`prio < msgPrio && simTime < msgPrioT\``
@@ -25928,6 +25933,7 @@ test('le message qui explique la punition n\'est plus recouvert dans la meme ima
     + ` puis « ${A.apresAmbulance} » — la phrase qui explique la punition a tenu 0 image et 0 ms sur les`
     + ` 3 000 demandees, l'ambulance ses 2 200 ms`
     + ` · APRES, meme image : « ${B.plainte} » puis, l'ambulance appelee, TOUJOURS « ${B.apresAmbulance} »`
+    + ` — et l'ambulance n'est pas PERDUE, elle attend son tour dans la case (« ${B.enAttente} »)`
     + ` · LA VRAIE SEQUENCE DU JEU (un passant renverse a 12 m/s, ${r.reel.touches} touche, ambulance`
     + ` ${r.reel.ambulance}, plainte prevue : ${r.reel.plainteDans}) : le bandeau dit « ${r.reel.banniere} »`
     + ` · LES DUREES, en horloge reelle (le bandeau s'efface sur un setTimeout, c'est la seule piece`

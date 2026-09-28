@@ -25837,3 +25837,245 @@ test('a la fete foraine, la pastille et la touche disent la meme chose : on mont
     + ` △ met au volant=${r.contre.triangle.volant} et rend recherche ${r.contre.triangle.etoiles}★`
     + (r.incoherences.length ? ` · INCOHERENCES : ${r.incoherences.slice(0, 5).join(' | ')}` : '') };
 });
+// ====== LE MESSAGE QUI EXPLIQUE LA PUNITION N'EST PLUS RECOUVERT (defaut n° 118) ======
+// « Tu as renverse X ! Il va porter plainte… » (priorite 0) etait recouvert DANS LA MEME IMAGE
+// par « Une ambulance a ete appelee » (priorite 1) : c'est le MEME tour de la boucle `ecrase`
+// (index.html 29073) qui appelle msg(), puis cinq lignes plus bas ambulanceAppel() (30202), qui
+// msg() a son tour. L'enfant ne lisait donc JAMAIS la phrase qui lui explique la chaine de cause
+// a effet qu'on vient de construire pour lui.
+// LA CAUSE PRECISE, dans msg() : `msgPrioT = prio > 0 ? simTime + ms / 1000 : 0` — une phrase de
+// PRIORITE 0 ne reserve RIEN, et le garde-fou `if (prio < msgPrio && simTime < msgPrioT) return`
+// ne mord donc jamais pour elle. Et une annonce bloquee etait JETEE, pas mise en attente.
+// LES DUREES. Le bandeau s'efface sur un `setTimeout` : c'est la seule piece du jeu qui ne se
+// compte pas en images. AVANT : la plainte 0 ms sur les 3 000 demandes, l'ambulance 2 200 ms.
+// APRES : la plainte 3 000 ms PUIS l'ambulance 2 200 ms, dans l'ordre de la chaine.
+test('le message qui explique la punition n\'est plus recouvert dans la meme image par l\'ambulance', async p => {
+  const r = await p.evaluate(async () => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+    const el = document.getElementById('msg');
+    const lu = () => el.classList.contains('show') ? el.textContent.trim() : '';
+    const dodo = ms => new Promise(rr => setTimeout(rr, ms));
+    const PLAINTE = '\u{1F691} Tu as renversé Tom ! Il va porter plainte…';
+    const AMBU = '\u{1F691} Une ambulance a été appelée';
+    const R = {};
+    // ---- 1. LE TEMOIN DE LA CAUSE : les deux appels dans la MEME image, a l'ANCIENNE priorite 0.
+    // ON NE MESURE PAS LE TEMPS ICI : sans G.step(), simTime ne bouge pas, les deux appels sont
+    // donc rigoureusement dans la meme image, comme dans la boucle `ecrase`.
+    G.msg(PLAINTE, 3000, 0);
+    R.avant = { plainte: lu() };
+    G.msg(AMBU, 2200, 1);
+    R.avant.apresAmbulance = lu();
+    // ---- 2. LA MEME IMAGE, AVEC LA PRIORITE REPAREE (celle du jeu aujourd'hui)
+    G.msg(PLAINTE, 3000, 2);
+    R.apres = { plainte: lu() };
+    G.msg(AMBU, 2200, 1);
+    R.apres.apresAmbulance = lu();
+    // ---- 3. LA VRAIE SEQUENCE DU JEU : on renverse un passant a 12 m/s, l'ambulance part
+    G.clearWanted('essai'); G.police.crimeLevel = 0; G.police.avert = 0; G.police.avertT = -999;
+    G.police.agents.length = 0;
+    for (const a of G.city.ambulances) { a.etat = null; a.victime = null; }
+    const v = G.bots.find(b => !b.prison && b.av && b.av.group);
+    const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    const X = -13, Z = 5.4;
+    G.bots.forEach((b, i) => { if (b === v) return; b.pos.set(160 + i * 4, 0.14, 160); b.av.group.position.copy(b.pos); b.wait = 9999; });
+    v.hp = 100; v.ko = 0; v.hitT = 0; v.porteplainte = 0; v.wait = 9999;
+    v.pos.set(X, 0.14, Z); v.av.group.position.copy(v.pos); v.av.group.visible = true;
+    car.busy = false; car.x = X; car.z = Z; car.h = 0; car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+    if (G.drive.car) G.exitCar();
+    P.pos.set(X, (car.y || 0) + 0.4, Z); G.enterCar(car);
+    const touches = G.ecraseAuSol(car, { speed: 12 });
+    const amb = G.city.ambulances.find(a => a.victime === v);
+    R.reel = { touches, ambulance: amb ? amb.etat : null, banniere: lu(), plainteDans: v.porteplainte ? 'oui' : 'non' };
+    // ---- 4. LES DUREES, EN HORLOGE REELLE (le bandeau s'efface sur un setTimeout).
+    // ON GELE LE JEU pendant la mesure : `paused = true` arrete step(), donc simTime et toute
+    // pastille de proximite qui viendrait salir le releve. Le minuteur du bandeau, lui, tourne.
+    const etait = G.paused; G.paused = true;
+    const trace = [{ t: 0, txt: lu() }];
+    let cumul = 0;
+    for (const ms of [400, 400, 400, 400, 400, 400, 400, 400, 500, 500, 500, 500, 500, 500]) {
+      await dodo(ms); cumul += ms;
+      const txt = lu();
+      if (txt !== trace[trace.length - 1].txt) trace.push({ t: cumul, txt });
+    }
+    R.trace = trace;
+    G.paused = etait;
+    G.exitCar(); G.clearWanted('fin');
+    v.hp = 100; v.ko = 0; v.porteplainte = 0;
+    // ---- 5. TEMOIN : on n'a pas decale les autres bandeaux. Sans reservation en cours, une
+    // pastille de proximite (prio 0) prend l'ecran a l'instant, comme avant.
+    G.msg('\u{1FA91} E : s\'asseoir', 1200, 0);
+    R.temoinPrio0 = lu();
+    G.msg('\u{1F3CE} BOOST !', 700, 0);
+    R.temoinRemplace = lu();
+    return R;
+  });
+  const A = r.avant, B = r.apres, T = r.trace;
+  // la trace : la plainte, PUIS l'ambulance, PUIS plus rien
+  const etapes = T.map(e => e.txt);
+  const iAmb = etapes.findIndex(t => /ambulance/.test(t));
+  const iVide = etapes.findIndex((t, k) => k > 0 && t === '');
+  const ok = /porter plainte/.test(A.plainte) && /ambulance/.test(A.apresAmbulance)      // LA CAUSE
+    && /porter plainte/.test(B.plainte) && /porter plainte/.test(B.apresAmbulance)       // LA REPARATION
+    && r.reel.touches >= 1 && r.reel.ambulance === 'route' && /porter plainte/.test(r.reel.banniere)
+    && iAmb > 0 && T[iAmb].t >= 2800 && T[iAmb].t <= 3600
+    && iVide > iAmb && T[iVide].t >= T[iAmb].t + 2000
+    && /s'asseoir|asseoir/.test(r.temoinPrio0) && /BOOST/.test(r.temoinRemplace);
+  return { ok, detail: `LA CAUSE, dans msg() : \`msgPrioT = prio > 0 ? simTime + ms / 1000 : 0\` — une`
+    + ` phrase de PRIORITE 0 ne reserve RIEN, donc le garde-fou \`prio < msgPrio && simTime < msgPrioT\``
+    + ` ne mord jamais pour elle ; et une annonce bloquee etait JETEE, pas mise en attente`
+    + ` · TEMOIN DE LA CAUSE, les deux appels dans LA MEME IMAGE a l'ancienne priorite : « ${A.plainte} »`
+    + ` puis « ${A.apresAmbulance} » — la phrase qui explique la punition a tenu 0 image et 0 ms sur les`
+    + ` 3 000 demandees, l'ambulance ses 2 200 ms`
+    + ` · APRES, meme image : « ${B.plainte} » puis, l'ambulance appelee, TOUJOURS « ${B.apresAmbulance} »`
+    + ` · LA VRAIE SEQUENCE DU JEU (un passant renverse a 12 m/s, ${r.reel.touches} touche, ambulance`
+    + ` ${r.reel.ambulance}, plainte prevue : ${r.reel.plainteDans}) : le bandeau dit « ${r.reel.banniere} »`
+    + ` · LES DUREES, en horloge reelle (le bandeau s'efface sur un setTimeout, c'est la seule piece`
+    + ` du jeu qui ne se compte pas en images, et le jeu est gele pendant le releve) :`
+    + ` ${T.map(e => `${e.t} ms → « ${e.txt || '(rien)'} »`).join(' | ')} — soit la plainte ${T[iAmb] ? T[iAmb].t : '?'} ms`
+    + ` (3 000 demandees), puis l'ambulance ${T[iVide] && T[iAmb] ? T[iVide].t - T[iAmb].t : '?'} ms (2 200 demandees)`
+    + ` · ET LES AUTRES BANDEAUX NE SONT PAS DECALES : hors reservation, une pastille de priorite 0`
+    + ` prend l'ecran a l'instant (« ${r.temoinPrio0} ») et la suivante la remplace a l'instant`
+    + ` (« ${r.temoinRemplace} »)` };
+});
+// ====== LE PASSANT COLLE AU PARE-CHOCS S'ECARTE, ET LE MESSAGE DIT LA MANŒUVRE (n° 119) ======
+// MESURE DU CONTROLEUR : 1 800 images, le passant reste entre 0,78 et 0,98 m du pare-chocs, il ne
+// bouge PAS, et la voiture reste bridee a 8,6 km/h (SORTIE_PAS = 2,4 m/s). L'issue existait
+// (marche arriere : 37,3 m parcourus) mais le message ne disait AUCUNE manœuvre.
+// LA CAUSE : `klaxonne(c)` ne fait que du BRUIT (`if (d < 40) horn(c.kind)`) — rien, dans tout le
+// fichier, ne faisait s'ecarter un passant devant un capot. Le commentaire du round 83 promettait
+// « il klaxonne, et le passant s'ecarte en deux secondes » : personne ne l'avait ecrit.
+// LA REPARATION, avec ce que le jeu avait deja : `combatTick` sait faire fuir un habitant
+// (`b.fight = 'flee'`, `b.fuitDe`, 2,6 m/s quand ce qu'il fuit n'est pas le joueur). `ecartePietons`
+// lui donne a fuir SA PROPRE PROJECTION SUR L'AXE de la caisse — s'en eloigner, c'est sortir du
+// couloir PAR LE COTE, et non courir devant le capot. Et pas au premier blip : au SECOND coup de
+// klaxon (ECARTE_DELAI = 2,4 s bloque), pour que le plafond de vitesse ait le temps de mordre.
+test('le passant colle au pare-chocs s\'ecarte quand on klaxonne, et le message dit la manœuvre', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: -10, y: 1, z: 8, hour: 12, frais: true });
+    const el = document.getElementById('msg');
+    const R = { SORTIE_PAS: G.SORTIE_PAS, ECARTE_PIETON: G.ECARTE_PIETON };
+    if (!G.ecartePietons) return { pourquoi: 'ecartePietons n\'est pas exporte' };
+    const tom = G.bots.find(b => b.name === 'Tom_le_ouf') || G.bots[0];
+    // les onze autres au loin : ce test juge UN passant et UNE voiture
+    G.bots.forEach((b, i) => { if (b === tom) return; b.pos.set(160 + i * 4, 0.14, 160);
+      b.av.group.position.copy(b.pos); b.wait = 9999; b.fight = null; b.rdv = null; });
+    G.clearWanted('essai'); G.police.crimeLevel = 0; G.police.avert = 0; G.police.avertT = -999;
+    G.police.agents.length = 0;
+    for (const a of G.city.ambulances) { a.etat = null; a.victime = null; }
+    // LA VOITURE DANS SA PLACE DE PARKING (c'est `sortDeStationnement` qui arme le plafond),
+    // et Tom PLANTE a 0,90 m du pare-chocs, dans l'axe — la mesure du controleur.
+    const car = G.city.cars.find(c => c.parts && !c.rider && !c.kart && c.x < -3 && c.x > -23 && c.z > 3 && c.z < 14)
+      || G.city.cars.find(c => c.parts && !c.rider && !c.kart);
+    const essai = (images) => {
+      if (G.drive.car) G.exitCar();
+      car.busy = false; car.dmg = 0; car.h = 0; car.x = -13; car.z = 8;
+      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      car.avertPietT = 0; car.pietBloqueT = 0;
+      const avant = (car.baseD || 4.4) / 2;
+      tom.hp = 100; tom.ko = 0; tom.hitT = 0; tom.wait = 9999; tom.fight = null; tom.fuitDe = null;
+      tom.drive = null; tom.enVoiture = null; tom.rdv = null; tom.target = null;
+      tom.pos.set(car.x, 0.14, car.z + avant + 0.9); tom.av.group.position.copy(tom.pos);
+      tom.av.group.visible = true;
+      P.pos.set(car.x, (car.y || 0) + 0.4, car.z); G.enterCar(car);
+      const trace = []; let degage = -1, vMax = 0, bride = 0, dit = null;
+      G.keys.add('KeyW');
+      for (let i = 0; i < images; i++) {
+        // le plein gaz, l'enfant qui insiste : la voiture ne bouge pas de son couloir
+        G.step(1 / 60, true);
+        // le passant est pousse par combatTick, appele par step() ; on le suit a chaque image
+        const fx = Math.sin(car.h), fz = Math.cos(car.h);
+        const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
+        const al = dx * fx + dz * fz, trav = Math.abs(-dx * fz + dz * fx);
+        const pare = al - (car.baseD || 4.4) / 2;   // distance au PARE-CHOCS
+        vMax = Math.max(vMax, Math.abs(G.drive.speed || 0));
+        if (G.sortDeStationnement(car, G.drive.speed) && G.pietonDevant(car, G.drive.speed)) bride++;
+        if (!dit) { const t = el.textContent || ''; if (/Attention/.test(t)) dit = t.trim(); }
+        if (i % 60 === 0 || i === images - 1) trace.push({ img: i, pare: +pare.toFixed(2), trav: +trav.toFixed(2) });
+        // DEGAGE = il n'est plus dans le couloir de freinage de la voiture
+        if (degage < 0 && !G.pietonDevant(car, G.drive.speed)) degage = i + 1;
+      }
+      G.keys.delete('KeyW');
+      const fx = Math.sin(car.h), fz = Math.cos(car.h);
+      const dx = tom.pos.x - car.x, dz = tom.pos.z - car.z;
+      const res = { degage, bride, dit, vMax: +vMax.toFixed(2), trace,
+        pareFin: +(dx * fx + dz * fz - (car.baseD || 4.4) / 2).toFixed(2),
+        travFin: +Math.abs(-dx * fz + dz * fx).toFixed(2),
+        hp: +(tom.hp == null ? 100 : tom.hp).toFixed(1), tole: +(car.dmg || 0).toFixed(2),
+        fuite: tom.fight, ambulance: !!G.city.ambulances.find(a => a.victime === tom) };
+      G.exitCar();
+      return res;
+    };
+    // ---- 1. AVANT : l'ANCIEN CODE REJOUE. On repousse `pietBloqueT` a chaque image, donc le
+    //      delai d'ecartement n'est JAMAIS atteint et `ecartePietons` n'est jamais appele : il
+    //      ne reste que le klaxon et le plafond de vitesse, c'est-a-dire le jeu d'avant.
+    R.avant = (() => {
+      if (G.drive.car) G.exitCar();
+      car.busy = false; car.dmg = 0; car.h = 0; car.x = -13; car.z = 8;
+      car.g.position.set(car.x, car.y || 0, car.z); G.vehicleSolid(car);
+      car.avertPietT = 0; car.pietBloqueT = 0;
+      const avant = (car.baseD || 4.4) / 2;
+      tom.hp = 100; tom.ko = 0; tom.hitT = 0; tom.wait = 9999; tom.fight = null; tom.fuitDe = null;
+      tom.drive = null; tom.enVoiture = null; tom.rdv = null; tom.target = null;
+      tom.pos.set(car.x, 0.14, car.z + avant + 0.9); tom.av.group.position.copy(tom.pos);
+      tom.av.group.visible = true;
+      P.pos.set(car.x, (car.y || 0) + 0.4, car.z); G.enterCar(car);
+      let pMin = 9, pMax = 0, degage = -1, vMax = 0;
+      G.keys.add('KeyW');
+      for (let i = 0; i < 1800; i++) {
+        car.pietBloqueT = G.simTime;        // le delai n'est jamais atteint : l'ancien comportement
+        tom.fight = null; tom.fuitDe = null;
+        G.step(1 / 60, true);
+        const fx = Math.sin(car.h), fz = Math.cos(car.h);
+        const pare = (tom.pos.x - car.x) * fx + (tom.pos.z - car.z) * fz - avant;
+        pMin = Math.min(pMin, pare); pMax = Math.max(pMax, pare);
+        vMax = Math.max(vMax, Math.abs(G.drive.speed || 0));
+        if (degage < 0 && !G.pietonDevant(car, G.drive.speed)) degage = i + 1;
+      }
+      G.keys.delete('KeyW'); G.exitCar();
+      return { images: 1800, pareMin: +pMin.toFixed(2), pareMax: +pMax.toFixed(2), degage,
+        vMax: +vMax.toFixed(2), kmh: +(vMax * 3.6).toFixed(1) };
+    })();
+    // ---- 2. APRES : le jeu tel qu'il est
+    R.apres = essai(600);
+    // ---- 3. TEMOIN : un passant HORS du couloir n'est pas touche
+    R.horsCouloir = (() => {
+      if (G.drive.car) G.exitCar();
+      car.h = 0; car.x = -13; car.z = 8; car.g.position.set(car.x, car.y || 0, car.z);
+      tom.fight = null; tom.fuitDe = null; tom.hp = 100;
+      tom.pos.set(car.x + 4, 0.14, car.z + 3); tom.av.group.position.copy(tom.pos);
+      const p0 = [tom.pos.x, tom.pos.z];
+      const n = G.ecartePietons(car, true);
+      return { ecartes: n, bouge: +Math.hypot(tom.pos.x - p0[0], tom.pos.z - p0[1]).toFixed(2), fight: tom.fight };
+    })();
+    tom.fight = null; tom.fuitDe = null; tom.hp = 100; tom.wait = 0;
+    if (G.drive.car) G.exitCar();
+    G.clearWanted('fin');
+    return R;
+  });
+  if (r.pourquoi) return { ok: false, detail: r.pourquoi };
+  const A = r.avant, B = r.apres;
+  const ok = A.degage < 0 && A.pareMin > 0.5 && A.pareMin < 1.1 && A.vMax <= r.SORTIE_PAS + 0.05
+    && B.degage > 0 && B.degage < 400 && B.travFin > A.pareMin
+    && B.hp === 100 && B.tole === 0 && !B.ambulance
+    && /Attention/.test(B.dit || '') && /recule/.test(B.dit || '')
+    && B.vMax <= r.SORTIE_PAS + 0.05
+    && r.horsCouloir.ecartes === 0 && r.horsCouloir.bouge === 0;
+  return { ok, detail: `LA CAUSE : \`klaxonne(c)\` ne fait que du BRUIT (\`if (d < 40) horn(c.kind)\`) —`
+    + ` rien, dans tout le fichier, ne faisait s'ecarter un passant devant un capot, et le bandeau`
+    + ` ne nommait aucune manœuvre`
+    + ` · AVANT (l'ancien code rejoue : le delai d'ecartement repousse a chaque image) : ${A.images} images`
+    + ` plein gaz, le passant reste entre ${A.pareMin} et ${A.pareMax} m du pare-chocs, il ne degage`
+    + ` JAMAIS (${A.degage}), et la voiture reste bridee a ${A.vMax} m/s (${A.kmh} km/h)`
+    + ` · APRES : il degage le couloir a l'image ${B.degage} (${(B.degage / 60).toFixed(1)} s),`
+    + ` en s'ecartant DE COTE — ${B.travFin} m de l'axe a la fin, ${B.pareFin} m du pare-chocs —,`
+    + ` etat « ${B.fuite} », et il n'a pas une egratignure (${B.hp} PV, ${B.tole} de tole,`
+    + ` ambulance=${B.ambulance}) · la voiture reste bridee a ${B.vMax} m/s tant qu'il est la`
+    + ` (${B.bride} images) · LE MESSAGE DIT LA MANŒUVRE : « ${B.dit} » (avant : « 🚸 Attention !`
+    + ` Quelqu'un est juste devant la voiture », aucune manœuvre)`
+    + ` · relevés, une ligne par seconde : ${B.trace.map(t => `${t.img}: ${t.pare} m du pare-chocs, ${t.trav} m de l'axe`).join(' | ')}`
+    + ` · TEMOIN, on n'ecarte que qui est dans le couloir : un passant a 4 m de l'axe n'est pas`
+    + ` touche (${r.horsCouloir.ecartes} ecarte, il a bouge de ${r.horsCouloir.bouge} m,`
+    + ` etat ${r.horsCouloir.fight})` };
+});

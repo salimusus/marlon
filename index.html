@@ -12287,6 +12287,47 @@ function pietonDerriere(c) {
   for (const a of (police.agents || [])) if (gene(a.x, a.y, a.z)) return true;
   return false;
 }
+// ---- LE PASSANT COLLÉ AU PARE-CHOCS S'ÉCARTE QUAND ON KLAXONNE (n° 119) ----
+// MESURE DU CONTRÔLEUR : 1 800 images, le passant reste entre 0,78 et 0,98 m du pare-chocs, il
+// NE BOUGE PAS, et la voiture reste bridée à 8,6 km/h (SORTIE_PAS). Le klaxon ne faisait que
+// du BRUIT : `klaxonne` joue un son, point. Le commentaire du round 83 promettait « il
+// klaxonne, et le passant s'écarte en deux secondes » — personne ne l'avait écrit.
+// LE JEU SAIT DÉJÀ FAIRE FUIR UN HABITANT, et c'est `combatTick` : `b.fight = 'flee'` avec
+// `b.fuitDe` (l'objet dont il s'éloigne, relu à CHAQUE image), `b.fuiteFin` et `b.fightT`.
+// Quand ce qu'il fuit n'est pas le joueur (`parBot`), il RECULE à 2,6 m/s au lieu de détaler à
+// 5,5 — c'est exactement ce qu'on veut d'un passant devant un capot : il s'écarte, il ne
+// traverse pas la ville. On lui donne donc LA VOITURE à fuir (`{ pos: c }`, donc les
+// coordonnées vivantes de la caisse), et il ne fait pas demi-tour pour se battre puisque
+// `combatTick` ne l'autorise que si `b.fuitDe` est vide.
+function ecartePietons(c, avant) {
+  let n = 0;
+  const fx = Math.sin(c.h), fz = Math.cos(c.h);
+  // le MÊME couloir que `pietonDevant` / `pietonDerriere`, sur 3 m de plus que la carrosserie :
+  // celui qu'on bride est celui qu'on écarte, jamais un passant du trottoir d'en face.
+  const lat = Math.max(1.1, (c.baseW || 2.4) / 2 + 0.6), portee = (c.baseD || 4.4) / 2 + 3;
+  for (const b of bots) {
+    if (b.drive || b.ko || b.prison || !b.av || !b.av.group || !b.av.group.visible) continue;
+    const dx = b.pos.x - c.x, dz = b.pos.z - c.z;
+    const al = (dx * fx + dz * fz) * (avant ? 1 : -1);
+    if (al <= 0 || al > portee || Math.abs(-dx * fz + dz * fx) >= lat + 0.4) continue;
+    if (Math.abs(b.pos.y - (c.y || 0)) > 2.4) continue;
+    // IL S'ÉCARTE DE CÔTÉ, IL NE COURT PAS DEVANT LE CAPOT. Ce qu'il fuit n'est pas la voiture
+    // (il resterait dans son couloir, poussé en avant, et la voiture le suivrait) : c'est SA
+    // PROPRE PROJECTION SUR L'AXE de la caisse. S'éloigner de ce point-là, c'est sortir du
+    // couloir par le côté le plus court — exactement ce que fait un passant.
+    let trav = -dx * fz + dz * fx;
+    // pile dans l'axe : il choisit un côté, et toujours LE MÊME (aucun tirage au sort)
+    if (Math.abs(trav) < 0.15) trav = ((b.pos.x + b.pos.z) % 1 + 1) % 1 < 0.5 ? -0.15 : 0.15;
+    const surAxe = { x: b.pos.x + fz * trav, y: c.y || 0, z: b.pos.z - fx * trav };
+    b.fight = 'flee'; b.fuitDe = { pos: surAxe };   // ce n'est pas l'enfant qu'il fuit : 2,6 m/s
+    b.fuiteFin = simTime + ECARTE_PIETON; b.fightT = simTime + ECARTE_PIETON;
+    b.wait = 0; b.dance = 0; b.garde = false; if (b.av.rig) b.av.rig.garde = false;
+    n++;
+  }
+  return n;
+}
+const ECARTE_PIETON = 3.2;   // il s'écarte 3,2 s : un peu plus que le repos du klaxon (2,4 s)
+const ECARTE_DELAI = 2.4;    // il ne s'écarte qu'au SECOND coup de klaxon (2,4 s bloqué)
 // ================= LE DEMI-TOUR SUR PLACE =================
 // LA PIECE QUI MANQUAIT AUX DEUX PILOTES AUTOMATIQUES. Un vehicule a l'arret qui doit repartir
 // DANS L'AUTRE SENS ne savait pas tourner : il recevait un point de passage derriere lui et
@@ -14331,13 +14372,21 @@ function schLire() {   // relit la question et les réponses
   const n = ['un', 'deux', 'trois', 'quatre'];
   schDire(`${q.q} ... ${q.opts.map((o, i) => `Réponse ${n[i]} : ${o}`).join('. ')}`);
 }
+// LA LIGNE « SCORE » SE RAFRAÎCHIT TOUT DE SUITE (n° 120). Elle n'était écrite que dans
+// `nextQuestion`, donc elle montrait le score d'AVANT la réponse qu'on venait de donner, et
+// l'exercice suivant n'arrive qu'1,5 s plus tard (2,8 s sur une faute, le temps que la craie
+// finisse sa phrase) : pendant tout ce temps l'enfant lisait un score périmé.
+function schScoreMaj() {
+  const el = $('schScore'); if (!el) return;
+  el.textContent = `Score : ${school.ok}/${school.tot} · série ${school.streak}`;
+}
 function nextQuestion() {
   const q = schTirage(school.subj, school.age); school.q = q;
   $('schQuestion').textContent = q.q; $('schFig').innerHTML = q.fig ? `<div style="font-size:30px">${q.fig}</div>` : '';
   const num = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
   $('schChoices').innerHTML = q.opts.map((o, i) => `<div class="item" data-i="${i}"><span class="e">${num[i]}</span>${o}</div>`).join('');
   $('schChoices').querySelectorAll('.item').forEach(el => el.addEventListener('click', () => answer(q.opts[+el.dataset.i], el)));
-  $('schScore').textContent = `Score : ${school.ok}/${school.tot} · série ${school.streak}`;
+  schScoreMaj();
   tableauQuestion(q);
   schLire();
 }
@@ -14351,6 +14400,7 @@ function answer(v, el) {
     // la bonne carte se repérait par son texte : le numéro ajouté devant l'avait cassé
     $('schChoices').querySelectorAll('.item').forEach(x => { if (q.opts[+x.dataset.i] === q.a) { x.style.background = '#d6ffd6'; x.style.borderColor = '#5cc453'; } });
     schDire(`Faux ! La bonne réponse était : ${q.a}`); }
+  schScoreMaj();   // n° 120 : le score compte la réponse qu'on vient de donner, pas la précédente
   const craie = tableauVerdict(q, v, good, Math.max(0, wallet - w0)) || 0;
   // on laisse la craie finir sa phrase avant de passer a l'exercice suivant
   school.q = null; setTimeout(() => { if (uiOpen === 'schoolUI') nextQuestion(); }, Math.max(good ? 1500 : 2800, craie * 1000 + 1200));
@@ -21851,7 +21901,7 @@ function netTick(dt, myAnim, sp) {
 }
 
 // ================= INTERFACE =================
-const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0;
+const msgEl = $('msg'); let msgTimer = 0, msgPrio = 0, msgPrioT = 0, msgAttente = null;   // msgAttente : la phrase qui attend son tour (n° 118)
 // Sur écran tactile il n'y a pas de clavier : les noms de touches des messages
 // deviennent les boutons affichés à l'écran. Un seul endroit pour toute la ville,
 // au lieu d'une quarantaine de libellés qui parlaient de « E » et « Espace ».
@@ -21897,12 +21947,38 @@ function ctrlText(t) {
 // L'horloge est celle du JEU (simTime), comme l'appui long de la croix : le banc avance la
 // simulation sans avancer la montre. Le minuteur d'effacement libère aussi la réservation,
 // pour qu'un menu qui gèle simTime ne verrouille pas la bannière.
+// ===== LE MESSAGE QUI SAUVE L'ENFANT N'EST PLUS RECOUVERT DANS LA MÊME IMAGE (n° 118) =====
+// « Tu as renversé X ! Il va porter plainte… » (ligne 29073) était écrite, puis RÉÉCRITE DANS LA
+// MÊME IMAGE par « Une ambulance a été appelée » (ligne 30202, priorité 1) : c'est le MÊME tour
+// de la boucle `ecrase` qui appelle msg() puis, cinq lignes plus bas, ambulanceAppel(), qui
+// msg() à son tour. MESURE AVANT : la première phrase restait à l'écran 0 image et 0 ms sur
+// les 3 000 ms demandées, la seconde ses 2 200 ms. L'enfant ne lisait donc JAMAIS la phrase
+// qui lui explique la chaîne de cause à effet qu'on vient de construire pour lui.
+// DEUX CORRECTIFS, tous les deux avec ce que la bannière avait déjà :
+//   1. la phrase de la plainte passe en PRIORITÉ 2 — c'est exactement ce que le n° 97 appelle
+//      « une annonce qui raconte ce qui vient d'arriver » : elle réserve l'écran pour ses 3 s ;
+//   2. une annonce (prio >= 1) qui arrive pendant une réservation n'est plus JETÉE : elle
+//      attend son tour dans UNE case et prend l'écran dès que la réservation se libère. UNE
+//      seule case (la dernière arrivée gagne) et SEULEMENT pour les annonces : les conseils de
+//      proximité (prio 0) se reposent à chaque image et restent simplement ignorés, sinon le
+//      bandeau partirait en file de plusieurs centaines d'entrées.
+// APRÈS : « Tu as renversé… » 3 000 ms, PUIS « Une ambulance a été appelée » 2 200 ms — les
+// deux se lisent, dans l'ordre de la chaîne de cause à effet.
 function msg(text, ms = 1400, prio = 0) {
-  if (prio < msgPrio && simTime < msgPrioT) return;
+  if (prio < msgPrio && simTime < msgPrioT) {
+    if (prio > 0) msgAttente = { text, ms, prio };   // elle attend son tour au lieu d'être perdue
+    return;
+  }
   msgPrio = prio; msgPrioT = prio > 0 ? simTime + ms / 1000 : 0;
   text = ctrlText(text);
   msgEl.textContent = text; msgEl.classList.toggle('long', text.length > 16); msgEl.classList.add('show');
-  clearTimeout(msgTimer); msgTimer = setTimeout(() => { msgEl.classList.remove('show'); msgPrio = 0; msgPrioT = 0; }, ms);
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => {
+    msgPrio = 0; msgPrioT = 0;
+    const suite = msgAttente; msgAttente = null;
+    if (suite) msg(suite.text, suite.ms, suite.prio);   // la phrase en attente prend l'écran
+    else msgEl.classList.remove('show');
+  }, ms);
 }
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -28556,9 +28632,18 @@ function conduire(c, cmd, dt) {
     const devant = pietonDevant(c, V.speed), derriere = pietonDerriere(c);
     if (devant || derriere) {
       V.speed = clamp(V.speed, -SORTIE_PAS, SORTIE_PAS);
+      if (!c.pietBloqueT) c.pietBloqueT = simTime;   // n° 119 : depuis quand quelqu'un est-il dans le couloir ?
       if (simTime > (c.avertPietT || 0)) { c.avertPietT = simTime + 2.4; klaxonne(c);
-        msg(devant ? '🚸 Attention ! Quelqu\'un est juste devant la voiture' : '🚸 Attention ! Quelqu\'un est juste derrière la voiture', 1800); }
-    }
+        // n° 119, LES DEUX MOITIÉS. 1) Le klaxon ÉCARTE vraiment le passant — mais pas au premier
+        // blip : personne ne bondit au premier coup de klaxon, et le plafond de vitesse doit
+        // garder le temps de mordre (c'est LUI qui rend l'écrasement impossible). Dès le SECOND
+        // coup (ECARTE_DELAI = 2,4 s bloqué), il s'écarte de côté pour de bon.
+        // 2) Le bandeau DIT LA MANŒUVRE : la seule issue mesurée était la marche arrière (37,3 m
+        // parcourus) et le message n'en parlait pas. Reculer, c'est S au clavier, L2 à la manette.
+        if (simTime - c.pietBloqueT >= ECARTE_DELAI) ecartePietons(c, !!devant);
+        msg(devant ? '🚸 Attention ! Quelqu\'un devant — recule (S ou L2) pour te dégager'
+          : '🚸 Attention ! Quelqu\'un derrière — avance doucement pour te dégager', 1800); }
+    } else c.pietBloqueT = 0;   // le couloir est libre : le compteur d'attente repart de zero
   }
   const accLong = (V.speed - v0) / Math.max(dt, 1e-3);
   if (pilote && P.jumpBuf > 0) { P.jumpBuf = 0; if (c.kind === 'buggy') { if (!c.airborne && (c.vy || 0) <= 0.01 && simTime > (c.hopT || 0)) { c.hopT = simTime + 0.9; c.vy = 9.5; c.airborne = true; c.susp = -0.2; sfx.jump(); burst(c.x, c.y + 0.3, c.z, 0xc9a86a, 6); } } else horn(c.kind); }   // SAUT : le buggy bondit, les autres klaxonnent
@@ -29070,7 +29155,7 @@ function ecraseAuSol(c, V) {
       // « pas de témoin, pas d'étoile » reste entière, on lui ajoute un témoin.
       if (policeTemoin(28)) infraction('écraser ' + b.name, 1, 2);
       else { b.porteplainte = simTime + PLAINTE_ECRASE;
-        msg(`🚑 Tu as renversé ${b.name} ! Il va porter plainte…`, 3000);
+        msg(`🚑 Tu as renversé ${b.name} ! Il va porter plainte…`, 3000, 2);   // n° 118 : prio 2, elle réserve l'écran ; l'ambulance (prio 1) attend son tour
         botSay(b, ['je vais porter plainte !', 'tu vas le regretter…', 'je le dirai à la police !']); }
       vehicleDamage(c, 4); }
     // L'AMBULANCE VIENT AUSSI POUR UN BLESSE LOURD. Elle n'etait appelee qu'a zero point de

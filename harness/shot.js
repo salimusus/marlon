@@ -2779,6 +2779,11 @@ window.__G = {
   arbitreMontee: typeof arbitreMontee === 'function' ? arbitreMontee : null,
   distManege: typeof distManege === 'function' ? distManege : null,
   distCarrosserie: typeof distCarrosserie === 'function' ? distCarrosserie : null,
+  // n° 119 : le passant colle au pare-chocs s'ecarte quand on klaxonne
+  ecartePietons: typeof ecartePietons === 'function' ? ecartePietons : null,
+  schScoreMaj: typeof schScoreMaj === 'function' ? schScoreMaj : null,   // n° 120
+  get ECARTE_PIETON() { return typeof ECARTE_PIETON !== 'undefined' ? ECARTE_PIETON : null; },
+  get msgVisible() { return msgEl.classList.contains('show') ? msgEl.textContent : ''; },   // le bandeau, ou '' s'il est efface
   updateAct: typeof updateAct === 'function' ? updateAct : null,
   remiseEnJeu: typeof remiseEnJeu === 'function' ? remiseEnJeu : null,
   relevageTick: typeof relevageTick === 'function' ? relevageTick : null,

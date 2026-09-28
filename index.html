@@ -17667,7 +17667,17 @@ function attack(kind) {   // kind : 'punch' (rapide, combo x3) ou 'kick' (lent, 
     // revenait jamais : les coups suivants frappaient le vide et il recuperait 100 ❤️ hors de
     // vue — jamais de KO, jamais le ralenti du coup final. Un sur trois recule encore, mais
     // trois secondes seulement : il revient, furieux, et tient tete.
-    if (!b.fight) { b.fight = Math.random() < 0.68 ? 'fight' : 'flee'; if (b.fight === 'flee') b.fuiteFin = simTime + 3; }
+    // UN FUYARD NE FUIT PAS UN FANTOME (round 83). `b.fuitDe` nomme l'agresseur de la bagarre EN
+    // COURS, et il n'est efface qu'a l'EXPIRATION de cette bagarre, dans `combatTick`. Quand une
+    // NOUVELLE bagarre commence il survivait donc a l'ancienne — et il commande DEUX choses : la
+    // direction de la fuite (on RECULE a 2,6 m/s devant un habitant au lieu de DETALER a 5,5 m/s
+    // devant le joueur) et surtout LE DEMI-TOUR, car `combatTick` n'autorise le fuyard a se
+    // retourner et a tenir tete que si `b.fuitDe` est vide. Un habitant frappe par l'enfant
+    // pouvait donc fuir POUR TOUJOURS a cause d'une vieille rancune contre un voisin. C'est ce
+    // qui rendait le test 378 rouge en suite complete alors qu'il etait vert dans son lot :
+    // « il revient se battre=false », KO en 7 coups sans un seul retournement.
+    // ICI L'AGRESSEUR EST LE JOUEUR : on efface le nom de l'ancien.
+    if (!b.fight) { b.fight = Math.random() < 0.68 ? 'fight' : 'flee'; if (b.fight === 'flee') b.fuiteFin = simTime + 3; b.fuitDe = null; }
     b.pos.x += fx * kb; b.pos.z += fz * kb; b.av.group.position.copy(b.pos);
     sonAie(b.pos.x, b.pos.y + 1.5, b.pos.z, hauteurVoix(b.name, !!b.girl));   // il crie de SA voix (tirée de son nom)
     if (b.hp <= 0) { b.ko = simTime + 5; b.hp = 0; b.fight = null; botSay(b, ['ouille…', 'KO…', 'j\'abandonne']); msg(`😵 ${b.name} est KO ! Frappe encore pour lui prendre ses pièces`, 1800); sfx.tone(300, 0, .5, 'sawtooth', .08, 60);
@@ -17743,6 +17753,7 @@ function coupCouteau(av, duree) {
   if (target.bot) {
     const b = target.bot; b.hp = (b.hp ?? 100) - dmg; b.fightT = simTime + 8;
     b.rancune = simTime + 45;   // (n° 84) le joueur l'a frappé : il a le droit de riposter, même une fois `P.crime` retombé
+    if (!b.fight) b.fuitDe = null;   // nouvelle bagarre, agresseur = le joueur (voir `fuitDe` dans punch)
     b.fight = b.fight || (Math.random() < 0.35 ? 'fight' : 'flee'); b.wait = 0.5; b.dance = 0;
     b.pos.x += fx * 0.6; b.pos.z += fz * 0.6; b.av.group.position.copy(b.pos);
     avDegats(b.av, niveauDegats(Math.max(0, b.hp)), b.hp);
@@ -23238,7 +23249,7 @@ function chienTick(dt) {
       }
       if (d < 1.6 && simTime > (chien.morsT || 0)) {
         chien.morsT = simTime + 1.1;
-        if (b) { b.hp = (b.hp ?? 100) - 9; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
+        if (b) { b.hp = (b.hp ?? 100) - 9; if (!b.fight) b.fuitDe = null; b.fight = 'flee'; b.fightT = simTime + 6; b.wait = 0.3; b.dance = 0; b.rancune = simTime + 45;   /* (n° 84) c'est le chien DU JOUEUR qui mord */
           b.pos.x += dx / d * -1.2; b.pos.z += dz / d * -1.2; b.av.group.position.copy(b.pos);
           impact(b.pos.x, b.pos.y + 1.1, b.pos.z, null, 'sang', 0.9); sonSouffle(b.pos.x, b.pos.y + 1.1, b.pos.z, .08, 500, .07, { portee: 30 });
           bubble(b.av, pickOne(['aïe ! ton chien !', 'rappelle-le !', 'au secours 🐶']));
@@ -26326,7 +26337,11 @@ function updateBot(b, dt) {
     const dx = b.target[0] - b.pos.x, dz = b.target[2] - b.pos.z, dist = Math.hypot(dx, dz), stepLen = b.speed * 0.7 * dt;
     if (dist <= stepLen) { b.pos.set(b.target[0], b.target[1], b.target[2]); b.target = null; b.wait = rnd(1.5, 5); }
     else {
-      const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z }; const blocked = npcMove(o, dx / dist * stepLen, dz / dist * stepLen, 0.4); b.pos.x = o.x; b.pos.z = o.z;
+      const o = { x: b.pos.x, y: b.pos.y, z: b.pos.z };
+      // un corps qui ne s'écarte pas (le joueur, un blessé à terre) se CONTOURNE : sans cela la
+      // poussée de `separerPersos` est plus grande que le pas et l'habitant reste épinglé
+      const mv = contourneFiges(b.pos.x, b.pos.z, dx / dist * stepLen, dz / dist * stepLen, dist);
+      const blocked = npcMove(o, mv[0], mv[1], 0.4); b.pos.x = o.x; b.pos.z = o.z;
       // EN VILLE, le sol n'est pas plat : trottoirs, perrons, dalles de boutique. Le point de
       // passage donnait une hauteur figée et les habitants marchaient 15 cm sous le bitume,
       // jambes coupées. On se cale sur le sol réel sous leurs pieds.
@@ -27353,6 +27368,55 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
   }
   return false;
 }
+// ============ DÉPLACER UN VÉHICULE GARÉ : ON REGARDE LES DEUX CÔTÉS ============
+// La réparation du bulldozer (défaut n° 113) ne posait QU'UNE question à chaque place
+// essayée : « est-ce que le DÉCOR me bute ? ». `carBlocked` écarte les autres caisses par
+// défaut (`if (o.veh && !opt.veh) continue`), donc la réponse était OUI, LIBRE à cinq
+// centimètres de la grue — et le banc d'essai l'a vu (test 486 : « la paire la plus serrée
+// garde 0,05 m, grue(24,4 ; 128,0) / bulldozer(26,2 ; 121,5) »).
+// UN VÉHICULE QU'ON DÉPLACE DOIT VÉRIFIER LES DEUX : qu'il n'est plus bloqué, ET qu'il ne
+// bloque ni ne frôle personne. Les trois contrôles ci-dessous, dans cet ordre :
+//   1. LE DÉCOR NE LE BUTE PAS. C'est le contrôle d'hier, intact : sans lui, `conduire` le
+//      déclare « buté » sur sa propre place de parking et tue sa vitesse à chaque image
+//      (mesure d'hier : 1,70 m en dix secondes pour une fiche à 36 km/h).
+//   2. LES AUTRES CAISSES NON PLUS. Le même `carBlocked`, `veh: true` — exactement ce que
+//      `vehBloque` demande pour tout véhicule conduit par le jeu, et ce dont `separerVehicules`
+//      se sert pour écarter deux caisses qui se recouvrent. Ce contrôle-là n'est pas une
+//      marge décrétée, il est CALCULÉ : `carBlocked` gonfle la caisse voisine du rayon de
+//      chaîne (1,574 m pour le bulldozer) et teste les centres des disques, dont le plus
+//      avancé est à 0,675 m en retrait de la tôle — il exige donc 1,574 − 0,675 = 0,90 m
+//      d'air dans l'axe, et 1,574 − 1,400 = 0,17 m en travers.
+//   3. ET IL N'EN FRÔLE AUCUNE, à MARGE_PARC près. POURQUOI UNE MARGE EN PLUS : la tôle de
+//      collision N'EST PAS le véhicule. Celle du bulldozer fait 2,80 × 5,40 m, mais sa LAME
+//      est un tablier de 3,20 m de large planté à 3,19 m de son centre — 0,49 m devant la
+//      boîte et 0,20 m de chaque côté. À cinq centimètres de boîte à boîte, la lame était
+//      DANS la grue de quinze centimètres, et un enfant de huit ans le voit. 0,60 m, c'est ce
+//      débord de 0,49 m plus onze centimètres d'air visible.
+// La mesure du contrôle 3 est celle du banc d'essai : l'air entre deux boîtes alignées sur les
+// axes, le plus grand des deux écarts (c'est ce que rend le théorème des axes séparateurs sur
+// deux rectangles non tournés). On compare des boîtes DÉJÀ orientées, donc une caisse en biais
+// est jugée sur son emprise, jamais moins.
+const MARGE_PARC = 0.6;
+function emprisePlan(v) {   // demi-emprise [en x, en z] de la caisse, cap compris
+  const cs = Math.abs(Math.cos(v.h || 0)), sn = Math.abs(Math.sin(v.h || 0));
+  const W = v.baseW || 2.4, D = v.baseD || 4.4;
+  return [(W * cs + D * sn) / 2, (W * sn + D * cs) / 2];
+}
+function placeDeParcLibre(v, x, z, marge) {
+  if (!v) return false;
+  const m = marge == null ? MARGE_PARC : marge;
+  const [r, L] = vehHalf(v);
+  const opt = { garde: v.garde || 0, veh: false };
+  if (carBlocked(x, z, v.solid, r, opt, v.y || 0, v.h || 0, L)) return false;          // 1.
+  opt.veh = true;
+  if (carBlocked(x, z, v.solid, r, opt, v.y || 0, v.h || 0, L)) return false;          // 2.
+  const [hx, hz] = emprisePlan(v);
+  for (const o of solidsAutour(x, z, Math.max(hx, hz) + m + 0.5, true)) {              // 3.
+    if (!o.veh || o === v.solid) continue;
+    if (Math.max(Math.abs(x - o.x) - hx - o.w / 2, Math.abs(z - o.z) - hz - o.d / 2) < m) return false;
+  }
+  return true;
+}
 // Aucun véhicule ne doit en chevaucher un autre : on écarte les paires qui se recouvrent.
 // (La voiture conduite a son propre traitement, resolveVehicleOverlap.)
 // ================= ON NE SE MARCHE PAS DESSUS =================
@@ -27364,10 +27428,64 @@ function carBlocked(x, z, self, r = 1.4, opt = {}, y = 0, h = null, L = 0) {
 // se traversaient encore, bien visibles à l'écran. 0,58 les écarte de 1,16 m : les corps
 // ne se touchent plus du tout, et la foule reste assez serrée pour tenir dans une boutique.
 const PERSO_R = 0.58;          // demi-largeur d'un personnage : ils se frôlent à 1,16 m
+// ============ ON CONTOURNE CE QUI NE S'ÉCARTE PAS (round 83, défaut n° 420) ============
+// L'ARITHMÉTIQUE DU BLOCAGE, mesurée. `separerPersos` applique le chevauchement ENTIER à celui
+// qui n'est pas figé (`pa = A.fige ? 0 : B.fige ? 1 : 0.5`). Or le pas d'un habitant vaut
+// `b.speed * 0.7 * dt`, soit 0,065 m par image à 5,6 m/s. Face à un corps qui ne bouge pas — LE
+// JOUEUR est toujours `fige`, comme un blessé à terre ou quelqu'un d'assis — il avance de
+// 0,065 m, crée 0,07 m de chevauchement, et se fait repousser de 0,07 m : la poussée est PLUS
+// GRANDE QUE LE PAS et il est ÉPINGLÉ à 1,16 m, pour toujours.
+// MESURE : l'ami parti chercher la voiture pour le joueur, le joueur pile entre lui et la
+// portière (habitant en (6 ; 8), joueur en (0 ; 8), voiture en (-8 ; 10) à 14,1 m) — il marche
+// 4,91 m, s'arrête à (1,09 ; 8) et y reste 4 800 images (80 s) à 6,90 m de son rendez-vous.
+// `stuckT` vaut 0 TOUT DU LONG : il n'est pas « bloqué » (`npcMove` le déclare libre à chaque
+// image), donc même le filet des 2,5 s ne le sauve pas. Il arrive « au volant d'aucune ».
+// ON NE POUSSE PAS MOINS FORT — deux silhouettes se traverseraient, c'est tout le défaut que
+// `separerPersos` a réparé. ON PASSE À CÔTÉ : quand un corps qui ne s'écarte pas se trouve
+// PILE sur le pas, le pas GLISSE le long du cercle de séparation, du côté qui va encore vers
+// le but. Deux garde-fous pour qu'il ne tourne pas en rond : on ne contourne que ce qui est
+// DEVANT et à moins de 1,16 m + un pas (donc seulement quand on serait vraiment épinglé), et
+// jamais un corps qui EST la destination (un rendez-vous « viens » se prend à 1,6 m du joueur).
+const FIGES = [];              // les corps qui n'encaissent rien, tenus à jour par separerPersos
+const CONTOUR = [0, 0];
+function contourneFiges(x, z, sx, sz, distBut) {
+  CONTOUR[0] = sx; CONTOUR[1] = sz;
+  const pas = Math.hypot(sx, sz); if (pas < 1e-5) return CONTOUR;
+  const ux = sx / pas, uz = sz / pas, D = PERSO_R * 2, port = D + pas;
+  let bx = 0, bz = 0, bd = 1e9, blat = 0;
+  // LE JOUEUR EST LU EN DIRECT (k = -1), les autres corps dans le registre. `FIGES` est rafraichi
+  // par `separerPersos`, donc une fois par image de jeu ; mais le joueur est le corps fige qui
+  // bouge le plus, et un banc d'essai qui appelle `updateBot` sans faire tourner la ville entiere
+  // se retrouverait avec un fantome a l'ancienne place de l'enfant. On ne mesure pas un fantome.
+  for (let k = -1; k < FIGES.length; k++) {
+    let fx, fz;
+    if (k < 0) { if (drive.car || P.hp <= 0) continue; fx = P.pos.x; fz = P.pos.z; }
+    else { fx = FIGES[k][0]; fz = FIGES[k][1]; }
+    const dx = fx - x, dz = fz - z;
+    const av = dx * ux + dz * uz;
+    if (av <= 0 || av > port) continue;                      // ni derrière nous, ni encore loin
+    const lat = dx * uz - dz * ux;
+    if (Math.abs(lat) >= D) continue;                        // on passe déjà à côté
+    if (distBut > 0 && av + D >= distBut) continue;          // ce corps EST la destination
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= bd) continue;
+    bd = d2; bx = dx; bz = dz; blat = lat;
+  }
+  if (bd > 1e8) return CONTOUR;
+  const d = Math.sqrt(bd) || 1, rx = bx / d, rz = bz / d;
+  let tx = -rz, tz = rx;                                     // la tangente au cercle de séparation
+  const dot1 = tx * ux + tz * uz, dot2 = -dot1;
+  // celle qui va encore vers le but ; nez à nez les deux se valent (produit nul) et on tranche
+  // par le côté où le corps penche, pour que deux images de suite choisissent le même côté
+  if (dot2 > dot1 || (dot2 === dot1 && blat < 0)) { tx = rz; tz = -rx; }
+  CONTOUR[0] = tx * pas; CONTOUR[1] = tz * pas;
+  return CONTOUR;
+}
 function separerPersos() {
+  FIGES.length = 0;
   if (!city.on) return;
   const l = [];
-  const add = (x, y, z, fige, pose) => l.push({ x, y, z, x0: x, z0: z, fige, pose });
+  const add = (x, y, z, fige, pose) => { if (fige) FIGES.push([x, z]); l.push({ x, y, z, x0: x, z0: z, fige, pose }); };
   for (const b of bots) {
     if (b.prison || b.drive || b.dead || !b.av || !b.av.group.visible) continue;
     add(b.pos.x, b.pos.y, b.pos.z, !!b.ko || !!b.sit, (x, z) => { b.pos.x = x; b.pos.z = z; b.av.group.position.x = x; b.av.group.position.z = z; });
@@ -27382,7 +27500,8 @@ function separerPersos() {
   for (const gd of (city.guards || [])) if (gd.av && gd.av.group.visible) add(gd.x, gd.y, gd.z, !!gd.ko, (x, z) => { gd.x = x; gd.z = z; gd.av.group.position.x = x; gd.av.group.position.z = z; });
   // le joueur compte aussi, mais c'est toujours l'AUTRE qui s'écarte : on ne pousse jamais
   // celui qui tient la manette
-  if (!drive.car && P.hp > 0) l.push({ x: P.pos.x, y: P.pos.y, z: P.pos.z, x0: P.pos.x, z0: P.pos.z, fige: true, pose: null });
+  if (!drive.car && P.hp > 0) { FIGES.push([P.pos.x, P.pos.z]);
+    l.push({ x: P.pos.x, y: P.pos.y, z: P.pos.z, x0: P.pos.x, z0: P.pos.z, fige: true, pose: null }); }
   const D = PERSO_R * 2, D2 = D * D;
   // trois passes : à six empilés au même point, une seule laissait encore des paires
   // serrées — chaque poussée en défait une autre.
@@ -32039,7 +32158,9 @@ function shotsTick(dt) {
       if (s.mine && (!P.crime || simTime > P.crime)) { P.crime = simTime + 20; infraction('tirer sur ' + r.name, 1, 3); }   // tirer sur quelqu'un : crime grave, la police riposte — mais seulement si c'est NOTRE balle (n° 85)
     } else if (quoi === 'bot') {
       const b = cible; city.tags++; impact(b.pos.x, b.pos.y + 1.15, b.pos.z, { x: dx, y: dy, z: dz }, 'balle', 1);
-      b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8; b.fight = b.fight || 'flee';
+      b.hp = (b.hp ?? 100) - (s.dmg || 20); b.wait = 1; b.dance = 0; b.fightT = simTime + 8;
+      if (!b.fight) b.fuitDe = null;   // nouvelle bagarre : pas d'ancien agresseur (voir `fuitDe` dans punch)
+      b.fight = b.fight || 'flee';
       if (s.mine) b.rancune = simTime + 45;   // (n° 84) touché par LA balle du joueur : il garde sa rancune
       b.pos.x += s.v.x / L2 * 0.8; b.pos.z += s.v.z / L2 * 0.8;
       if (b.hp <= 0) {
@@ -39193,7 +39314,9 @@ function buildMetiers() {
   // la premiere rangee des que la chaussee devant eux s'elargit, et une place ecrite en dur
   // derriere eux se retrouve alors DANS la benne — c'est exactement ce qui est arrive au
   // second passage d'elargissement. 7 m d'entraxe pour 7 m + 5,40 m de caisses : 0,80 m entre
-  // les deux, quelle que soit la largeur de la rue.
+  // les deux, quelle que soit la largeur de la rue. (C'est sa place de DEPART ; le bloc du
+  // decalage, plus bas, le pose finalement en x = 28,20 — a l'est des bennes a gravats ET hors
+  // du nez de la grue. Le calcul sur benne.z reste ce qui lui donne son z.)
   const bull = gare(makeVehiculeTravail('bulldozer', MET_C.jaune, dx - 8.8, benne.z - 7, 0));
   // ---------- SA PLACE DOIT ÊTRE LIBRE, ET ON LE VÉRIFIE (défaut n° 113, round 83) ----------
   // MESURE : garé en (18,20 ; 121,50), le bulldozer avait la première BENNE À GRAVATS
@@ -39213,12 +39336,24 @@ function buildMetiers() {
   // est vide à l'est des bennes à gravats. On avance donc d'un mètre à la fois jusqu'à la
   // première place où son gabarit ne mord sur rien ; s'il n'y en a aucune, on le laisse où il
   // était plutôt que de le déplacer pour rien.
+  // ---------- CE QUE LE DÉCALAGE D'HIER NE REGARDAIT PAS (test 486, round 83) ----------
+  // Le contrôle ne posait QU'UNE question à chaque place essayée : « est-ce que le DÉCOR me
+  // bute ? ». `carBlocked` écarte les autres caisses par défaut : il a donc répondu « libre »
+  // au premier mètre où les bennes à gravats lâchaient, à x = 26,20 — À CINQ CENTIMÈTRES DE
+  // LA GRUE. Relevé : grue (24,40 ; 128,00), caisse 2,50 × 7,50 m, nez à z 124,25 ; bulldozer
+  // (26,20 ; 121,50), caisse 2,80 × 5,40 m, nez à z 124,20 ; et sa LAME, qui n'est pas dans sa
+  // caisse, plantée à z 124,40 — quinze centimètres DANS la grue.
+  // `placeDeParcLibre` pose les trois questions d'un coup (le décor, les autres caisses par
+  // `veh: true`, et MARGE_PARC = 0,60 m d'air entre les tôles) ; on garde le pas d'un mètre vers
+  // l'est le long de la même rangée, et si AUCUNE place ne convient on le laisse où il était
+  // plutôt que de le déplacer pour rien. La réparation d'hier est intacte : le contrôle du
+  // décor est le PREMIER des trois, et le bulldozer roule toujours.
   {
-    const [br, bL] = vehHalf(bull);
-    const libre = () => !carBlocked(bull.x, bull.z, bull.solid, br, { garde: bull.garde || 0 }, bull.y, bull.h, bL);
     const x0 = bull.x;
-    for (let i = 1; i <= 18 && !libre(); i++) { bull.x = x0 + i; bull.g.position.x = bull.x; vehicleSolid(bull); }
-    if (!libre()) { bull.x = x0; bull.g.position.x = x0; vehicleSolid(bull); }
+    let trouve = placeDeParcLibre(bull, x0, bull.z) ? x0 : null;
+    for (let i = 1; i <= 18 && trouve == null; i++) if (placeDeParcLibre(bull, x0 + i, bull.z)) trouve = x0 + i;
+    bull.x = trouve == null ? x0 : trouve;
+    bull.g.position.x = bull.x; vehicleSolid(bull);
     settleVehicle(bull); bull.home0 = [bull.x, bull.z, bull.h];
   }
   city.cars.push(fourgon, benne, grue, pelle, tracteur, velo, camion, bull);

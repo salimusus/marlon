@@ -22912,6 +22912,12 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
     const alea = Math.random; Math.random = () => 0.5;
     const b = G.bots.find(q => q.av && q.av.group);
     b.pos.set(67, 0, 1.5); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+    // ON REND LE NOM QU'ON EMPRUNTE. Ce test rebaptisait l'habitant « Momo_king » pour la duree
+    // de sa mesure et le laissait ainsi POUR TOUTE LA SUITE : il n'y avait plus aucun
+    // Lucas_2014 dans la page (et deux Momo_king, `find` ne rendant plus le vrai). C'est ce qui
+    // faisait exploser le test du rendez-vous a la portiere en suite complete alors qu'il etait
+    // vert dans son lot. Le nom d'origine est repose a la fin du test.
+    const nom497 = b.name;
     b.ko = 0; b.hp = 100; b.wait = 1e6; b.rdv = null; b.fight = null; b.name = 'Momo_king';
     G.P.pos.set(67, 0.3, 19.4); G.P.hp = 100;
     G.equipWeapon('pistol'); G.P.drawn = true;
@@ -22930,10 +22936,13 @@ test('au stand de tir, la butte arrête toutes les balles : quarante coups, pas 
     const out = { rayons: n, libres, pire: +pire.toFixed(2), etoiles: G.police.wanted,
       touchees: G.city.shots, hpVoisin: b.hp, zVoisin: +b.pos.z.toFixed(2), enVol: (G.shots || []).length };
     G.P.gun = false; G.P.weapon = null; G.P.drawn = false;
+    b.name = nom497; b.wait = 0;   // il retrouve son nom et sa vie d'habitant
+    out.nomRendu = b.name;
     return out;
   });
-  const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0;
-  return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin` };
+  const ok = r.libres === 0 && r.pire <= 3 && r.etoiles === 0 && r.hpVoisin === 100 && r.touchees >= 20 && r.enVol === 0
+    && r.nomRendu && r.nomRendu !== 'Momo_king';
+  return { ok, detail: `le stand n'avait AUCUNE butte : derrière les trois cibles il n'y avait que deux poteaux de 0,36 m, le parking, puis la rue z = 0 — un rayon prolongé au-delà de la cible du milieu ne rencontrait RIEN sur 200 m, et s'entraîner valait ★★★ « éliminer Momo_king » (mesuré 2/2, et la capture d4-stand-large.png montre le passage piéton à travers les cibles) · maintenant, ${r.rayons - r.libres}/${r.rayons} rayons sont arrêtés par la butte au plus tard ${r.pire} m derrière la cible · 40 coups tirés depuis la ligne de tir : ${r.touchees} cibles touchées, ★ ${r.etoiles} (contre ★ 3 avant), l'habitant planté derrière les cibles reste à ❤️ ${r.hpVoisin} (il était abattu et repoussé dans la rue) et ${r.enVol} balle en vol à la fin · le nom emprunté est rendu : l'habitant redevient « ${r.nomRendu} » (il restait « Momo_king » pour toute la suite, et le test du rendez-vous à la portière explosait dessus)` };
 });
 
 test('la cage à grimper se GRIMPE A PIED du gazon au plancher du sommet, sans un seul saut', async p => {
@@ -25003,7 +25012,22 @@ test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitan
     __SHOT.go({ world: 4, x: -60, y: 1, z: 30, hour: 12, frais: true });
     const R = {}, R2 = 2.2, lieu = { x: 0, z: 8, nom: 'centre-ville' };
     const c = G.city.cars.find(v => G.voitureEmpruntable(v) && !v.rider && !v.busy && v.parts);
-    const b = G.bots.find(x => x.name === 'Lucas_2014');
+    if (!c) return { erreur: 'aucune voiture ordinaire libre dans la ville' };
+    // L'HABITANT EST EXIGE, PAS SUPPOSE. Ce test lisait `G.bots.find(x => x.name ===
+    // 'Lucas_2014')` : vert dans son lot, il levait « Cannot read properties of undefined
+    // (reading 'av') » en suite complete. LE NOM AVAIT ETE EMPRUNTE : le test du stand de tir
+    // rebaptise le premier habitant « Momo_king » pour la duree de sa mesure et ne le lui
+    // rendait pas — il n'y avait plus AUCUN Lucas_2014 dans la page (et deux Momo_king).
+    // On ne suppose donc plus : on prend l'habitant par son nom s'il est la, sinon le premier
+    // habitant VIVANT et A PIED, on le nomme dans le bilan avec sa vitesse (c'est elle qui fixe
+    // les comptes d'images), et on refuse le test s'il n'y en a aucun. On lui rend aussi un etat
+    // propre : un habitant laisse en pleine bagarre ou en prison par un voisin ne marche pas.
+    const b = G.bots.find(x => x.name === 'Lucas_2014' && x.av && x.av.group && !x.dead && !x.prison)
+      || G.bots.find(x => x.av && x.av.group && !x.dead && !x.prison && !x.drive);
+    if (!b) return { erreur: 'aucun habitant vivant et a pied parmi les ' + G.bots.length + ' habitants' };
+    R.habitant = { nom: b.name, vitesse: b.speed, rang: G.bots.indexOf(b) };
+    b.prison = false; b.dead = 0; b.hp = 100; b.sit = null; b.ride = null; b.sport = null;
+    b.bagarre = null; b.gangMission = null; b.ordre = null; b.suit = null; b.job = null;
     b.av.group.visible = true;
     // LE MUR DU RELEVE PRECEDENT est toujours la : on le nomme, c'est le temoin de la geometrie.
     const mur = G.solids.find(o => !o.veh && Math.abs(o.x + 35.5) < 0.6 && Math.abs(o.z - 11.68) < 0.6 && o.h > 3);
@@ -25045,6 +25069,7 @@ test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitan
       b.pos.set(BX, 0.3, BZ); b.av.group.position.copy(b.pos);
       b.drive = null; b.rdv = null; b.rdvRoute = null; b.rdvRouteT = 0; b.target = null; b.wait = 0;
       b.ko = 0; b.stuckT = 0; b.fight = null; b.enVoiture = null; b.activite = null;
+      b.hp = 100; b.dead = 0; b.prison = false; b.sit = null; b.bagarre = null; b.sport = null;
       G.botPrendVoiture(b, lieu, null, true);
       if (!b.rdv) return null;
       if (forcer) { b.rdv.x = forcer[0]; b.rdv.z = forcer[1]; }
@@ -25070,12 +25095,13 @@ test('le rendez-vous a la portiere est choisi sur un cote JOIGNABLE : l\'habitan
     R.apres = marche(null);        // le choix du jeu aujourd'hui
     return R;
   });
+  if (r.erreur) return { ok: false, detail: r.erreur };
   const tp = q => q.stuckMax >= 2.5 || q.sauts > 0;
-  const ok = !!r.mur && r.recensement.defaut > 0 && r.recensement.avecIssue > 0
+  const ok = !!r.mur && !!r.habitant && r.recensement.defaut > 0 && r.recensement.avecIssue > 0
     && r.cotes.length >= 2 && !r.cotes[0].joignable            // le plus proche debout n'est PAS joignable
     && r.apres.auVolant && !tp(r.apres) && r.apres.images > 0 && r.apres.images < r.avant.images
     && tp(r.avant);                                            // et avant, seul le filet le sauvait
-  return { ok, detail: `« il verifie qu'on tient debout, pas que le point est atteignable » · le mur du releve precedent est toujours la : ${r.mur ? `${r.mur.w} m de long et ${r.mur.h} m de haut en (${r.mur.x} ; ${r.mur.z})` : 'INTROUVABLE'}`
+  return { ok, detail: `« il verifie qu'on tient debout, pas que le point est atteignable » · habitant mesure : ${r.habitant ? `${r.habitant.nom} (rang ${r.habitant.rang}, vitesse ${r.habitant.vitesse} m/s)` : 'AUCUN'} · le mur du releve precedent est toujours la : ${r.mur ? `${r.mur.w} m de long et ${r.mur.h} m de haut en (${r.mur.x} ; ${r.mur.z})` : 'INTROUVABLE'}`
     + ` · RECENSEMENT sur ${r.recensement.paires} configurations (voiture posee de 10 en 10 m sur la ville habitee, habitant a 8 m dans quatre directions) : ${r.recensement.defaut} ou le cote le plus proche ou l'on TIENT DEBOUT n'est pas joignable a pied, dont ${r.recensement.avecIssue} qui ont une autre portiere joignable (hors banc, au pas de 5 m : 300 sur 3 038, dont 175 avec une issue)`
     + ` · CAS MESURE, voiture en (-60 ; 25), habitant en (-65,66 ; 30,66) — les huit cotes : ${r.cotes.map(q => `(${q.p[0]} ; ${q.p[1]}) a ${q.d} m ${q.joignable ? 'JOIGNABLE' : 'injoignable'}`).join(', ')}`
     + ` · AVANT (l'ancien choix, le plus proche ou l'on tient debout, ${JSON.stringify(r.avant.rdv)}) : ${r.avant.images} images pour monter, compteur de blocage a ${r.avant.stuckMax} au maximum — le filet des 2,5 s se declenche — et ${r.avant.sauts} saut de ${r.avant.sautMax} m, une TELEPORTATION`
@@ -25494,4 +25520,175 @@ test('dans les cages d\'escalier de La Zone, la camera recule assez pour que l\'
     && r.temoins.every(s => s.d >= SEUILS[s.nom] && !s.coupe && !s.dans);
   const l = s => `${s.nom} (y ${s.y}) ${s.pire} m`;
   return { ok, detail: `« le visage de l'enfant remplit l'ecran : plus une marche, plus un garde-corps » — et La Zone, c'est CINQ immeubles a TROIS niveaux · AVANT, six points de l'escalier et quatre caps chacun, pour un confort que le jeu se fixe a ${C} m : palier du rez 0,48 · 1re volee 0,52 · palier de demi-tour 0,88 · 2e volee 0,59 · palier du 1er 0,48 · coursive du 1er 0,48 m (18 releves sur 24 sous deux metres), la rue a dix metres de la donnant 5,09 a 9,10 m au meme instant · TROIS CAUSES mesurees rayon par rayon : cam.pmax ecrase a 0,04 rad AUX VINGT-QUATRE RELEVES (cam.plafond 1,05 m sur les paliers, 0,44 m sur les volees — une cage d'escalier a une dalle au-dessus de la tete, et la montee, seul secours du jeu quand il n'y a pas de place derriere, s'en trouvait interdite : hausse 0 partout, contre 0,717 rad dans la rue) ; les GARDE-CORPS fermant les trois rayons a 0,67 m ; et le PLAFOND traite comme un mur (volee et palier du dessus 1,38 / 1,80 m, plancher de l'appartement du dessus 3,18 m, dalle de la coursive 3,34 m, jusqu'a une chaise du premier a 3,65 m) · APRES, memes points, memes caps : ${r.cage.map(l).join(' · ')} — et de ${Math.min(...r.cage.map(s => s.devant))} a ${Math.max(...r.cage.map(s => s.devant))} m de degage devant l'enfant · LES QUATRE AUTRES IMMEUBLES, leurs trois niveaux : ${r.imms.map(s => `(${s.x} ; ${s.z}) pire ${s.pire} m${s.mauvais.length ? ' MAUVAIS ' + s.mauvais.join(', ') : ''}`).join(' · ')} · rien n'est efface : ${r.entier.railsCaches}/${r.entier.rails} garde-corps et ${r.entier.marchesCachees}/${r.entier.marches} marches ou paliers caches, piece « ${r.entier.piece} » · ${r.nbPieces} volumes de camera declares, et la cage n'entre PAS dans city.interieurs (${r.pasDansInterieurs}) — le sol sous l'escalier n'est l'interieur de rien · lieux temoins inchanges au centimetre : ${r.temoins.map(s => s.nom + ' ' + s.d + ' m').join(', ')}` };
+});
+// ============ ON CONTOURNE CE QUI NE S'ECARTE PAS (round 83, defaut n° 420) ============
+// L'ARITHMETIQUE DU BLOCAGE. `separerPersos` applique le chevauchement ENTIER a celui qui n'est
+// pas fige (`pa = A.fige ? 0 : B.fige ? 1 : 0.5`), et LE JOUEUR EST TOUJOURS FIGE : on ne pousse
+// jamais celui qui tient la manette. Le pas d'un habitant, lui, vaut `b.speed * 0.7 * dt`, soit
+// 0,0653 m par image a 5,6 m/s. Il avance de 0,0653 m, cree 0,0700 m de chevauchement, se fait
+// repousser de 0,0700 m : LA POUSSEE EST PLUS GRANDE QUE LE PAS et il est EPINGLE a 1,16 m du
+// joueur, pour toujours. Et comme `npcMove` le declare libre a chaque image — ce n'est pas le
+// decor qui l'arrete — `stuckT` reste a 0 et meme le filet des 2,5 s ne le sauve pas.
+// C'EST AINSI QUE L'AMI ARRIVAIT « AU VOLANT D'AUCUNE » : l'enfant plante entre lui et la
+// portiere l'y clouait (mesure : 4,91 m parcourus, puis 4 800 images a 6,90 m du rendez-vous).
+// ON NE POUSSE PAS MOINS FORT (deux silhouettes se traverseraient, c'est tout ce que
+// `separerPersos` a repare) : ON PASSE A COTE. Ce test mesure les deux bouts — il PASSE, et il
+// ne passe pas AU TRAVERS ; plus le temoin qui garde la regle d'etre trop gourmande : un
+// rendez-vous « viens » se prend toujours a cote du joueur, sans tourner autour de lui.
+test('un habitant contourne le joueur plante sur son chemin au lieu d\'y rester epingle', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 8, hour: 12, frais: true });
+    // L'HABITANT EST EXIGE, PAS SUPPOSE (lecon du test precedent : un voisin lui emprunte son nom)
+    const b = G.bots.find(x => x.av && x.av.group && !x.dead && !x.prison && !x.drive);
+    if (!b) return { erreur: 'aucun habitant vivant et a pied' };
+    const R = { habitant: b.name, vitesse: b.speed };
+    // LES DOUZE AUTRES SONT RANGES AU LOIN : ce test juge UN marcheur et UN corps fige.
+    G.bots.forEach((o, i) => { if (o === b) return; o.rdv = null; o.ordre = null; o.activite = null;
+      o.drive = null; o.sport = null; o.bagarre = null; o.fight = null; o.ko = 0; o.dead = 0; o.hp = 100;
+      o.wait = 9999; o.target = null; o.pos.set(400 + i * 3, 0.4, 400); o.av.group.position.copy(o.pos); });
+    (G.gangs || []).forEach(Gg => (Gg.membres || []).forEach(m => { m.x += 600; m.z += 600;
+      if (m.av) m.av.group.position.set(m.x, m.y || 0, m.z); }));
+    (G.police.agents || []).slice().forEach(a => { a.x += 600; a.z += 600; });
+    const neuf = () => { b.rdv = null; b.rdvRoute = null; b.rdvRouteT = 0; b.target = null; b.wait = 0;
+      b.ko = 0; b.dead = 0; b.prison = false; b.stuckT = 0; b.fight = null; b.bagarre = null;
+      b.drive = null; b.ordre = null; b.activite = null; b.sport = null; b.sit = null; b.hp = 100;
+      b.av.group.visible = true; };
+    // L'ARITHMETIQUE, RELEVEE SUR LE JEU : le pas d'une image contre la poussee d'une image
+    const dt = 1 / 60, D = 1.16;                     // PERSO_R * 2, la distance de frolement
+    const pas = +(b.speed * 0.7 * dt).toFixed(4);
+    // a l'equilibre, la poussee (D - d) egale le pas : il s'immobilise a d = D - pas et n'ira
+    // jamais plus loin. C'est le 1,09 m releve dans le jeu, au centimetre.
+    R.arithmetique = { pas, separation: D, equilibre: +(D - pas).toFixed(4) };
+    // ---- 1. IL DOIT PASSER : rendez-vous a (-6 ; 8), le joueur PILE au milieu en (0 ; 8)
+    // ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS (le banc rend une image par seconde).
+    const marche = (px, pz, rx, rz, suit) => {
+      neuf();
+      b.pos.set(6, 0.3, 8); b.av.group.position.copy(b.pos);
+      P.pos.set(px, 0.5, pz); P.vel.set(0, 0, 0);
+      b.rdv = suit ? { x: px, z: pz, y: 0.3, nom: 'toi', arrive: false, suit: true }
+                   : { x: rx, z: rz, y: 0.3, nom: 'la-bas', arrive: false };
+      let images = -1, dJoueurMin = 99, dButMin = 99, sauts = 0, stuckMax = 0, travers = 0;
+      let qx = b.pos.x, qz = b.pos.z;
+      for (let i = 0; i < 1200; i++) {
+        G.separerPersos(); G.updateBot(b, dt);
+        const s = Math.hypot(b.pos.x - qx, b.pos.z - qz); if (s > 0.35) sauts++;
+        qx = b.pos.x; qz = b.pos.z;
+        stuckMax = Math.max(stuckMax, b.stuckT || 0);
+        const dj = Math.hypot(b.pos.x - px, b.pos.z - pz);
+        dJoueurMin = Math.min(dJoueurMin, dj);
+        if (dj < D - 0.02) travers++;                // il est passe DANS le joueur : interdit
+        const db = Math.hypot(b.pos.x - b.rdv.x, b.pos.z - b.rdv.z);
+        dButMin = Math.min(dButMin, db);
+        if (images < 0 && db <= (suit ? 1.15 : 1.85)) images = i + 1;
+      }
+      return { images, dJoueurMin: +dJoueurMin.toFixed(2), dButMin: +dButMin.toFixed(2),
+        travers, sauts, stuckMax: +stuckMax.toFixed(2),
+        fin: [+b.pos.x.toFixed(2), +b.pos.z.toFixed(2)], passe: b.pos.x < px };
+    };
+    R.traversLeJoueur = marche(0, 8, -6, 8, false);
+    // ---- 2. TEMOIN : le meme trajet, le joueur ECARTE de six metres — le cout du detour
+    R.joueurEcarte = marche(0, 14, -6, 8, false);
+    // ---- 3. TEMOIN : « viens » — il s'arrete A COTE du joueur, il ne tourne pas autour
+    R.vientTeVoir = marche(0, 8, 0, 8, true);
+    return R;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const A = r.traversLeJoueur, T = r.joueurEcarte, V = r.vientTeVoir;
+  const ok = A.images > 0 && A.passe && A.travers === 0 && A.sauts === 0 && A.dJoueurMin >= 1.1
+    && A.images < T.images * 3
+    && T.images > 0 && T.travers === 0
+    && V.images > 0 && V.travers === 0 && V.dJoueurMin >= 1.1 && V.dButMin <= 1.15;
+  return { ok, detail: `${r.habitant} (${r.vitesse} m/s) marche vers un but que le joueur BARRE`
+    + ` · L'ARITHMETIQUE DU BLOCAGE : son pas vaut ${r.arithmetique.pas} m par image (b.speed x 0,7 x dt) et`
+    + ` \`separerPersos\` applique a un corps NON fige le chevauchement ENTIER — le joueur, lui, est`
+    + ` toujours fige (« on ne pousse jamais celui qui tient la manette ») : sa poussee vaut`
+    + ` ${r.arithmetique.separation} m moins la distance, elle EGALE donc son pas a`
+    + ` ${r.arithmetique.equilibre} m et il ne peut plus avancer d'un millimetre — c'est le 1,09 m`
+    + ` releve dans le jeu, au centimetre — AVANT : 4,91 m parcourus puis 4 800 images (80 s) a 6,90 m du`
+    + ` rendez-vous, \`stuckT\` a 0 tout du long, donc meme le filet des 2,5 s ne partait pas, et l'ami`
+    + ` arrivait « au volant d'aucune »`
+    + ` · IL PASSE : joueur pile au milieu en (0 ; 8), but a (-6 ; 8) — atteint en ${A.images} images,`
+    + ` arrive en (${A.fin[0]} ; ${A.fin[1]}), passe de l'autre cote=${A.passe}, ${A.sauts} saut,`
+    + ` compteur de blocage ${A.stuckMax}`
+    + ` · ET IL NE PASSE PAS AU TRAVERS : ${A.travers} image dans le joueur, jamais plus pres que`
+    + ` ${A.dJoueurMin} m (la separation vaut ${r.arithmetique.separation} m)`
+    + ` · COUT DU DETOUR, meme trajet le joueur ecarte de 6 m : ${T.images} images contre ${A.images}`
+    + ` · TEMOIN, la regle n'est pas gourmande : un rendez-vous « viens » se prend TOUJOURS a cote du`
+    + ` joueur et l'habitant ne tourne pas autour — ${V.images} images, il finit a ${V.dButMin} m de son`
+    + ` but et a ${V.dJoueurMin} m du joueur, ${V.travers} image dans lui` };
+});
+// ====== UN FUYARD NE FUIT PAS UN FANTOME (round 83, la regression du test 378) ======
+// `b.fuitDe` nomme l'agresseur de la bagarre EN COURS. Il n'etait efface qu'a l'EXPIRATION de
+// cette bagarre, dans `combatTick` — jamais a son OUVERTURE. Or il commande deux choses : la
+// direction de la fuite (on RECULE a 2,6 m/s devant un habitant, on DETALE a 5,5 m/s devant le
+// joueur) et surtout LE DEMI-TOUR, car `combatTick` n'autorise le fuyard a se retourner que si
+// `b.fuitDe` est vide : `if (b.fight === 'flee' && simTime > b.fuiteFin && !(b.fuitDe && b.fuitDe.pos))`.
+// Un habitant frappe par l'enfant fuyait donc POUR TOUJOURS a cause d'une vieille rancune
+// contre un voisin. C'est ce qui rendait le test 378 rouge en suite complete et vert dans son
+// lot : le champ survit a `b.fight = null`, que le test remet pourtant a zero.
+// ON MONTE LA POLLUTION A LA MAIN au lieu d'attendre qu'un voisin la laisse, et on garde le
+// temoin : quand c'est un AUTRE HABITANT qui frappe, `fuitDe` est bel et bien pose et le
+// fuyard ne se retourne pas — on n'a pas desarme la regle, on l'a seulement empechee de survivre
+// a la bagarre qui l'avait posee.
+test('un habitant frappe par l\'enfant se retourne meme s\'il gardait une vieille rancune contre un voisin', async p => {
+  const r = await p.evaluate(() => {
+    const G = __G, P = G.P;
+    __SHOT.go({ world: 4, x: 0, y: 1, z: 3.5, hour: 12, frais: true });
+    const vivants = G.bots.filter(x => x.av && x.av.group && !x.dead && !x.prison);
+    if (vivants.length < 2) return { erreur: 'il faut deux habitants vivants' };
+    const b = vivants[0], voisin = vivants[1];
+    // les autres sont ranges au loin : ce test juge UN frappeur et UN frappe
+    G.bots.forEach((o, i) => { if (o === b) return; o.rdv = null; o.ordre = null; o.activite = null;
+      o.drive = null; o.sport = null; o.bagarre = null; o.fight = null; o.fuitDe = null; o.ko = 0;
+      o.dead = 0; o.hp = 100; o.wait = 9999; o.target = null;
+      o.pos.set(400 + i * 3, 0.4, 400); o.av.group.position.copy(o.pos); });
+    (G.gangs || []).forEach(Gg => (Gg.membres || []).forEach(m => { m.x += 600; m.z += 600;
+      if (m.av) m.av.group.position.set(m.x, m.y || 0, m.z); }));
+    (G.police.agents || []).slice().forEach(a => { a.x += 600; a.z += 600; });
+    // ON COMPTE DES PAS, ON NE MESURE PAS LE TEMPS (le banc rend une image par seconde).
+    const essai = (rancune) => {
+      b.hp = 100; b.ko = 0; b.dead = 0; b.prison = false; b.fight = null; b.garde = false;
+      b.bagarre = null; b.rdv = null; b.activite = null; b.wait = 0; b.fuiteFin = 0;
+      b.pos.set(0, 0.3, 6); b.av.group.position.copy(b.pos); b.av.group.visible = true;
+      b.fuitDe = rancune ? voisin : null;   // LA POLLUTION : une bagarre finie avec un voisin
+      const vrai = Math.random; Math.random = () => 0.9;   // le tirage tombe sur « fuite »
+      const coups = []; let ko = false, retourne = -1;
+      try {
+        for (let i = 0; i < 14 && !ko; i++) {
+          P.pos.set(b.pos.x, b.pos.y, b.pos.z + 1.1); P.facing = Math.PI; P.vel.set(0, 0, 0);
+          P.punchCd = 0; P.poingT = 0;
+          G.punch();
+          for (let k = 0; k < 40; k++) { G.step(1 / 60, true); G.updateBot(b, 1 / 60); }
+          coups.push({ hp: +b.hp.toFixed(0), etat: b.fight, fuitDe: b.fuitDe ? (b.fuitDe.name || 'joueur') : null });
+          if (b.fight === 'fight' && retourne < 0) retourne = i + 1;
+          if (b.hp <= 0 || b.ko) ko = true;
+        }
+      } finally { Math.random = vrai; }
+      return { coups: coups.length, ko, retourne, suite: coups.map(c => c.hp + (c.etat === 'flee' ? '↗' : c.etat === 'fight' ? '⚔' : '')).join(' '),
+        fuitDeFin: coups.length ? coups[coups.length - 1].fuitDe : null };
+    };
+    const R = { sansRancune: essai(false), avecRancune: essai(true) };
+    // TEMOIN : quand c'est un AUTRE HABITANT qui frappe, `fuitDe` est pose et le fuyard ne se
+    // retourne pas — la regle mord toujours.
+    b.hp = 100; b.ko = 0; b.fight = null; b.fuitDe = null; b.fuiteFin = 0; b.wait = 0;
+    b.pos.set(0, 0.3, 6); b.av.group.position.copy(b.pos);
+    voisin.hp = 100; voisin.ko = 0; voisin.dead = 0; voisin.wait = 0;
+    voisin.pos.set(0, 0.3, 7.2); voisin.av.group.position.copy(voisin.pos); voisin.av.group.visible = true;
+    P.pos.set(40, 0.3, 40);            // le joueur est AILLEURS : la bagarre ne le regarde pas
+    G.botTape(voisin, b);
+    let etatT = null, fuitDeT = null;
+    for (let k = 0; k < 600; k++) { G.step(1 / 60, true); etatT = b.fight; fuitDeT = b.fuitDe ? (b.fuitDe.name || 'joueur') : null; if (!b.fight) break; }
+    R.parUnVoisin = { etat: etatT, fuitDe: fuitDeT, nom: voisin.name };
+    return R;
+  });
+  if (r.erreur) return { ok: false, detail: r.erreur };
+  const A = r.sansRancune, B = r.avecRancune, T = r.parUnVoisin;
+  const ok = A.ko && A.retourne > 0 && B.ko && B.retourne > 0 && B.coups <= 14
+    && T.fuitDe === T.nom;
+  return { ok, detail: `\`b.fuitDe\` nomme l'agresseur de la bagarre EN COURS, et il n'etait efface qu'a son EXPIRATION, jamais a son OUVERTURE`
+    + ` · il commande le DEMI-TOUR : \`combatTick\` n'autorise le fuyard a tenir tete que si le champ est vide — un habitant frappe par l'enfant fuyait donc POUR TOUJOURS a cause d'une vieille rancune contre un voisin (test 378 rouge en suite, vert dans son lot : « il revient se battre=false », KO en 7 coups)`
+    + ` · SANS RANCUNE : il se retourne au coup ${A.retourne}, KO en ${A.coups} coups (${A.suite})`
+    + ` · AVEC LA VIEILLE RANCUNE MONTEE A LA MAIN (b.fuitDe = un voisin, une bagarre finie) : il se retourne au coup ${B.retourne}, KO en ${B.coups} coups (${B.suite}) — AVANT, jamais`
+    + ` · TEMOIN, la regle mord toujours : frappe par un AUTRE HABITANT (${T.nom}, le joueur a 40 m), le fuyard garde son agresseur (fuitDe = ${T.fuitDe}) et ne se retourne pas contre l'enfant` };
 });

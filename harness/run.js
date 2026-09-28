@@ -63,6 +63,10 @@ globalThis.__G = {
   cheminPieton: typeof cheminPieton === 'function' ? cheminPieton : null,
   botPrendVoiture: typeof botPrendVoiture === 'function' ? botPrendVoiture : null,
   npcBlocked: typeof npcBlocked === 'function' ? npcBlocked : null,
+  separerPersos: typeof separerPersos === 'function' ? separerPersos : null,
+  contourneFiges: typeof contourneFiges === 'function' ? contourneFiges : null,
+  placeDeParcLibre: typeof placeDeParcLibre === 'function' ? placeDeParcLibre : null,
+  vehHalf: typeof vehHalf === 'function' ? vehHalf : null,
   ecraseAuSol: typeof ecraseAuSol === 'function' ? ecraseAuSol : null,
 };
 `;

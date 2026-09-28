@@ -1374,6 +1374,32 @@ marchaient en ligne droite **dans les murs** (mes blocages n'étaient pas ceux d
 
 ## LE CONTRÔLE DU ROUND 83 — r83-qa2 (entrées 117 et suivantes)
 
+### VERDICT : **OUI MAIS** — livrable après le n° 122, qui se répare en une ligne d'ordre de priorité
+
+**Le défaut bloquant du contrôle précédent (n° 109) est réparé, et je l'ai vérifié des deux
+côtés : la perche ET l'image.** 240 relevés à 4,95 m là où il y en avait 18 sur 24 sous deux
+mètres ; la montée du trottoir au 2ᵉ étage puis dans l'appartement, **0 blocage**, pieds et tête
+dans le cadre à chaque arrêt, **41 garde-corps sur 41 et 25 marches sur 25 visibles**. Le poste
+a eu raison de refuser la recette de la cabane.
+
+**Ce qui retient la livraison, et c'est tout ce qui la retient** : le **n° 122**. Un enfant qui
+marche jusqu'à la grande roue, qui voit la consigne s'armer, qui appuie sur E (△ à la manette) —
+et qui se retrouve **recherché par la police pour vol de voiture**. Il est puni pour une action
+qu'il n'a pas demandée et qu'aucun message ne lui a proposée. C'est GÊNANT et non bloquant au
+sens strict (il n'est jamais prisonnier, il peut courir ou faire sa peine), mais c'est le seul
+de mes constats qui **punit sans qu'on comprenne**, et il tombe **à l'endroit du jeu où un enfant
+de huit ans va en premier**. Il se répare par l'ordre de priorité de la touche.
+
+**Ce qui reste et ne gêne pas** : n° 117 (six pas sur cinquante-deux dans la cage d'escalier, un
+cap sur quatre, un pas de plus libère), n° 118, n° 119, n° 120, n° 121, et le n° 111 d'avant.
+
+**Ce que je n'ai PAS contrôlé ce round, et je le dis** : la **manette DualSense** (tout mon
+contrôle est au clavier, par les vrais gestionnaires de touches ; le round 81 l'avait jouée à la
+manette et `harness/gamepad.js` la couvre — mais le n° 122 vaut à l'identique sur △, qui porte la
+même action) ; l'**introduction** ; le **son** ; et je n'ai **pas su entrer dans la banque** par
+le nord ni par l'est.
+
+
 ### 117. Dans la cage d'escalier de La Zone, il reste SIX PAS sur cinquante-deux où la caméra entre encore dans le dos de l'enfant
 - **Gravité** : GÊNANT. C'est le reliquat du n° 109, qui est réparé par ailleurs (voir son entrée) : on est passé de **18 relevés sur 24 sous deux mètres** à **6 relevés sur 208 sous le confort**.
 - **Reproduire** : La Zone, immeuble (−169 ; 10). Se placer en **(−159,70 ; 1,16 ; 12,10)** (bande montante du rez, deux marches au-dessus du palier) et tourner la caméra **plein ouest**.

@@ -5,3 +5,7 @@ harness/vendor/
 .variant-*.html
 .claude/worktrees/
 .claude/settings.local.json
+best-flotte-src/
+fleetbase/
+nationalsecurityagency/
+cyberkaida/

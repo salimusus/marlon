@@ -4,3 +4,4 @@ shots/
 harness/vendor/
 .variant-*.html
 .claude/worktrees/
+.claude/settings.local.json
